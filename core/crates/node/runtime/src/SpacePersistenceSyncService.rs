@@ -92,8 +92,16 @@ impl SpacePersistenceSyncService {
 
     /// Starts the unique change-triggered persistence synchronizer for this CoreNode.
     pub fn start(&self) -> Result<(), String> {
+        let startedAt = currentTimeMillis();
         self.state.spaceStore.initialize()?;
         let localNodeId = self.state.nodeRouter.localNodeId();
+        operit_util::AppLogger::AppLogger::i(
+            "SpacePersistenceSyncService",
+            &format!(
+                "space store initialize done elapsedMs={}",
+                currentTimeMillis() - startedAt
+            ),
+        );
         {
             let mut services = persistenceServices()
                 .lock()
@@ -104,6 +112,7 @@ impl SpacePersistenceSyncService {
             self.state.active.store(true, Ordering::Release);
             services.insert(localNodeId.clone(), self.state.clone());
         }
+        let registrationStartedAt = currentTimeMillis();
 
         let weakState = Arc::downgrade(&self.state);
         let subscription = subscribeSyncMutations(move || {
@@ -130,6 +139,14 @@ impl SpacePersistenceSyncService {
             let _ = self.stop();
             return Err(error);
         }
+        operit_util::AppLogger::AppLogger::i(
+            "SpacePersistenceSyncService",
+            &format!(
+                "discovery announcement watcher started elapsedMs={}",
+                currentTimeMillis() - registrationStartedAt
+            ),
+        );
+        let synchronizationStartedAt = currentTimeMillis();
 
         if let Err(error) = self.scheduleSynchronization() {
             self.state
@@ -143,6 +160,13 @@ impl SpacePersistenceSyncService {
                 .remove(&localNodeId);
             return Err(error);
         }
+        operit_util::AppLogger::AppLogger::i(
+            "SpacePersistenceSyncService",
+            &format!(
+                "space sync scheduling done elapsedMs={}",
+                currentTimeMillis() - synchronizationStartedAt
+            ),
+        );
         Ok(())
     }
 

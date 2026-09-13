@@ -1,18 +1,17 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use operit_model::ChatMessage::ChatMessage;
 use operit_model::InputProcessingState::InputProcessingState;
-use operit_model::MessagePart::MessagePartKind;
+use operit_model::MessagePartCodec::MessagePartCodec;
 use operit_util::ChatMarkupRegex::{attr_value, tag_ranges, ChatMarkupRegex};
 
 use super::empty_state::render_blue_cat_lines;
+use super::fold::{FoldRenderContext, FoldedLines, TranscriptFoldState};
 use super::i18n::TuiText;
-use super::markdown::{
-    render_markdown_lines, render_tool_call_part_from_attributes, render_tool_result_part,
-};
+use super::markdown::render_markdown_lines_folded;
 use super::selection::mark_soft_wrap_continuation;
 use super::theme;
 use super::typewriter::TypewriterState;
@@ -26,8 +25,36 @@ pub(super) fn render_message_lines(
     typewriter_state: &mut TypewriterState,
     text: TuiText,
 ) -> Vec<Line<'static>> {
+    let fold_state = TranscriptFoldState::default();
+    render_message_lines_folded(
+        messages,
+        content_width,
+        is_loading,
+        input_state,
+        thinking_line,
+        typewriter_state,
+        &fold_state,
+        text,
+    )
+    .lines
+}
+
+/// Renders transcript messages together with clickable fold hit regions.
+pub(super) fn render_message_lines_folded(
+    messages: &[ChatMessage],
+    content_width: usize,
+    is_loading: bool,
+    input_state: &InputProcessingState,
+    thinking_line: &Line<'static>,
+    typewriter_state: &mut TypewriterState,
+    fold_state: &TranscriptFoldState,
+    text: TuiText,
+) -> FoldedLines {
     if messages.is_empty() {
-        return render_blue_cat_lines(content_width, text);
+        return FoldedLines {
+            lines: render_blue_cat_lines(content_width, text),
+            hits: Vec::new(),
+        };
     }
 
     let active_message_timestamps = messages
@@ -36,10 +63,12 @@ pub(super) fn render_message_lines(
         .collect::<HashSet<_>>();
     typewriter_state.retain_messages(&active_message_timestamps);
 
-    let mut lines = Vec::new();
+    let mut output = FoldedLines::default();
     for (index, message) in messages.iter().enumerate() {
-        append_message_gap(&mut lines);
-        lines.extend(render_transcript_message_lines(
+        if !output.lines.is_empty() {
+            output.lines.push(Line::from(""));
+        }
+        output.extend(render_transcript_message_lines_with_cache(
             message,
             index,
             messages.len(),
@@ -47,40 +76,25 @@ pub(super) fn render_message_lines(
             is_loading,
             thinking_line,
             typewriter_state,
+            fold_state,
             text,
         ));
     }
     if is_loading && matches!(messages.last(), Some(message) if message.sender == "user") {
-        append_message_gap(&mut lines);
-        lines.extend(render_loading_ai_placeholder_lines(
-            content_width,
-            thinking_line,
-        ));
+        if !output.lines.is_empty() {
+            output.lines.push(Line::from(""));
+        }
+        output
+            .lines
+            .extend(render_loading_ai_placeholder_lines(
+                content_width,
+                thinking_line,
+            ));
     }
-    lines.extend(render_input_error_lines(input_state, text));
-    lines
-}
-
-pub(super) fn render_transcript_message_lines(
-    message: &ChatMessage,
-    index: usize,
-    messages_len: usize,
-    content_width: usize,
-    is_loading: bool,
-    thinking_line: &Line<'static>,
-    typewriter_state: &mut TypewriterState,
-    text: TuiText,
-) -> Vec<Line<'static>> {
-    render_transcript_message_lines_with_cache(
-        message,
-        index,
-        messages_len,
-        content_width,
-        is_loading,
-        thinking_line,
-        typewriter_state,
-        text,
-    )
+    output
+        .lines
+        .extend(render_input_error_lines(input_state, text));
+    output
 }
 
 pub(super) fn render_transcript_message_lines_with_cache(
@@ -91,8 +105,9 @@ pub(super) fn render_transcript_message_lines_with_cache(
     is_loading: bool,
     thinking_line: &Line<'static>,
     typewriter_state: &mut TypewriterState,
+    fold_state: &TranscriptFoldState,
     text: TuiText,
-) -> Vec<Line<'static>> {
+) -> FoldedLines {
     let role = message.roleName.trim();
     let sender = message_header_label(message.sender.as_str(), role);
     let color = message_header_color(message.sender.as_str());
@@ -109,12 +124,6 @@ pub(super) fn render_transcript_message_lines_with_cache(
         }
         meta.push_str(&message.modelName);
     }
-    if message.outputTokens > 0 {
-        if !meta.is_empty() {
-            meta.push_str(" / ");
-        }
-        meta.push_str(&format!("out={}", message.outputTokens));
-    }
     let header_spans = if meta.is_empty() {
         vec![Span::styled(
             sender,
@@ -129,18 +138,18 @@ pub(super) fn render_transcript_message_lines_with_cache(
             Span::styled(meta, Style::default().fg(theme::TEXT_MUTED)),
         ]
     };
-    let mut lines = Vec::new();
+    let mut output = FoldedLines::default();
     if message.sender == "user" {
         append_user_message_card(
-            &mut lines,
+            &mut output.lines,
             header_spans,
             &message.displayText(),
             content_width,
             text,
         );
-        return lines;
+        return output;
     }
-    lines.push(style_message_line(
+    output.lines.push(style_message_line(
         Line::from(header_spans),
         message.sender.as_str(),
         block_style,
@@ -148,110 +157,44 @@ pub(super) fn render_transcript_message_lines_with_cache(
     ));
     let is_streaming_message =
         is_streaming_message_for_tui(message, index, messages_len, is_loading);
-    let mut parts = message.parts.iter().collect::<Vec<_>>();
-    parts.sort_by_key(|part| part.sequence);
-    let has_visible_part = parts.iter().any(|part| {
-        matches!(
-            part.kind,
-            MessagePartKind::Markdown
-                | MessagePartKind::ToolCall
-                | MessagePartKind::ToolResult
-                | MessagePartKind::Status
-        )
-    });
-    let has_thinking_part = parts
-        .iter()
-        .any(|part| part.kind == MessagePartKind::Thinking);
-    if !has_visible_part && has_thinking_part {
-        lines.push(style_message_line(
-            thinking_line.clone(),
-            message.sender.as_str(),
-            block_style,
-            message_layout,
-        ));
-    } else if !has_visible_part && is_streaming_message {
-        lines.push(style_message_line(
-            thinking_line.clone(),
-            message.sender.as_str(),
-            block_style,
-            message_layout,
-        ));
-    } else {
-        let mut rendered_part = false;
-        for part in parts {
-            match part.kind {
-                MessagePartKind::Markdown | MessagePartKind::Status => {
-                    let rendered_lines =
-                        render_markdown_lines(&part.content, message_content_width, text);
-                    lines.extend(
-                        wrap_message_lines(rendered_lines, message_content_width)
-                            .into_iter()
-                            .map(|line| {
-                                style_message_line(
-                                    line,
-                                    message.sender.as_str(),
-                                    block_style,
-                                    message_layout,
-                                )
-                            }),
-                    );
-                    rendered_part = true;
-                }
-                MessagePartKind::Thinking => {}
-                MessagePartKind::ToolCall => {
-                    let tool_name = part
-                        .toolName
-                        .as_deref()
-                        .expect("tool-call message parts require a tool name");
-                    lines.extend(
-                        render_tool_call_part_from_attributes(
-                            tool_name,
-                            &part.attributes,
-                            message_content_width,
-                        )
-                        .into_iter()
-                        .map(|line| {
-                            style_message_line(
-                                line,
-                                message.sender.as_str(),
-                                block_style,
-                                message_layout,
-                            )
-                        }),
-                    );
-                    rendered_part = true;
-                }
-                MessagePartKind::ToolResult => {
-                    lines.extend(
-                        render_tool_result_part(
-                            part.attributes.get("status").map(String::as_str),
-                            &part.content,
-                            message_content_width,
-                        )
-                        .into_iter()
-                        .map(|line| {
-                            style_message_line(
-                                line,
-                                message.sender.as_str(),
-                                block_style,
-                                message_layout,
-                            )
-                        }),
-                    );
-                    rendered_part = true;
-                }
-            }
-        }
-        if !rendered_part {
-            lines.push(style_message_line(
+    let markup = MessagePartCodec::assistantMarkup(&message.parts);
+    if markup.is_empty() {
+        if is_streaming_message {
+            output.lines.push(style_message_line(
+                thinking_line.clone(),
+                message.sender.as_str(),
+                block_style,
+                message_layout,
+            ));
+        } else {
+            output.lines.push(style_message_line(
                 Line::from(""),
                 message.sender.as_str(),
                 block_style,
                 message_layout,
             ));
         }
+        return output;
     }
-    lines
+    let fold = FoldRenderContext {
+        message_timestamp: message.timestamp,
+        is_streaming: is_streaming_message,
+        fold_state,
+        thinking_line: Some(thinking_line),
+    };
+    let mut folded = render_markdown_lines_folded(&markup, message_content_width, text, Some(&fold));
+    folded = wrap_folded_lines(folded, message_content_width);
+    for line in &mut folded.lines {
+        *line = style_message_line(
+            std::mem::replace(line, Line::from("")),
+            message.sender.as_str(),
+            block_style,
+            message_layout,
+        );
+    }
+    output.extend(folded);
+    let _ = typewriter_state;
+    output
 }
 
 pub(super) fn render_loading_ai_placeholder_lines(
@@ -387,12 +330,6 @@ fn style_message_line(
     line
 }
 
-fn append_message_gap(lines: &mut Vec<Line<'static>>) {
-    if !lines.is_empty() {
-        lines.push(Line::from(""));
-    }
-}
-
 fn append_user_message_card(
     lines: &mut Vec<Line<'static>>,
     header_spans: Vec<Span<'static>>,
@@ -416,7 +353,8 @@ fn append_user_message_card(
     ));
 
     let mut rendered_lines =
-        render_markdown_lines(&parsed.processed_text, layout.content_width, text);
+        render_markdown_lines_folded(&parsed.processed_text, layout.content_width, text, None)
+            .lines;
     trim_blank_edge_lines(&mut rendered_lines);
     if rendered_lines.is_empty() {
         rendered_lines.push(Line::from(""));
@@ -681,6 +619,39 @@ fn style_user_card_line(
         ));
     }
     Line::from(spans)
+}
+
+/// Wraps folded transcript lines while remapping clickable fold hits.
+fn wrap_folded_lines(block: FoldedLines, width: usize) -> FoldedLines {
+    let width = width.max(1);
+    let mut wrapped_lines = Vec::new();
+    let mut wrapped_hits = Vec::new();
+    let mut hits_by_line: HashMap<usize, Vec<super::fold::FoldTarget>> = HashMap::new();
+    for hit in block.hits {
+        hits_by_line
+            .entry(hit.line_index)
+            .or_default()
+            .push(hit.target);
+    }
+    for (index, line) in block.lines.into_iter().enumerate() {
+        let start = wrapped_lines.len();
+        wrapped_lines.extend(wrap_message_lines(vec![line], width));
+        let end = wrapped_lines.len();
+        if let Some(targets) = hits_by_line.remove(&index) {
+            for target in targets {
+                for line_index in start..end {
+                    wrapped_hits.push(super::fold::TranscriptFoldHit {
+                        line_index,
+                        target: target.clone(),
+                    });
+                }
+            }
+        }
+    }
+    FoldedLines {
+        lines: wrapped_lines,
+        hits: wrapped_hits,
+    }
 }
 
 fn wrap_message_lines(lines: Vec<Line<'static>>, width: usize) -> Vec<Line<'static>> {
@@ -984,7 +955,7 @@ mod tests {
     }
 
     #[test]
-    fn ai_thinking_block_is_hidden_from_transcript() {
+    fn ai_thinking_block_is_collapsed_in_transcript() {
         let mut ai = ChatMessage::new_with_markdown_timestamp(
             "ai".to_string(),
             "<thinking>内部推理</thinking>\n你好！".to_string(),
@@ -1005,6 +976,7 @@ mod tests {
         let rendered = dump_logical_lines(&lines);
 
         assert!(rendered.contains("你好"));
+        assert!(rendered.contains("Thinking Process"));
         assert!(!rendered.contains("内部推理"));
         assert!(!rendered.contains("<thinking>"));
     }
@@ -1022,14 +994,94 @@ mod tests {
             48,
             true,
             &InputProcessingState::Idle,
+            &Line::from("Thinking Process"),
+            &mut typewriter_state,
+            TuiLanguage::English.text(),
+        );
+        let rendered = dump_logical_lines(&lines);
+
+        assert!(rendered.contains("Thinking Process"));
+        assert!(rendered.contains("内部推理"));
+    }
+
+    #[test]
+    fn closed_thinking_keeps_process_title_while_message_still_streams() {
+        let ai = ChatMessage::new_with_markdown_timestamp(
+            "ai".to_string(),
+            "<thinking>内部推理</thinking>\n你好".to_string(),
+            1,
+        );
+        let mut typewriter_state = TypewriterState::default();
+        let lines = render_message_lines(
+            &[ai],
+            48,
+            true,
+            &InputProcessingState::Idle,
+            &Line::from("sweep-title"),
+            &mut typewriter_state,
+            TuiLanguage::English.text(),
+        );
+        let rendered = dump_logical_lines(&lines);
+
+        assert!(rendered.contains("Thinking Process"));
+        assert!(!rendered.contains("sweep-title"));
+        assert!(!rendered.contains("内部推理"));
+        assert!(rendered.contains("你好"));
+    }
+
+    #[test]
+    fn tool_call_and_result_render_as_one_merged_row() {
+        let markup = concat!(
+            "<tool name=\"read_file\" call_id=\"a\"><param name=\"path\">a.txt</param></tool>",
+            "<tool_result name=\"read_file\" status=\"success\"><content>file body</content></tool_result>",
+            "done",
+        );
+        let ai = ChatMessage::new_with_markdown_timestamp("ai".to_string(), markup.to_string(), 1);
+        let mut typewriter_state = TypewriterState::default();
+        let lines = render_message_lines(
+            &[ai],
+            80,
+            false,
+            &InputProcessingState::Idle,
             &Line::from("thinking"),
             &mut typewriter_state,
             TuiLanguage::English.text(),
         );
         let rendered = dump_logical_lines(&lines);
 
-        assert!(rendered.contains("thinking"));
-        assert!(rendered.contains("内部推理"));
+        assert!(rendered.contains("read_file"));
+        assert!(rendered.contains("✓"));
+        assert!(!rendered.contains("↳"));
+        assert!(!rendered.contains("file body"));
+        assert!(rendered.contains("done"));
+    }
+
+    #[test]
+    fn two_tool_calls_collapse_into_one_group_header() {
+        let markup = concat!(
+            "<tool name=\"read_file\" call_id=\"a\"><param name=\"path\">a.txt</param></tool>",
+            "<tool_result name=\"read_file\" status=\"success\"><content>ok</content></tool_result>",
+            "<tool name=\"list_files\" call_id=\"b\"><param name=\"path\">.</param></tool>",
+            "<tool_result name=\"list_files\" status=\"success\"><content>src</content></tool_result>",
+            "done",
+        );
+        let ai = ChatMessage::new_with_markdown_timestamp("ai".to_string(), markup.to_string(), 2);
+        let mut typewriter_state = TypewriterState::default();
+        let lines = render_message_lines(
+            &[ai],
+            80,
+            false,
+            &InputProcessingState::Idle,
+            &Line::from("thinking"),
+            &mut typewriter_state,
+            TuiLanguage::English.text(),
+        );
+        let rendered = dump_logical_lines(&lines);
+
+        assert!(rendered.contains("Tool Calls (2)"));
+        assert!(!rendered.contains("read_file"));
+        assert!(!rendered.contains("list_files"));
+        assert!(rendered.contains("done"));
     }
 
     #[test]

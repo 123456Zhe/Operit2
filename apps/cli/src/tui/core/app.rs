@@ -617,6 +617,14 @@ impl OperitTui {
                     self.transcript_scroll,
                     &self.transcript_copy_lines,
                 ) {
+                    if self.transcript_selection.is_click()
+                        && self
+                            .transcript_render_cache
+                            .toggle_fold_at_line(position.line)
+                    {
+                        self.transcript_selection.clear();
+                        return Ok(());
+                    }
                     self.transcript_selection.end(position);
                 }
             }

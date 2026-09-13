@@ -89,6 +89,7 @@ class _OperitAppState extends State<OperitApp> {
     return OperitTheme(
       initialThemePreferenceSnapshot:
           UserPreferencesManager.defaultThemePreferenceSnapshot,
+      initialThemeMode: _runtimeManager.startupThemeMode,
       initialThemeIsReady: false,
       unconfiguredChildEnabled: true,
       child: _AppDialogHost(

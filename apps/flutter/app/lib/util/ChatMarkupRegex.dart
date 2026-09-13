@@ -58,6 +58,26 @@ class ChatMarkupRegex {
     dotAll: true,
   );
 
+  static final _mediaLinkTag = RegExp(
+    r'''<link\b[^>]*(?:/\s*>|>[\s\S]*?</link\s*>)''',
+    caseSensitive: false,
+    dotAll: true,
+  );
+  static final _mediaLinkAttribute = <String, RegExp>{
+    'type': RegExp(
+      r'''\btype\s*=\s*\\*["']?([^"'\\\s>]+)\\*["']?''',
+      caseSensitive: false,
+    ),
+    'id': RegExp(
+      r'''\bid\s*=\s*\\*["']?([^"'\\\s>]+)\\*["']?''',
+      caseSensitive: false,
+    ),
+    'filename': RegExp(
+      r'''\bfilename\s*=\s*\\*["']?([^"'\\\s>]+)\\*["']?''',
+      caseSensitive: false,
+    ),
+  };
+
   static bool isToolTagName(String? tagName) {
     return tagName != null && _toolTagNameRegex.hasMatch(tagName);
   }
@@ -79,6 +99,62 @@ class ChatMarkupRegex {
   static String? extractOpeningTagName(String xml) {
     return _openingTagNameRegex.firstMatch(xml.trim())?.group(1);
   }
+
+  /// Extracts canonical image, audio, and video pool links in source order.
+  static List<ChatMediaLink> extractMediaLinks(String message) {
+    final links = <ChatMediaLink>[];
+    final seen = <String>{};
+    for (final match in _mediaLinkTag.allMatches(message)) {
+      final source = match.group(0)!;
+      final type = _mediaLinkAttribute['type']
+          ?.firstMatch(source)
+          ?.group(1)
+          ?.toLowerCase();
+      final id = _mediaLinkAttribute['id']?.firstMatch(source)?.group(1);
+      if (type == null || id == null || id == 'error') {
+        continue;
+      }
+      if (!const <String>{'image', 'audio', 'video', 'file'}.contains(type)) {
+        continue;
+      }
+      final fileNameMatch = type == 'file'
+          ? _mediaLinkAttribute['filename']?.firstMatch(source)
+          : null;
+      final fileName = fileNameMatch == null
+          ? null
+          : decodeChatXmlText(fileNameMatch.group(1)!);
+      if (type == 'file' && (fileName == null || fileName.isEmpty)) {
+        continue;
+      }
+      if (seen.add('$type:$id')) {
+        links.add(ChatMediaLink(type: type, id: id, fileName: fileName));
+      }
+    }
+    return links;
+  }
+
+  /// Removes canonical image, audio, and video pool links from message text.
+  static String removeMediaLinks(String message) {
+    return message.replaceAllMapped(_mediaLinkTag, (match) {
+      final source = match.group(0)!;
+      final type = _mediaLinkAttribute['type']
+          ?.firstMatch(source)
+          ?.group(1)
+          ?.toLowerCase();
+      return const <String>{'image', 'audio', 'video', 'file'}.contains(type)
+          ? ''
+          : source;
+    });
+  }
+}
+
+/// Identifies one canonical media-pool link in chat markup.
+class ChatMediaLink {
+  const ChatMediaLink({required this.type, required this.id, this.fileName});
+
+  final String type;
+  final String id;
+  final String? fileName;
 }
 
 /// Decodes XML entities from attachment text after markup parsing.

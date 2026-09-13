@@ -41,6 +41,9 @@ pub mod mcp;
 #[path = "mcp_runtime/mod.rs"]
 pub mod mcp_runtime;
 
+#[path = "PackageLoadingProgress.rs"]
+pub mod PackageLoadingProgress;
+
 #[path = "packTool/mod.rs"]
 pub mod packTool;
 

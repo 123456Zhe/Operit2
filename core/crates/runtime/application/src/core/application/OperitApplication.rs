@@ -44,6 +44,11 @@ use operit_tools::files::PathMapper::PathMapper;
 use operit_tools::files::VisualFileSystem::VisualFileSystem;
 use operit_tools::runtime_support::ToolRuntimeDependencies;
 use operit_tools::tools::mcp_runtime::plugins::MCPStarter::MCPStarter;
+use operit_tools::tools::PackageLoadingProgress::{
+    completePluginLoadingSession, observePluginLoadingProgress, showPluginLoading,
+};
+
+pub use operit_tools::tools::PackageLoadingProgress::{PluginLoadingItem, PluginLoadingProgress};
 use operit_tools::tools::mcp_runtime::MCPRepository::MCPRepository;
 use operit_tools::tools::packTool::RuntimePackageManager::RuntimePackageManager;
 use operit_tools::tools::skill_runtime::SkillRepository::SkillRepository;
@@ -228,14 +233,30 @@ impl OperitApplication {
         self.appStartupTimeMs = currentTimeMillis();
         AppLogger::i("OperitApplication", "runtime initialization start");
         setHostManager(self.hostManager.clone());
+        let cleanupStartedAt = currentTimeMillis();
         self.configureOpenMpEnvironment();
         self.cleanOnExitFiles()?;
+        AppLogger::i(
+            "OperitApplication",
+            &format!(
+                "clean on-exit files done elapsedMs={}",
+                currentTimeMillis() - cleanupStartedAt
+            ),
+        );
+        let databaseStartedAt = currentTimeMillis();
         self.ensureWorkManagerInitialized();
         AIMessageManager::initialize();
         self.initializeJsonSerializer();
         self.initializeAppLanguage();
         self.initAndroidPermissionPreferences();
         self.preloadDatabase();
+        AppLogger::i(
+            "OperitApplication",
+            &format!(
+                "database preload done elapsedMs={}",
+                currentTimeMillis() - databaseStartedAt
+            ),
+        );
         let mut toolHandler = self.toolHandler.clone();
         let toolRegistrationStartedAt = currentTimeMillis();
         AppLogger::i("OperitApplication", "default tool registration start");
@@ -283,7 +304,7 @@ impl OperitApplication {
             ),
         );
         self.initialized = true;
-        self.initMcpPlugins();
+        self.dispatchPluginLoading();
         AppLogger::i(
             "OperitApplication",
             &format!(
@@ -331,23 +352,47 @@ impl OperitApplication {
     /// Starts deployed MCP plugins according to the configured startup timeout.
     #[allow(non_snake_case)]
     pub fn initMcpPlugins(&self) {
+        self.dispatchPluginLoading();
+    }
+
+    /// Loads ToolPkg packages and starts MCP plugins in the background with overlay progress.
+    fn dispatchPluginLoading(&self) {
         let hostManager = self.hostManager.clone();
         let runtimeSupport = self.toolHandler.runtimeSupport();
+        let packageManager = self.toolHandler.getOrCreatePackageManager();
         let taskScheduler = self
             .hostManager
             .hostRuntimeTaskSchedulerHost
             .clone()
-            .expect("runtime task scheduler host must be configured for MCP startup");
+            .expect("runtime task scheduler host must be configured for plugin startup");
         let startup = move || {
+            showPluginLoading();
+            packageManager
+                .lock()
+                .expect("package manager mutex poisoned")
+                .loadAvailablePackages();
             let starter = MCPStarter::new(hostManager, runtimeSupport);
             let timeoutSeconds = ApiPreferences::getInstance()
                 .getMcpStartupTimeoutSeconds()
                 .expect("api preferences must provide mcp startup timeout seconds");
             let _ = starter.startAllDeployedPluginsWithTimeout(timeoutSeconds);
+            completePluginLoadingSession();
         };
         taskScheduler
-            .scheduleHostRuntimeTask("operit-mcp-startup", Box::new(startup))
-            .expect("MCP startup task must be scheduled");
+            .scheduleHostRuntimeTask("operit-plugin-startup", Box::new(startup))
+            .expect("plugin startup task must be scheduled");
+    }
+
+    /// Observes package and plugin loading overlay progress.
+    #[allow(non_snake_case)]
+    pub fn pluginLoadingProgressFlow(&self) -> StateFlow<PluginLoadingProgress> {
+        observePluginLoadingProgress()
+    }
+
+    /// Hides the package and plugin loading overlay without stopping the load session.
+    #[allow(non_snake_case)]
+    pub fn skipPluginLoading(&self) {
+        operit_tools::tools::PackageLoadingProgress::skipPluginLoading();
     }
 
     /// Returns the initialized tool handler owned by this runtime.

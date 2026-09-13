@@ -1533,6 +1533,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'This model has already been added to this provider.';
 
   @override
+  String get settingsModelDuplicateProviderName =>
+      'A provider with this name already exists.';
+
+  @override
   String get settingsModelMaxTokens => 'Max tokens';
 
   @override
@@ -3651,4 +3655,48 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsRuntimeControlRoleUser => 'User';
+
+  @override
+  String get pluginLoadingTitle => 'Loading';
+
+  @override
+  String get pluginLoadingSkip => 'Skip';
+
+  @override
+  String get pluginLoadingCollapse => 'Collapse';
+
+  @override
+  String pluginLoadingStatus(int started, int total) {
+    return 'Started: $started / $total';
+  }
+
+  @override
+  String pluginLoadingCurrentTask(String task) {
+    return 'Loading $task';
+  }
+
+  @override
+  String get pluginLoadingSuccess => 'Loaded';
+
+  @override
+  String get pluginLoadingFailed => 'Failed';
+
+  @override
+  String get pluginLoadingWaiting => 'Waiting';
+
+  @override
+  String get pluginLoadingKindPackage => 'Package';
+
+  @override
+  String get pluginLoadingKindMcp => 'MCP';
+
+  @override
+  String get pluginLoadingCompleteSuccess => 'All packages and plugins loaded';
+
+  @override
+  String get pluginLoadingCompleteWithFailures =>
+      'Some packages or plugins failed to load';
+
+  @override
+  String get pluginLoadingNoLogs => 'No logs';
 }

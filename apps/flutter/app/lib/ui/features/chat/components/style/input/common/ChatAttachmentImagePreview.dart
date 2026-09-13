@@ -1,9 +1,13 @@
 // ignore_for_file: file_names
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:operit2/core/bridge/PlatformCoreProxy.dart';
+import 'package:operit2/core/bridge/ProxyCoreRuntimeBridge.dart';
+import 'package:operit2/core/proxy/generated/CoreProxyClients.g.dart';
 
 /// Renders a chat attachment image from client-readable attachment bytes.
 class ChatAttachmentImagePreview extends StatefulWidget {
@@ -12,11 +16,13 @@ class ChatAttachmentImagePreview extends StatefulWidget {
     super.key,
     required this.attachmentPath,
     required this.fileName,
+    this.mediaPoolType,
     this.fit = BoxFit.cover,
   });
 
   final String attachmentPath;
   final String fileName;
+  final String? mediaPoolType;
   final BoxFit fit;
 
   /// Creates mutable state for the attachment byte load.
@@ -33,15 +39,22 @@ class _ChatAttachmentImagePreviewState
   @override
   void initState() {
     super.initState();
-    _imageBytesFuture = _readAttachmentImageBytes(widget.attachmentPath);
+    _imageBytesFuture = _readAttachmentImageBytes(
+      widget.attachmentPath,
+      widget.mediaPoolType,
+    );
   }
 
   /// Restarts the byte request when the attachment path changes.
   @override
   void didUpdateWidget(covariant ChatAttachmentImagePreview oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.attachmentPath != widget.attachmentPath) {
-      _imageBytesFuture = _readAttachmentImageBytes(widget.attachmentPath);
+    if (oldWidget.attachmentPath != widget.attachmentPath ||
+        oldWidget.mediaPoolType != widget.mediaPoolType) {
+      _imageBytesFuture = _readAttachmentImageBytes(
+        widget.attachmentPath,
+        widget.mediaPoolType,
+      );
     }
   }
 
@@ -86,7 +99,21 @@ class _ChatAttachmentImagePreviewState
 }
 
 /// Reads attachment image bytes through Flutter's cross-platform file wrapper.
-Future<Uint8List> _readAttachmentImageBytes(String attachmentPath) {
+const GeneratedCoreProxyClients _mediaPoolClients = GeneratedCoreProxyClients(
+  ProxyCoreRuntimeBridge(coreProxy: platformCoreProxy),
+);
+
+/// Reads image bytes from the runtime media pool or the ordinary file host.
+Future<Uint8List> _readAttachmentImageBytes(
+  String attachmentPath,
+  String? mediaPoolType,
+) async {
+  if (mediaPoolType != null) {
+    final mediaData = await _mediaPoolClients
+        .servicesRuntimeHostInteractionService
+        .getMediaPoolData(mediaType: mediaPoolType, id: attachmentPath);
+    return base64Decode(mediaData.base64);
+  }
   return XFile(_localPathForAttachment(attachmentPath)).readAsBytes();
 }
 

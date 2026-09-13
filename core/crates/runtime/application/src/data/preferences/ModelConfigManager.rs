@@ -9,8 +9,8 @@ use operit_local_models::LocalEngineManifest::LocalPlatformTarget;
 use operit_local_models::LocalModelManifest::LocalModelKind;
 use operit_local_models::LocalModelRegistryStore::LocalModelRegistryStore;
 use operit_model::ModelCatalog::ModelCatalog;
-use operit_model::ModelConfigData::{
-    ApiProviderType, AvailableProviderModel, AvailableProviderModelSource, ModelCapabilities,
+    use operit_model::ModelConfigData::{
+        ApiProviderType, AvailableProviderModel, AvailableProviderModelSource, ModelCapabilities,
     ModelConfigDefaults, ModelContextSpec, ModelProfile, ModelRequestSpec, ModelSummarySettings,
     ProviderModelSummary, ProviderProfile, ResolvedModelConfig, default_deepseek_provider,
     local_model_provider,
@@ -1215,6 +1215,72 @@ mod tests {
                 .apiKey,
             "sk-restored"
         );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// Verifies creating a provider with an occupied name is rejected.
+    #[test]
+    fn create_provider_rejects_duplicate_name() {
+        let root = unique_test_root("create_provider_rejects_duplicate_name");
+        setup_test_runtime(root.clone());
+        let manager = ModelConfigManager::new(root.clone());
+
+        manager
+            .createProvider(
+                "Same provider name".to_string(),
+                "OPENAI".to_string(),
+                "https://api.openai.com/v1".to_string(),
+            )
+            .expect("first provider with this name");
+        let error = manager
+            .createProvider(
+                "Same provider name".to_string(),
+                "OPENAI".to_string(),
+                "https://api.openai.com/v1".to_string(),
+            )
+            .expect_err("duplicate provider name should be rejected");
+        assert!(matches!(
+            error,
+            ModelConfigError::ProviderNameAlreadyExists(name) if name == "Same provider name"
+        ));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// Verifies renaming a provider onto an occupied name is rejected.
+    #[test]
+    fn update_provider_profile_rejects_duplicate_name() {
+        let root = unique_test_root("update_provider_profile_rejects_duplicate_name");
+        setup_test_runtime(root.clone());
+        let manager = ModelConfigManager::new(root.clone());
+
+        let providerId = manager
+            .createProvider(
+                "First provider".to_string(),
+                "OPENAI".to_string(),
+                "https://api.openai.com/v1".to_string(),
+            )
+            .expect("first provider");
+        manager
+            .createProvider(
+                "Second provider".to_string(),
+                "OPENAI".to_string(),
+                "https://api.openai.com/v1".to_string(),
+            )
+            .expect("second provider");
+
+        let mut provider = manager
+            .getProviderProfile(&providerId)
+            .expect("created provider");
+        provider.name = "Second provider".to_string();
+        let error = manager
+            .updateProviderProfile(provider)
+            .expect_err("duplicate provider name should be rejected");
+        assert!(matches!(
+            error,
+            ModelConfigError::ProviderNameAlreadyExists(name) if name == "Second provider"
+        ));
 
         let _ = fs::remove_dir_all(root);
     }

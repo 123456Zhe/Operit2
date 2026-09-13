@@ -35,6 +35,8 @@ class _AgentModelSelectorPopupState extends State<AgentModelSelectorPopup> {
   String? _expandedProviderId;
   String? _infoTitle;
   String? _infoDescription;
+  bool? _enableThinkingMode;
+  bool? _enableMaxContextMode;
 
   GeneratedCoreProxyClients get _clients => widget.viewModel.clients;
 
@@ -48,13 +50,6 @@ class _AgentModelSelectorPopupState extends State<AgentModelSelectorPopup> {
   /// Loads model, context, and thinking settings for the popup.
   Future<_AgentModelSelectorData> _loadSettings() {
     return _loadAgentModelSelectorData(_clients);
-  }
-
-  /// Refreshes the popup data after a setting changes.
-  void _reloadSettings() {
-    setState(() {
-      _settingsFuture = _loadSettings();
-    });
   }
 
   /// Applies a provider model as the chat model.
@@ -84,11 +79,15 @@ class _AgentModelSelectorPopupState extends State<AgentModelSelectorPopup> {
     if (data.thinkingSettings.requiredValue) {
       return;
     }
+    final enableThinkingMode =
+        !(_enableThinkingMode ?? data.enableThinkingMode);
+    setState(() {
+      _enableThinkingMode = enableThinkingMode;
+    });
     await _clients.preferencesApiPreferences.updateThinkingSettings(
-      enableThinkingMode: !data.enableThinkingMode,
+      enableThinkingMode: enableThinkingMode,
       thinkingQualityLevel: null,
     );
-    _reloadSettings();
   }
 
   /// Stores the selected provider/model thinking option.
@@ -102,7 +101,6 @@ class _AgentModelSelectorPopupState extends State<AgentModelSelectorPopup> {
           modelId: data.currentBinding.modelId,
           thinkingOptionId: optionId,
         );
-    _reloadSettings();
   }
 
   /// Navigates to the model settings screen.
@@ -121,15 +119,19 @@ class _AgentModelSelectorPopupState extends State<AgentModelSelectorPopup> {
   /// Toggles Max Context mode for the active chat model.
   Future<void> _toggleMaxContext(_AgentModelSelectorData data) async {
     final config = data.currentConfig;
+    final enableMaxContextMode =
+        !(_enableMaxContextMode ?? config.context.enableMaxContextMode);
+    setState(() {
+      _enableMaxContextMode = enableMaxContextMode;
+    });
     await _clients.preferencesModelConfigManager.updateContextForModel(
       providerId: config.providerId,
       modelId: config.modelId,
       context: core_proxy.ModelContextSpec(
         maxContextLength: config.context.maxContextLength,
-        enableMaxContextMode: !config.context.enableMaxContextMode,
+        enableMaxContextMode: enableMaxContextMode,
       ),
     );
-    _reloadSettings();
   }
 
   /// Builds the model selector popup card.
@@ -169,6 +171,10 @@ class _AgentModelSelectorPopupState extends State<AgentModelSelectorPopup> {
                       child: Center(child: CircularProgressIndicator()),
                     );
                   }
+                  final displayData = data.copyWith(
+                    enableThinkingMode:
+                        _enableThinkingMode ?? data.enableThinkingMode,
+                  );
                   return SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Column(
@@ -176,10 +182,11 @@ class _AgentModelSelectorPopupState extends State<AgentModelSelectorPopup> {
                       children: <Widget>[
                         _ThinkingSettingsItem(
                           popupContainerColor: popupContainerColor,
-                          data: data,
-                          onToggleThinkingMode: () => _toggleThinking(data),
+                          data: displayData,
+                          onToggleThinkingMode: () =>
+                              _toggleThinking(displayData),
                           onThinkingOptionChanged: (optionId) =>
-                              _updateThinkingOption(data, optionId),
+                              _updateThinkingOption(displayData, optionId),
                           onInfoClick: () => _showInfo('思考设置', '管理思考模式'),
                           onThinkingModeInfoClick: () => _showInfo(
                             '思考模式',
@@ -193,6 +200,7 @@ class _AgentModelSelectorPopupState extends State<AgentModelSelectorPopup> {
                         ),
                         _MaxContextSettingItem(
                           enabled:
+                              _enableMaxContextMode ??
                               data.currentConfig.context.enableMaxContextMode,
                           onToggle: () => _toggleMaxContext(data),
                           onInfoClick: () => _showInfo(
@@ -278,6 +286,8 @@ class _AgentModelMenuSectionState extends State<AgentModelMenuSection> {
   String? _expandedProviderId;
   bool _modelSectionExpanded = false;
   bool _modelDropdownExpanded = false;
+  bool? _enableThinkingMode;
+  bool? _enableMaxContextMode;
 
   GeneratedCoreProxyClients get _clients => widget.viewModel.clients;
 
@@ -291,13 +301,6 @@ class _AgentModelMenuSectionState extends State<AgentModelMenuSection> {
   /// Loads model selector state for the embedded input menu section.
   Future<_AgentModelSelectorData> _loadSettings() {
     return _loadAgentModelSelectorData(_clients);
-  }
-
-  /// Refreshes the embedded menu data after changing a model setting.
-  void _reloadSettings() {
-    setState(() {
-      _settingsFuture = _loadSettings();
-    });
   }
 
   /// Selects one configured model for chat from the embedded menu.
@@ -318,14 +321,7 @@ class _AgentModelMenuSectionState extends State<AgentModelMenuSection> {
       providerId: provider.id,
       modelId: model.id,
     );
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _modelDropdownExpanded = false;
-      _expandedProviderId = null;
-      _settingsFuture = _loadSettings();
-    });
+    widget.onDismiss();
   }
 
   /// Toggles thinking mode from the embedded menu.
@@ -333,11 +329,15 @@ class _AgentModelMenuSectionState extends State<AgentModelMenuSection> {
     if (data.thinkingSettings.requiredValue) {
       return;
     }
+    final enableThinkingMode =
+        !(_enableThinkingMode ?? data.enableThinkingMode);
+    setState(() {
+      _enableThinkingMode = enableThinkingMode;
+    });
     await _clients.preferencesApiPreferences.updateThinkingSettings(
-      enableThinkingMode: !data.enableThinkingMode,
+      enableThinkingMode: enableThinkingMode,
       thinkingQualityLevel: null,
     );
-    _reloadSettings();
   }
 
   /// Stores the selected provider/model thinking option from the embedded menu.
@@ -351,21 +351,24 @@ class _AgentModelMenuSectionState extends State<AgentModelMenuSection> {
           modelId: data.currentBinding.modelId,
           thinkingOptionId: optionId,
         );
-    _reloadSettings();
   }
 
   /// Toggles Max Context mode from the embedded menu.
   Future<void> _toggleMaxContext(_AgentModelSelectorData data) async {
     final config = data.currentConfig;
+    final enableMaxContextMode =
+        !(_enableMaxContextMode ?? config.context.enableMaxContextMode);
+    setState(() {
+      _enableMaxContextMode = enableMaxContextMode;
+    });
     await _clients.preferencesModelConfigManager.updateContextForModel(
       providerId: config.providerId,
       modelId: config.modelId,
       context: core_proxy.ModelContextSpec(
         maxContextLength: config.context.maxContextLength,
-        enableMaxContextMode: !config.context.enableMaxContextMode,
+        enableMaxContextMode: enableMaxContextMode,
       ),
     );
-    _reloadSettings();
   }
 
   /// Navigates to the model settings screen from the embedded menu.
@@ -408,6 +411,9 @@ class _AgentModelMenuSectionState extends State<AgentModelMenuSection> {
           );
         }
         final embeddedPanelColor = colorScheme.surface.withValues(alpha: 0.42);
+        final displayData = data.copyWith(
+          enableThinkingMode: _enableThinkingMode ?? data.enableThinkingMode,
+        );
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -464,10 +470,11 @@ class _AgentModelMenuSectionState extends State<AgentModelMenuSection> {
                         const SizedBox(height: 2),
                         _ThinkingSettingsItem(
                           popupContainerColor: embeddedPanelColor,
-                          data: data,
-                          onToggleThinkingMode: () => _toggleThinking(data),
+                          data: displayData,
+                          onToggleThinkingMode: () =>
+                              _toggleThinking(displayData),
                           onThinkingOptionChanged: (optionId) =>
-                              _updateThinkingOption(data, optionId),
+                              _updateThinkingOption(displayData, optionId),
                           onInfoClick: () {},
                           onThinkingModeInfoClick: () {},
                           onThinkingQualityInfoClick: () {},
@@ -476,6 +483,7 @@ class _AgentModelMenuSectionState extends State<AgentModelMenuSection> {
                         const SizedBox(height: 2),
                         _MaxContextSettingItem(
                           enabled:
+                              _enableMaxContextMode ??
                               data.currentConfig.context.enableMaxContextMode,
                           onToggle: () => _toggleMaxContext(data),
                           onInfoClick: () {},
@@ -507,6 +515,17 @@ class _AgentModelSelectorData {
   final core_proxy.ResolvedModelConfig currentConfig;
   final core_proxy.ThinkingSettingsDescriptor thinkingSettings;
   final bool enableThinkingMode;
+
+  /// Returns a copy with selected display fields replaced.
+  _AgentModelSelectorData copyWith({bool? enableThinkingMode}) {
+    return _AgentModelSelectorData(
+      providers: providers,
+      currentBinding: currentBinding,
+      currentConfig: currentConfig,
+      thinkingSettings: thinkingSettings,
+      enableThinkingMode: enableThinkingMode ?? this.enableThinkingMode,
+    );
+  }
 }
 
 class _ThinkingSettingsItem extends StatefulWidget {
@@ -550,17 +569,18 @@ class _ThinkingSettingsItemState extends State<_ThinkingSettingsItem> {
     }
   }
 
-  /// Syncs the slider when loaded thinking settings change.
+  /// Syncs the slider when the resolved thinking option changes.
   @override
   void didUpdateWidget(covariant _ThinkingSettingsItem oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.data.currentConfig.thinkingOptionId ==
+        widget.data.currentConfig.thinkingOptionId) {
+      return;
+    }
     final settings = widget.data.thinkingSettings;
     if (settings.control == core_proxy.ThinkingControl.levels &&
         settings.options.isNotEmpty) {
-      final nextIndex = _selectedOptionIndex(widget.data);
-      if (nextIndex != _sliderIndex) {
-        _sliderIndex = nextIndex;
-      }
+      _sliderIndex = _selectedOptionIndex(widget.data);
     }
   }
 
@@ -1298,7 +1318,6 @@ class _InfoPopup extends StatelessWidget {
   }
 }
 
-/// Loads model selector data shared by popup and embedded menu rendering.
 Future<_AgentModelSelectorData> _loadAgentModelSelectorData(
   GeneratedCoreProxyClients clients,
 ) async {

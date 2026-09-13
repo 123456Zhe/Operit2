@@ -28,6 +28,7 @@ use operit_util::stream::Stream::Stream;
 use operit_util::AppLogger::AppLogger;
 use operit_util::ChainLogger::{self, PLUGIN_CHAIN, RECEIVE_CHAIN, SEND_CHAIN};
 use operit_util::ImagePoolManager::ImagePoolManager;
+use operit_util::MediaPoolManager::MediaPoolManager;
 
 const DEFAULT_CHAT_KEY: &str = "__DEFAULT_CHAT__";
 const MESSAGE_PROCESS_TIMING_TAG: &str = "MessageProcessTiming";
@@ -773,7 +774,6 @@ impl AIMessageManager {
         enableDirectAudioProcessing: bool,
         enableDirectVideoProcessing: bool,
     ) -> Result<String, String> {
-        let hasInlineContent = !attachment.content.trim().is_empty();
         if enableDirectImageProcessing
             && attachment
                 .mimeType
@@ -782,23 +782,29 @@ impl AIMessageManager {
         {
             return Self::buildDirectImageAttachmentTag(attachment, fileSystemHost);
         }
-        if !hasInlineContent
-            && enableDirectAudioProcessing
+        if enableDirectAudioProcessing
             && attachment
                 .mimeType
                 .to_ascii_lowercase()
                 .starts_with("audio/")
         {
-            return Ok(format!("<audio_link id=\"{}\"/>", attachment.filePath));
+            return Self::buildDirectMediaAttachmentTag(
+                attachment,
+                fileSystemHost,
+                "audio",
+            );
         }
-        if !hasInlineContent
-            && enableDirectVideoProcessing
+        if enableDirectVideoProcessing
             && attachment
                 .mimeType
                 .to_ascii_lowercase()
                 .starts_with("video/")
         {
-            return Ok(format!("<video_link id=\"{}\"/>", attachment.filePath));
+            return Self::buildDirectMediaAttachmentTag(
+                attachment,
+                fileSystemHost,
+                "video",
+            );
         }
 
         let attributes = Self::buildAttachmentAttributes(attachment);
@@ -851,6 +857,50 @@ impl AIMessageManager {
             ));
         }
         Ok(imageId)
+    }
+
+    /// Builds a canonical audio or video media link backed by the process media pool.
+    fn buildDirectMediaAttachmentTag(
+        attachment: &AttachmentInfo,
+        fileSystemHost: Option<&dyn FileSystemHost>,
+        mediaType: &str,
+    ) -> Result<String, String> {
+        let mediaId = Self::registerDirectMediaAttachment(attachment, fileSystemHost, mediaType)?;
+        Ok(match mediaType {
+            "audio" => MediaLinkBuilder::audio(&mediaId),
+            "video" => MediaLinkBuilder::video(&mediaId),
+            _ => return Err(format!("Unsupported direct media type: {mediaType}")),
+        })
+    }
+
+    /// Registers an audio or video attachment in the process media pool.
+    fn registerDirectMediaAttachment(
+        attachment: &AttachmentInfo,
+        fileSystemHost: Option<&dyn FileSystemHost>,
+        mediaType: &str,
+    ) -> Result<String, String> {
+        let Some(fileSystemHost) = fileSystemHost else {
+            return Err(format!(
+                "FileSystemHost is required for direct {mediaType} attachment"
+            ));
+        };
+        let bytes = fileSystemHost
+            .readFileBytes(&attachment.filePath)
+            .map_err(|error| error.message)?;
+        if bytes.is_empty() {
+            return Err(format!(
+                "{mediaType} attachment is empty: {}",
+                attachment.filePath
+            ));
+        }
+        let mediaId = MediaPoolManager::add_media_bytes(&bytes, &attachment.mimeType);
+        if mediaId == "error" {
+            return Err(format!(
+                "{mediaType} attachment could not be registered: {}",
+                attachment.filePath
+            ));
+        }
+        Ok(mediaId)
     }
 
     /// Builds the XML attributes for an attachment notice.

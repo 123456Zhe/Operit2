@@ -36,6 +36,27 @@ impl ToolPkgLoader {
         )
     }
 
+    /// Loads a ToolPkg archive from an embedded non-core external asset.
+    #[allow(non_snake_case)]
+    pub fn loadToolPkgFromBundledExternalAsset<FReportPackageLoadError>(
+        assetName: &str,
+        bytes: &'static [u8],
+        jsEngine: &dyn JsExecutionEngine,
+        reportPackageLoadError: FReportPackageLoadError,
+    ) -> Result<ToolPkgLoadResult, String>
+    where
+        FReportPackageLoadError: Fn(&str, &str),
+    {
+        Self::loadToolPkgFromArchiveBytes(
+            bytes,
+            ToolPkgSourceType::EXTERNAL,
+            assetName,
+            false,
+            jsEngine,
+            reportPackageLoadError,
+        )
+    }
+
     /// Loads a ToolPkg archive from embedded application asset bytes.
     #[allow(non_snake_case)]
     pub fn loadToolPkgFromBuiltInAsset<FReportPackageLoadError>(

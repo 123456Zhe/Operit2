@@ -1484,6 +1484,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsModelDuplicateModelId => '该模型已添加到当前供应商。';
 
   @override
+  String get settingsModelDuplicateProviderName => '已存在同名供应商。';
+
+  @override
   String get settingsModelMaxTokens => 'Max tokens';
 
   @override
@@ -3507,4 +3510,47 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsRuntimeControlRoleUser => '普通用户';
+
+  @override
+  String get pluginLoadingTitle => '正在加载';
+
+  @override
+  String get pluginLoadingSkip => '跳过';
+
+  @override
+  String get pluginLoadingCollapse => '收起';
+
+  @override
+  String pluginLoadingStatus(int started, int total) {
+    return '已启动: $started / $total';
+  }
+
+  @override
+  String pluginLoadingCurrentTask(String task) {
+    return '正在加载 $task';
+  }
+
+  @override
+  String get pluginLoadingSuccess => '加载成功';
+
+  @override
+  String get pluginLoadingFailed => '加载失败';
+
+  @override
+  String get pluginLoadingWaiting => '等待中';
+
+  @override
+  String get pluginLoadingKindPackage => '包';
+
+  @override
+  String get pluginLoadingKindMcp => 'MCP';
+
+  @override
+  String get pluginLoadingCompleteSuccess => '包和插件已全部加载';
+
+  @override
+  String get pluginLoadingCompleteWithFailures => '部分包或插件加载失败';
+
+  @override
+  String get pluginLoadingNoLogs => '没有日志';
 }

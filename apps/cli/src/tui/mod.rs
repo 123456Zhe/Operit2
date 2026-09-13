@@ -18,6 +18,8 @@ mod i18n;
 mod input;
 #[path = "core/link_proxy_rs.rs"]
 mod link_proxy_rs;
+#[path = "transcript/fold.rs"]
+mod fold;
 #[path = "transcript/markdown.rs"]
 mod markdown;
 #[path = "input/pending_queue.rs"]

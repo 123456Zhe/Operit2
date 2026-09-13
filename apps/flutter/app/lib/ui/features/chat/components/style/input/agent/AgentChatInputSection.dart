@@ -117,6 +117,7 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
   OverlayEntry? _inputMenuPopupEntry;
   OverlayEntry? _mentionPopupEntry;
   OverlayEntry? _attachmentPopupEntry;
+  final GlobalKey _modelPopupWidgetKey = GlobalKey();
   StreamSubscription<
     Map<core_proxy.FunctionType, core_proxy.FunctionModelBinding>
   >?
@@ -155,10 +156,9 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
     }
   }
 
-  /// Rebuilds open popups before and after the viewport relayout.
+  /// Rebuilds open popups after the viewport finishes relayout.
   @override
   void didChangeMetrics() {
-    _markOpenPopupsForBuild();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _markOpenPopupsForBuild();
     });
@@ -202,9 +202,9 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
         return Stack(
           children: <Widget>[
             Positioned.fill(
-              child: GestureDetector(
+              child: Listener(
                 behavior: HitTestBehavior.translucent,
-                onTap: _dismissMentionSuggestionPopup,
+                onPointerDown: (_) => _dismissMentionSuggestionPopup(),
                 child: const SizedBox.expand(),
               ),
             ),
@@ -281,9 +281,9 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
         return Stack(
           children: <Widget>[
             Positioned.fill(
-              child: GestureDetector(
+              child: Listener(
                 behavior: HitTestBehavior.translucent,
-                onTap: _dismissModelSettingsPopup,
+                onPointerDown: (_) => _dismissModelSettingsPopup(),
                 child: const SizedBox.expand(),
               ),
             ),
@@ -297,6 +297,7 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxHeight: placement.maxHeight),
                   child: AgentModelSelectorPopup(
+                    key: _modelPopupWidgetKey,
                     viewModel: widget.viewModel,
                     onDismiss: _dismissModelSettingsPopup,
                     onModelChanged: _handleModelChanged,
@@ -324,9 +325,9 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
         return Stack(
           children: <Widget>[
             Positioned.fill(
-              child: GestureDetector(
+              child: Listener(
                 behavior: HitTestBehavior.translucent,
-                onTap: _dismissInputMenuPopup,
+                onPointerDown: (_) => _dismissInputMenuPopup(),
                 child: const SizedBox.expand(),
               ),
             ),
@@ -370,9 +371,9 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
         return Stack(
           children: <Widget>[
             Positioned.fill(
-              child: GestureDetector(
+              child: Listener(
                 behavior: HitTestBehavior.translucent,
-                onTap: _dismissAttachmentPopup,
+                onPointerDown: (_) => _dismissAttachmentPopup(),
                 child: const SizedBox.expand(),
               ),
             ),

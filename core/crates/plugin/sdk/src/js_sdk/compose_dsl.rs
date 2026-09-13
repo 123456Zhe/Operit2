@@ -1928,11 +1928,6 @@ pub struct ComposeModifierOp {
     /// Positional arguments encoded for the selected operation.
     pub args: Option<Vec<serde_json::Value>>,
 }
-/// Serializable sequence of modifier operations attached to a Compose node.
-pub struct ComposeModifierValue {
-    /// Operations applied in chain order by the host renderer.
-    pub __modifierOps: Vec<ComposeModifierOp>,
-}
 /// Stores a dynamically dispatched Compose modifier implementation.
 pub type ComposeModifierProxy = Arc<dyn ComposeModifierProxyApi>;
 /// Chainable layout, drawing, input, and positioning operations for Compose nodes.
@@ -2182,8 +2177,6 @@ pub trait ComposeModifierProxyApi: Send + Sync {
     fn align(&self, alignment: ComposeModifierAlign) -> ComposeModifierProxy;
     /// Matches the final size of the containing box without affecting its measurement.
     fn matchParentSize(&self) -> ComposeModifierProxy;
-    /// Serializes the accumulated modifier operations for transport to the host.
-    fn toJSON(&self) -> ComposeModifierValue;
 }
 /// Typography and color overrides applied to editable text.
 pub struct ComposeTextFieldStyle {
@@ -2205,7 +2198,7 @@ pub struct ComposeCommonProps {
     /// Content presented as the host screen's top-bar title.
     pub topBarTitle: Option<ComposeChildren>,
     /// Ordered modifier operations applied to layout, drawing, and input.
-    pub modifier: Option<ComposeModifierValue>,
+    pub modifier: Option<ComposeModifierProxy>,
     /// Sibling draw order, with larger values rendered above smaller ones.
     pub zIndex: Option<f64>,
     /// Share of remaining main-axis space inside a row or column.

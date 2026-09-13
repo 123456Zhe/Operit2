@@ -145,10 +145,9 @@ class _ClassicChatInputSectionState extends State<ClassicChatInputSection>
     }
   }
 
-  /// Rebuilds open popups before and after the viewport relayout.
+  /// Rebuilds open popups after the viewport finishes relayout.
   @override
   void didChangeMetrics() {
-    _markOpenPopupsForBuild();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _markOpenPopupsForBuild();
     });
@@ -928,9 +927,9 @@ class _ClassicPopupShell extends StatelessWidget {
     return Stack(
       children: <Widget>[
         Positioned.fill(
-          child: GestureDetector(
+          child: Listener(
             behavior: HitTestBehavior.translucent,
-            onTap: onDismiss,
+            onPointerDown: (_) => onDismiss(),
             child: const SizedBox.expand(),
           ),
         ),

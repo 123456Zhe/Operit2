@@ -1,10 +1,10 @@
 use ratatui::layout::Rect;
 
-/// ASCII glyphs stay one cell wide on CJK terminals; block and triangle glyphs do not.
-pub(super) const THUMB_SYMBOL: &str = "#";
-pub(super) const TRACK_SYMBOL: &str = "|";
-pub(super) const BEGIN_SYMBOL: &str = "^";
-pub(super) const END_SYMBOL: &str = "v";
+/// Classic TUI scrollbar glyphs: block thumb, light track, triangle arrows.
+pub(super) const THUMB_SYMBOL: &str = "█";
+pub(super) const TRACK_SYMBOL: &str = "│";
+pub(super) const BEGIN_SYMBOL: &str = "▲";
+pub(super) const END_SYMBOL: &str = "▼";
 
 /// Which part of the vertical-right transcript scrollbar a pointer is on.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

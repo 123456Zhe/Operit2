@@ -209,7 +209,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     text: ctx.UI.LazyColumn(
       {
         spacing: 12,
-        modifier: ctx.Modifier.heightIn({ max: 420 }).toJSON(),
+        modifier: ctx.Modifier.heightIn({ max: 420 }),
       },
       body
     ),

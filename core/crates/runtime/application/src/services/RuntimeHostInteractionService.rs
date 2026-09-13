@@ -13,6 +13,8 @@ use operit_host_api::TimeUtils::tryCurrentTimeMillisU128;
 use operit_host_api::{
     SystemNotificationActivation, SystemNotificationRequest, SystemOperationHost,
 };
+use operit_util::ImagePoolManager::ImagePoolManager;
+use operit_util::MediaPoolManager::MediaPoolManager;
 use operit_util::stream::Stream::{CollectFuture, Stream};
 use tokio::sync::{oneshot, Notify};
 
@@ -815,6 +817,16 @@ pub struct RuntimeHostInteractionService {
     systemOperationHost: Option<Arc<dyn SystemOperationHost>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// Bytes and metadata returned for a registered image or media-pool entry.
+pub struct RuntimeMediaPoolData {
+    pub mediaType: String,
+    pub base64: String,
+    pub mimeType: String,
+    pub width: i32,
+    pub height: i32,
+}
+
 #[derive(Clone, Debug)]
 /// Blocking stream of pending host interaction requests for selected kinds.
 pub struct RuntimeHostInteractionEventStream {
@@ -861,6 +873,58 @@ impl RuntimeHostInteractionService {
     pub fn getInstance(context: &HostManager) -> Self {
         Self {
             systemOperationHost: context.systemOperationHost.clone(),
+        }
+    }
+
+    /// Reads one registered image or audio/video entry by its pool id.
+    pub fn getMediaPoolData(
+        &self,
+        mediaType: String,
+        id: String,
+    ) -> Result<RuntimeMediaPoolData, String> {
+        let mediaType = mediaType.trim().to_ascii_lowercase();
+        let id = id.trim();
+        if id.is_empty() {
+            return Err("media pool id is required".to_string());
+        }
+        match mediaType.as_str() {
+            "image" => {
+                let image = ImagePoolManager::get_image(id)
+                    .ok_or_else(|| format!("image pool entry not found: {id}"))?;
+                if !image.mime_type.to_ascii_lowercase().starts_with("image/") {
+                    return Err(format!(
+                        "image pool entry has invalid MIME type: {}",
+                        image.mime_type
+                    ));
+                }
+                Ok(RuntimeMediaPoolData {
+                    mediaType,
+                    base64: image.base64,
+                    mimeType: image.mime_type,
+                    width: image.width,
+                    height: image.height,
+                })
+            }
+            "audio" | "video" | "file" => {
+                let media = MediaPoolManager::get_media(id)
+                    .ok_or_else(|| format!("media pool entry not found: {id}"))?;
+                let mimeType = media.mime_type.to_ascii_lowercase();
+                let expectedPrefix = format!("{mediaType}/");
+                if mediaType != "file" && !mimeType.starts_with(&expectedPrefix) {
+                    return Err(format!(
+                        "{mediaType} pool entry has incompatible MIME type: {}",
+                        media.mime_type
+                    ));
+                }
+                Ok(RuntimeMediaPoolData {
+                    mediaType,
+                    base64: media.base64,
+                    mimeType: media.mime_type,
+                    width: 0,
+                    height: 0,
+                })
+            }
+            _ => Err(format!("unsupported media pool type: {mediaType}")),
         }
     }
 
@@ -1442,6 +1506,44 @@ impl RuntimeHostInteractionBroker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Verifies image and audio/video pool entries are returned by pool id.
+    #[test]
+    fn mediaPoolDataIsReadByIdWithTypeValidation() {
+        let service = RuntimeHostInteractionService::getInstance(&HostManager::new());
+        let imageId = ImagePoolManager::add_image_bytes(
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR\x00\x00\x00\x01\x00\x00\x00\x01",
+            Some("image/png"),
+            None,
+        );
+        let audioId = MediaPoolManager::add_media_bytes(b"audio", "audio/mpeg");
+        let videoId = MediaPoolManager::add_media_bytes(b"video", "video/mp4");
+        let invalidAudioId = MediaPoolManager::add_media_bytes(b"audio", "text/plain");
+
+        let image = service
+            .getMediaPoolData("image".to_string(), imageId.clone())
+            .expect("image pool entry must be readable");
+        let audio = service
+            .getMediaPoolData("audio".to_string(), audioId.clone())
+            .expect("audio pool entry must be readable");
+        let video = service
+            .getMediaPoolData("video".to_string(), videoId.clone())
+            .expect("video pool entry must be readable");
+
+        assert_eq!(image.mimeType, "image/png");
+        assert!(!image.base64.is_empty());
+        assert_eq!(audio.mimeType, "audio/mpeg");
+        assert_eq!(audio.base64, "YXVkaW8=");
+        assert_eq!(video.mimeType, "video/mp4");
+        assert_eq!(video.base64, "dmlkZW8=");
+        assert!(service
+            .getMediaPoolData("audio".to_string(), invalidAudioId.clone())
+            .is_err());
+
+        MediaPoolManager::remove_media(&audioId);
+        MediaPoolManager::remove_media(&videoId);
+        MediaPoolManager::remove_media(&invalidAudioId);
+    }
 
     /// Verifies non-blocking owner notifications remain pending until acknowledged.
     #[test]

@@ -751,6 +751,7 @@
   "settingsModelCustomModel": "Custom model",
   "settingsModelModelId": "Model ID",
   "settingsModelDuplicateModelId": "This model has already been added to this provider.",
+  "settingsModelDuplicateProviderName": "A provider with this name already exists.",
   "settingsModelMaxTokens": "Max tokens",
   "settingsModelMaxTokensDescription": "Limit how many tokens one response may generate.",
   "settingsModelTemperature": "Temperature",
@@ -1819,5 +1820,35 @@
   "settingsRuntimeControlRoleRelay": "Relay node",
   "settingsRuntimeControlRoleStorage": "Storage node",
   "settingsRuntimeControlRoleRunner": "Task runner",
-  "settingsRuntimeControlRoleUser": "User"
+  "settingsRuntimeControlRoleUser": "User",
+  "pluginLoadingTitle": "Loading",
+  "pluginLoadingSkip": "Skip",
+  "pluginLoadingCollapse": "Collapse",
+  "pluginLoadingStatus": "Started: {started} / {total}",
+  "@pluginLoadingStatus": {
+    "placeholders": {
+      "started": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "pluginLoadingCurrentTask": "Loading {task}",
+  "@pluginLoadingCurrentTask": {
+    "placeholders": {
+      "task": {
+        "type": "String"
+      }
+    }
+  },
+  "pluginLoadingSuccess": "Loaded",
+  "pluginLoadingFailed": "Failed",
+  "pluginLoadingWaiting": "Waiting",
+  "pluginLoadingKindPackage": "Package",
+  "pluginLoadingKindMcp": "MCP",
+  "pluginLoadingCompleteSuccess": "All packages and plugins loaded",
+  "pluginLoadingCompleteWithFailures": "Some packages or plugins failed to load",
+  "pluginLoadingNoLogs": "No logs"
 }

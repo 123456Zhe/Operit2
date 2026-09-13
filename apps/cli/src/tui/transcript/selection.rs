@@ -15,7 +15,7 @@ pub(super) struct TranscriptSelectionState {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct TranscriptPosition {
-    line: usize,
+    pub(super) line: usize,
     column: usize,
 }
 
@@ -47,6 +47,11 @@ impl TranscriptSelectionState {
         if self.normalized_range().is_none() {
             self.clear();
         }
+    }
+
+    /// Returns whether the current pointer gesture is a click without a drag range.
+    pub(super) fn is_click(&self) -> bool {
+        matches!((self.anchor, self.cursor), (Some(anchor), Some(cursor)) if anchor == cursor)
     }
 
     pub(super) fn clear(&mut self) {

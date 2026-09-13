@@ -309,7 +309,16 @@ impl OperitFlutterBridge {
             ))]
             terminalHost.clone(),
         )?;
+        let coreInitializationStartedAt = operit_host_api::TimeUtils::currentTimeMillis();
         core.localApplicationMut().onCreate()?;
+        operit_util::AppLogger::AppLogger::i(
+            "OperitFlutterBridge",
+            &format!(
+                "core onCreate done elapsedMs={}",
+                operit_host_api::TimeUtils::currentTimeMillis() - coreInitializationStartedAt
+            ),
+        );
+        let coreApplicationStartedAt = operit_host_api::TimeUtils::currentTimeMillis();
         install_permission_requester(&mut core);
         #[cfg(not(target_arch = "wasm32"))]
         let chatRuntimeHolder = core.localApplicationMut().chatRuntimeHolder.clone();
@@ -320,6 +329,13 @@ impl OperitFlutterBridge {
             localCore.clone(),
             RemoteDeviceInfo::native(),
         )?;
+        operit_util::AppLogger::AppLogger::i(
+            "OperitFlutterBridge",
+            &format!(
+                "CoreApplication start done elapsedMs={}",
+                operit_host_api::TimeUtils::currentTimeMillis() - coreApplicationStartedAt
+            ),
+        );
         Ok(Self {
             #[cfg(not(target_arch = "wasm32"))]
             runtime,

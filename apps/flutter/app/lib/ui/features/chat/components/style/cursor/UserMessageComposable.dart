@@ -111,6 +111,48 @@ class _UserMessageComposableState extends State<UserMessageComposable> {
               children: <Widget>[
                 if (parseResult.replyInfo != null)
                   _ReplyInfoView(replyInfo: parseResult.replyInfo!),
+                if (parseResult.imageLinks.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: <Widget>[
+                        for (final imageLink in parseResult.imageLinks)
+                          AttachmentTag(
+                            attachment: AttachmentData(
+                              id: imageLink.id,
+                              filename: 'Image',
+                              type: 'image/*',
+                              mediaPoolType: 'image',
+                            ),
+                            textColor: effectiveTextColor,
+                            backgroundColor: bubbleColor,
+                            onClick: (attachmentData) {
+                              final chatAttachment = ChatAttachment(
+                                id: attachmentData.id,
+                                filename: attachmentData.filename,
+                                mimeType: attachmentData.type,
+                                size: attachmentData.size,
+                                content: attachmentData.content,
+                                mediaPoolType: attachmentData.mediaPoolType,
+                              );
+                              showDialog<void>(
+                                context: context,
+                                builder: (dialogContext) =>
+                                    AttachmentViewerDialog(
+                                      visible: true,
+                                      attachment: chatAttachment,
+                                      onDismiss: () {
+                                        Navigator.of(dialogContext).pop();
+                                      },
+                                    ),
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
                 if (parseResult.trailingAttachments.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4),
@@ -133,6 +175,7 @@ class _UserMessageComposableState extends State<UserMessageComposable> {
                                   mimeType: attachmentData.type,
                                   size: attachmentData.size,
                                   content: attachmentData.content,
+                                  mediaPoolType: attachmentData.mediaPoolType,
                                 );
                                 showDialog<void>(
                                   context: context,
@@ -253,12 +296,14 @@ class MessageParseResult {
     required this.processedText,
     required this.trailingAttachments,
     this.replyInfo,
+    this.imageLinks = const <ImageLinkData>[],
     this.proxySenderName,
   });
 
   final String processedText;
   final List<AttachmentData> trailingAttachments;
   final ReplyInfo? replyInfo;
+  final List<ImageLinkData> imageLinks;
   final String? proxySenderName;
 }
 
@@ -274,6 +319,13 @@ class ReplyInfo {
   final String content;
 }
 
+/// Identifies one image pool link parsed from a user message.
+class ImageLinkData {
+  const ImageLinkData({required this.id});
+
+  final String id;
+}
+
 class AttachmentData {
   const AttachmentData({
     required this.id,
@@ -281,6 +333,7 @@ class AttachmentData {
     required this.type,
     this.size = 0,
     this.content = '',
+    this.mediaPoolType,
   });
 
   final String id;
@@ -288,6 +341,7 @@ class AttachmentData {
   final String type;
   final int size;
   final String content;
+  final String? mediaPoolType;
 }
 
 class _AttachmentMatch {
@@ -308,6 +362,30 @@ MessageParseResult parseMessageContent(String content) {
         .replaceFirst(proxySenderMatch.group(0)!, '')
         .trim();
   }
+
+  final mediaLinks = ChatMarkupRegex.extractMediaLinks(cleanedContent);
+  final imageLinks = <ImageLinkData>[
+    for (final mediaLink in mediaLinks)
+      if (mediaLink.type == 'image') ImageLinkData(id: mediaLink.id),
+  ];
+  final mediaLinkAttachments = <AttachmentData>[
+    for (final mediaLink in mediaLinks)
+      if (mediaLink.type == 'audio' ||
+          mediaLink.type == 'video' ||
+          mediaLink.type == 'file')
+        AttachmentData(
+          id: mediaLink.id,
+          filename: mediaLink.fileName ??
+              (mediaLink.type == 'audio' ? 'Audio' : 'Video'),
+          type: switch (mediaLink.type) {
+            'audio' => 'audio/*',
+            'video' => 'video/*',
+            _ => 'application/octet-stream',
+          },
+          mediaPoolType: mediaLink.type,
+        ),
+  ];
+  cleanedContent = ChatMarkupRegex.removeMediaLinks(cleanedContent).trim();
 
   final replyMatch = ChatMarkupRegex.replyToTag.firstMatch(cleanedContent);
   final replyInfo = replyMatch == null
@@ -344,8 +422,12 @@ MessageParseResult parseMessageContent(String content) {
   if (!cleanedContent.contains('<attachment')) {
     return MessageParseResult(
       processedText: cleanedContent,
-      trailingAttachments: workspaceAttachments,
+      trailingAttachments: <AttachmentData>[
+        ...workspaceAttachments,
+        ...mediaLinkAttachments,
+      ],
       replyInfo: replyInfo,
+      imageLinks: imageLinks,
       proxySenderName: proxySenderName,
     );
   }
@@ -371,8 +453,12 @@ MessageParseResult parseMessageContent(String content) {
   if (matches.isEmpty) {
     return MessageParseResult(
       processedText: cleanedContent,
-      trailingAttachments: workspaceAttachments,
+      trailingAttachments: <AttachmentData>[
+        ...workspaceAttachments,
+        ...mediaLinkAttachments,
+      ],
       replyInfo: replyInfo,
+      imageLinks: imageLinks,
       proxySenderName: proxySenderName,
     );
   }
@@ -439,12 +525,15 @@ MessageParseResult parseMessageContent(String content) {
   if (lastIndex < cleanedContent.length) {
     messageText.write(cleanedContent.substring(lastIndex));
   }
-  trailingAttachments.insertAll(0, workspaceAttachments);
-
   return MessageParseResult(
     processedText: messageText.toString(),
-    trailingAttachments: trailingAttachments,
+    trailingAttachments: <AttachmentData>[
+      ...workspaceAttachments,
+      ...mediaLinkAttachments,
+      ...trailingAttachments,
+    ],
     replyInfo: replyInfo,
+    imageLinks: imageLinks,
     proxySenderName: proxySenderName,
   );
 }
@@ -587,6 +676,6 @@ bool _attachmentClickable(AttachmentData attachment) {
       attachment.id.startsWith('/') ||
       attachment.id.startsWith('content://') ||
       attachment.id.startsWith('file://') ||
-      attachment.id.startsWith('media_pool:') ||
+      attachment.mediaPoolType != null ||
       attachment.type.startsWith('image/');
 }

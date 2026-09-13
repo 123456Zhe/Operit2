@@ -4,6 +4,11 @@ use std::sync::Arc;
 use serde_json::Value;
 
 use crate::runtime_support::ToolRuntimeSupport;
+use crate::tools::PackageLoadingProgress::{
+    appendPluginLoadingItemLog, ensurePluginLoadingItem, markPluginLoadingItemFailed,
+    markPluginLoadingItemLoading, markPluginLoadingItemSuccess, pluginLoadingSessionActive,
+    PLUGIN_LOAD_KIND_MCP,
+};
 use crate::tools::mcp_runtime::plugins::MCPBridge::MCPBridge;
 use crate::tools::mcp_runtime::plugins::MCPBridgeClient::MCPBridgeClient;
 use crate::tools::mcp_runtime::MCPLocalServer::{
@@ -112,9 +117,29 @@ impl MCPStarter {
         let timeoutMs = timeoutSeconds.max(1) as u64 * 1000;
         let mut successCount = 0usize;
         for pluginId in &plugins {
+            reportMcpPluginQueued(pluginId, &localServer);
+        }
+        for pluginId in &plugins {
+            reportMcpPluginStarting(pluginId, &localServer);
             let startedAtMillis = operit_host_api::TimeUtils::currentTimeMillisU128();
-            if self.startPluginWithTimeout(pluginId, timeoutMs, |_| {}) {
+            let mut lastError = String::new();
+            let started = self.startPluginWithTimeout(pluginId, timeoutMs, |status| {
+                let message = startStatusMessage(&status);
+                appendMcpPluginLog(pluginId, &message);
+                if matches!(
+                    &status,
+                    StartStatus::Error(_)
+                        | StartStatus::TerminalServiceUnavailable(_)
+                        | StartStatus::PnpmMissing(_)
+                ) {
+                    lastError = message;
+                }
+            });
+            if started {
                 successCount += 1;
+                reportMcpPluginSuccess(pluginId);
+            } else {
+                reportMcpPluginFailure(pluginId, &lastError);
             }
             if operit_host_api::TimeUtils::currentTimeMillisU128().saturating_sub(startedAtMillis)
                 >= u128::from(timeoutMs)
@@ -313,6 +338,76 @@ fn parseConfigJson(configJson: &str) -> Option<MCPConfig> {
 #[allow(non_snake_case)]
 fn currentTimeMillis() -> i64 {
     operit_host_api::TimeUtils::currentTimeMillis()
+}
+
+fn mcpPluginDisplayName(pluginId: &str, localServer: &MCPLocalServer) -> String {
+    localServer
+        .getPluginMetadata(pluginId)
+        .map(|metadata| metadata.name)
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| {
+            pluginId
+                .split('/')
+                .last()
+                .unwrap_or(pluginId)
+                .to_string()
+        })
+}
+
+fn startStatusMessage(status: &StartStatus) -> String {
+    match status {
+        StartStatus::InProgress(message)
+        | StartStatus::Success(message)
+        | StartStatus::Error(message)
+        | StartStatus::TerminalServiceUnavailable(message)
+        | StartStatus::PnpmMissing(message) => message.clone(),
+    }
+}
+
+fn reportMcpPluginQueued(pluginId: &str, localServer: &MCPLocalServer) {
+    if !pluginLoadingSessionActive() {
+        return;
+    }
+    ensurePluginLoadingItem(
+        pluginId,
+        &mcpPluginDisplayName(pluginId, localServer),
+        PLUGIN_LOAD_KIND_MCP,
+    );
+}
+
+fn reportMcpPluginStarting(pluginId: &str, localServer: &MCPLocalServer) {
+    if !pluginLoadingSessionActive() {
+        return;
+    }
+    let displayName = mcpPluginDisplayName(pluginId, localServer);
+    ensurePluginLoadingItem(pluginId, &displayName, PLUGIN_LOAD_KIND_MCP);
+    markPluginLoadingItemLoading(pluginId, Some(&displayName));
+}
+
+fn appendMcpPluginLog(pluginId: &str, message: &str) {
+    if !pluginLoadingSessionActive() {
+        return;
+    }
+    appendPluginLoadingItemLog(pluginId, message);
+}
+
+fn reportMcpPluginSuccess(pluginId: &str) {
+    if !pluginLoadingSessionActive() {
+        return;
+    }
+    markPluginLoadingItemSuccess(pluginId, None);
+}
+
+fn reportMcpPluginFailure(pluginId: &str, message: &str) {
+    if !pluginLoadingSessionActive() {
+        return;
+    }
+    let failure = if message.trim().is_empty() {
+        "failed"
+    } else {
+        message
+    };
+    markPluginLoadingItemFailed(pluginId, failure, message);
 }
 
 #[allow(non_snake_case)]

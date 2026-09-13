@@ -2828,6 +2828,12 @@ abstract class AppLocalizations {
   /// **'This model has already been added to this provider.'**
   String get settingsModelDuplicateModelId;
 
+  /// No description provided for @settingsModelDuplicateProviderName.
+  ///
+  /// In en, this message translates to:
+  /// **'A provider with this name already exists.'**
+  String get settingsModelDuplicateProviderName;
+
   /// No description provided for @settingsModelMaxTokens.
   ///
   /// In en, this message translates to:
@@ -6566,6 +6572,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'User'**
   String get settingsRuntimeControlRoleUser;
+
+  /// No description provided for @pluginLoadingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading'**
+  String get pluginLoadingTitle;
+
+  /// No description provided for @pluginLoadingSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get pluginLoadingSkip;
+
+  /// No description provided for @pluginLoadingCollapse.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse'**
+  String get pluginLoadingCollapse;
+
+  /// No description provided for @pluginLoadingStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Started: {started} / {total}'**
+  String pluginLoadingStatus(int started, int total);
+
+  /// No description provided for @pluginLoadingCurrentTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading {task}'**
+  String pluginLoadingCurrentTask(String task);
+
+  /// No description provided for @pluginLoadingSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Loaded'**
+  String get pluginLoadingSuccess;
+
+  /// No description provided for @pluginLoadingFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get pluginLoadingFailed;
+
+  /// No description provided for @pluginLoadingWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get pluginLoadingWaiting;
+
+  /// No description provided for @pluginLoadingKindPackage.
+  ///
+  /// In en, this message translates to:
+  /// **'Package'**
+  String get pluginLoadingKindPackage;
+
+  /// No description provided for @pluginLoadingKindMcp.
+  ///
+  /// In en, this message translates to:
+  /// **'MCP'**
+  String get pluginLoadingKindMcp;
+
+  /// No description provided for @pluginLoadingCompleteSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'All packages and plugins loaded'**
+  String get pluginLoadingCompleteSuccess;
+
+  /// No description provided for @pluginLoadingCompleteWithFailures.
+  ///
+  /// In en, this message translates to:
+  /// **'Some packages or plugins failed to load'**
+  String get pluginLoadingCompleteWithFailures;
+
+  /// No description provided for @pluginLoadingNoLogs.
+  ///
+  /// In en, this message translates to:
+  /// **'No logs'**
+  String get pluginLoadingNoLogs;
 }
 
 class _AppLocalizationsDelegate

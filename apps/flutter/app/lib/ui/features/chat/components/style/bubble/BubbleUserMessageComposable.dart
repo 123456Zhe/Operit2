@@ -201,6 +201,7 @@ class _UserMessagePreBubbleContent extends StatelessWidget {
                         id: imageLink.id,
                         filename: 'Image',
                         type: 'image/*',
+                        mediaPoolType: 'image',
                       ),
                       textColor: textColor,
                       backgroundColor: backgroundColor,
@@ -235,6 +236,7 @@ class _UserMessagePreBubbleContent extends StatelessWidget {
                               mimeType: attachmentData.type,
                               size: attachmentData.size,
                               content: attachmentData.content,
+                              mediaPoolType: attachmentData.mediaPoolType,
                             );
                             showDialog<void>(
                               context: context,
@@ -606,16 +608,10 @@ class _MessageAvatar extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: isProxySender
-          ? CharacterAvatarImage(
-              avatarUri: avatarImagePath,
-              fit: BoxFit.cover,
-            )
+          ? CharacterAvatarImage(avatarUri: avatarImagePath, fit: BoxFit.cover)
           : avatarImagePath != null && avatarImagePath.isNotEmpty
-              ? ThemeAssetImage(
-                  storagePath: avatarImagePath,
-                  fit: BoxFit.cover,
-                )
-              : Icon(icon, color: tint, size: 22),
+          ? ThemeAssetImage(storagePath: avatarImagePath, fit: BoxFit.cover)
+          : Icon(icon, color: tint, size: 22),
     );
   }
 }
@@ -661,6 +657,7 @@ class AttachmentData {
     required this.type,
     this.size = 0,
     this.content = '',
+    this.mediaPoolType,
   });
 
   final String id;
@@ -668,6 +665,7 @@ class AttachmentData {
   final String type;
   final int size;
   final String content;
+  final String? mediaPoolType;
 }
 
 class _AttachmentMatch {
@@ -689,18 +687,27 @@ MessageParseResult parseMessageContent(String content) {
         .trim();
   }
 
+  final mediaLinks = ChatMarkupRegex.extractMediaLinks(cleanedContent);
   final imageLinks = <ImageLinkData>[
-    for (final mediaLink in _extractMediaLinkTags(cleanedContent))
+    for (final mediaLink in mediaLinks)
       if (mediaLink.type == 'image') ImageLinkData(id: mediaLink.id),
   ];
-  cleanedContent = _removeMediaLinks(cleanedContent).trim();
+  cleanedContent = ChatMarkupRegex.removeMediaLinks(cleanedContent).trim();
   final mediaLinkAttachments = <AttachmentData>[
-    for (final mediaLink in _extractMediaLinkTags(content))
-      if (mediaLink.type != 'image')
+    for (final mediaLink in mediaLinks)
+      if (mediaLink.type == 'audio' ||
+          mediaLink.type == 'video' ||
+          mediaLink.type == 'file')
         AttachmentData(
-          id: 'media_pool:${mediaLink.id}',
-          filename: mediaLink.type == 'audio' ? 'Audio' : 'Video',
-          type: mediaLink.type == 'audio' ? 'audio/*' : 'video/*',
+          id: mediaLink.id,
+          filename: mediaLink.fileName ??
+              (mediaLink.type == 'audio' ? 'Audio' : 'Video'),
+          type: switch (mediaLink.type) {
+            'audio' => 'audio/*',
+            'video' => 'video/*',
+            _ => 'application/octet-stream',
+          },
+          mediaPoolType: mediaLink.type,
         ),
   ];
 
@@ -867,96 +874,6 @@ int _parseLong(String? value) {
   return parsed;
 }
 
-class _MediaLinkTag {
-  const _MediaLinkTag({required this.type, required this.id});
-
-  final String type;
-  final String id;
-}
-
-List<_MediaLinkTag> _extractMediaLinkTags(String message) {
-  final tags = <_MediaLinkTag>[];
-  final seen = <String>{};
-  var cursor = 0;
-  while (true) {
-    final startRelative = message.indexOf('<link', cursor);
-    if (startRelative < 0) {
-      break;
-    }
-    final endRelative = message.indexOf('</link>', startRelative);
-    if (endRelative < 0) {
-      break;
-    }
-    final end = endRelative + '</link>'.length;
-    final tagText = message.substring(startRelative, end);
-    final type = _extractAttr(tagText, 'type');
-    final id = _extractAttr(tagText, 'id');
-    if (type != null &&
-        id != null &&
-        id != 'error' &&
-        const <String>{'image', 'audio', 'video'}.contains(type)) {
-      final key = '$type/$id';
-      if (seen.add(key)) {
-        tags.add(_MediaLinkTag(type: type, id: id));
-      }
-    }
-    cursor = end;
-  }
-  return tags;
-}
-
-String _removeMediaLinks(String message) {
-  final result = StringBuffer();
-  var cursor = 0;
-  while (true) {
-    final startRelative = message.indexOf('<link', cursor);
-    if (startRelative < 0) {
-      result.write(message.substring(cursor));
-      break;
-    }
-    result.write(message.substring(cursor, startRelative));
-    final endRelative = message.indexOf('</link>', startRelative);
-    if (endRelative < 0) {
-      result.write(message.substring(startRelative));
-      break;
-    }
-    cursor = endRelative + '</link>'.length;
-  }
-  return result.toString();
-}
-
-String? _extractAttr(String source, String attributeName) {
-  final attrStart = source.indexOf(attributeName);
-  if (attrStart < 0) {
-    return null;
-  }
-  final afterName = source
-      .substring(attrStart + attributeName.length)
-      .trimLeft();
-  if (!afterName.startsWith('=')) {
-    return null;
-  }
-  final afterEquals = afterName.substring(1).trimLeft();
-  final afterEscape = afterEquals.startsWith('\\')
-      ? afterEquals.substring(1)
-      : afterEquals;
-  if (afterEscape.isEmpty) {
-    return null;
-  }
-  final quote = afterEscape[0];
-  if (quote == '"' || quote == "'") {
-    final body = afterEscape.substring(1);
-    final end = body.indexOf(quote);
-    if (end < 0) {
-      return null;
-    }
-    return body.substring(0, end).replaceFirst(RegExp(r'\\$'), '');
-  }
-  final end = afterEscape.indexOf(RegExp(r'\s|>'));
-  final value = end < 0 ? afterEscape : afterEscape.substring(0, end);
-  return value.replaceFirst(RegExp(r'/$'), '').replaceFirst(RegExp(r'\\$'), '');
-}
-
 class _ReplyInfoView extends StatelessWidget {
   const _ReplyInfoView({required this.replyInfo});
 
@@ -1089,6 +1006,6 @@ bool _attachmentClickable(AttachmentData attachment) {
       attachment.id.startsWith('/') ||
       attachment.id.startsWith('content://') ||
       attachment.id.startsWith('file://') ||
-      attachment.id.startsWith('media_pool:') ||
+      attachment.mediaPoolType != null ||
       attachment.type.startsWith('image/');
 }

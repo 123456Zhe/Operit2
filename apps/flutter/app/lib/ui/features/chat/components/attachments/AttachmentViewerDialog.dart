@@ -1,9 +1,22 @@
 // ignore_for_file: file_names
 
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:operit2/core/bridge/PlatformCoreProxy.dart';
+import 'package:operit2/core/bridge/ProxyCoreRuntimeBridge.dart';
+import 'package:operit2/core/proxy/generated/CoreProxyClients.g.dart';
 
 import '../../../../common/components/OperitDialog.dart';
 import '../style/input/common/ChatAttachmentImagePreview.dart';
+import '../workspace/file_preview/WorkspaceMediaPreviewWidgets.dart';
+
+const GeneratedCoreProxyClients _attachmentMediaClients =
+    GeneratedCoreProxyClients(
+      ProxyCoreRuntimeBridge(coreProxy: platformCoreProxy),
+    );
 
 class ChatAttachment {
   const ChatAttachment({
@@ -12,6 +25,7 @@ class ChatAttachment {
     required this.mimeType,
     this.size = 0,
     this.content = '',
+    this.mediaPoolType,
   });
 
   final String id;
@@ -19,6 +33,7 @@ class ChatAttachment {
   final String mimeType;
   final int size;
   final String content;
+  final String? mediaPoolType;
 }
 
 class AttachmentViewerDialog extends StatelessWidget {
@@ -84,10 +99,16 @@ class _AttachmentPreview extends StatelessWidget {
           child: ChatAttachmentImagePreview(
             attachmentPath: attachment.id,
             fileName: attachment.filename,
+            mediaPoolType: attachment.mediaPoolType,
             fit: BoxFit.contain,
           ),
         ),
       );
+    }
+
+    if (attachment.mimeType.startsWith('audio/') ||
+        attachment.mimeType.startsWith('video/')) {
+      return _MediaPoolAttachmentPreview(attachment: attachment);
     }
 
     if (isTextLike || attachment.content.isNotEmpty) {
@@ -109,6 +130,60 @@ class _AttachmentPreview extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Loads audio or video bytes from a media pool id or an ordinary attachment path.
+class _MediaPoolAttachmentPreview extends StatelessWidget {
+  const _MediaPoolAttachmentPreview({required this.attachment});
+
+  final ChatAttachment attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List>(
+      future: _readAttachmentMediaBytes(attachment),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Text(
+            snapshot.error.toString(),
+            style: Theme.of(context).textTheme.bodySmall,
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final bytes = snapshot.requireData;
+        if (attachment.mimeType.startsWith('audio/')) {
+          return WorkspaceAudioPreview(
+            bytes: bytes,
+            title: attachment.filename,
+          );
+        }
+        return WorkspaceVideoPreview(
+          bytes: bytes,
+          fileName: attachment.filename,
+        );
+      },
+    );
+  }
+}
+
+/// Reads attachment media bytes through the runtime pool bridge or file host.
+Future<Uint8List> _readAttachmentMediaBytes(ChatAttachment attachment) async {
+  if (attachment.mediaPoolType != null) {
+    final data = await _attachmentMediaClients
+        .servicesRuntimeHostInteractionService
+        .getMediaPoolData(
+          mediaType: attachment.mediaPoolType!,
+          id: attachment.id,
+        );
+    return base64Decode(data.base64);
+  }
+  final uri = Uri.tryParse(attachment.id);
+  final path = uri != null && uri.scheme == 'file'
+      ? uri.toFilePath()
+      : attachment.id;
+  return XFile(path).readAsBytes();
 }
 
 bool isTextLikeMimeType(String mimeType) {

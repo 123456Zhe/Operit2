@@ -17,6 +17,7 @@ import '../../data/preferences/UserPreferencesManager.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../common/RuntimeBootstrapScreen.dart';
 import '../features/chat/tts/TtsFloatingPanel.dart';
+import '../features/startup/PluginLoadingOverlay.dart';
 import '../../core/host/browser/RuntimeBrowserOwnerHost.dart';
 import '../features/chat/components/workspace/browser/automation/WorkspaceWebVisitHost.dart';
 import '../permissions/ToolApprovalHost.dart';
@@ -28,6 +29,7 @@ class OperitTheme extends StatefulWidget {
     super.key,
     required this.child,
     required this.initialThemePreferenceSnapshot,
+    this.initialThemeMode,
     required this.initialThemeIsReady,
     this.hostInteractionHostsEnabled = true,
     this.unconfiguredChildEnabled = false,
@@ -35,6 +37,7 @@ class OperitTheme extends StatefulWidget {
 
   final Widget child;
   final ThemePreferenceSnapshot initialThemePreferenceSnapshot;
+  final ThemeMode? initialThemeMode;
   final bool initialThemeIsReady;
   final bool hostInteractionHostsEnabled;
   final bool unconfiguredChildEnabled;
@@ -208,7 +211,10 @@ class _OperitThemeState extends State<OperitTheme> {
     final themeSnapshot = runtimeReady
         ? _controller.themePreferenceSnapshot
         : UserPreferencesManager.defaultThemePreferenceSnapshot;
-    final themeMode = runtimeReady ? _controller.themeMode : ThemeMode.system;
+    final themeMode = runtimeReady
+        ? _controller.themeMode
+        : widget.initialThemeMode ??
+              widget.initialThemePreferenceSnapshot.themeMode;
     final Widget appChild;
     if (_preserveUnconfiguredChild) {
       appChild = Stack(
@@ -297,6 +303,10 @@ class _OperitMaterialApp extends StatelessWidget {
               children: <Widget>[
                 Positioned.fill(child: child),
                 const TtsFloatingPanel(),
+                PluginLoadingOverlay(
+                  key: const ValueKey<String>('plugin-loading-overlay'),
+                  enabled: hostInteractionHostsEnabled,
+                ),
               ],
             ),
           ),
@@ -649,6 +659,9 @@ class OperitThemeController {
       characterGroupId: _activeCharacterGroupId,
     );
     await _loadCustomFontIfNeeded(snapshot);
+    await RuntimeBootstrapManager.instance.saveStartupThemeMode(
+      snapshot.themeMode,
+    );
     _themePreferenceSnapshot = snapshot;
     _onChanged();
   }
@@ -706,6 +719,9 @@ class OperitThemeController {
     if (revision != _activePromptRevision) {
       return;
     }
+    await RuntimeBootstrapManager.instance.saveStartupThemeMode(
+      snapshot.themeMode,
+    );
     _activeThemeTargetName = targetName;
     _themePreferenceSnapshot = snapshot;
     _onChanged();

@@ -791,29 +791,33 @@ class _OperitMainScreenState extends State<OperitMainScreen> {
             '';
         final screenSize = MediaQuery.sizeOf(context);
         final useTabletLayout = useTabletLayoutForWidth(screenSize.width);
-        final content = AppContent(
-          routerState: _routerState,
-          currentScreen: currentScreen,
-          currentRouteEntry: currentRouteEntry,
-          currentRouteTitle: currentRouteTitle,
-          useTabletLayout: useTabletLayout,
-          isTabletSidebarExpanded: _isTabletSidebarExpanded,
-          canGoBack: _routerState.canPop,
-          enableNavigationAnimation: true,
-          isNavigatingBack: _isNavigatingBack,
-          topBarController: _topBarController,
-          appBarEntries: appBarEntries,
-          onGoBack: _goBack,
-          onNavigationButtonPressed: () {
-            if (useTabletLayout) {
-              setState(() {
-                _isTabletSidebarExpanded = !_isTabletSidebarExpanded;
-              });
-            } else {
-              _drawerOpenState.value = true;
-            }
-          },
-          onAppBarEntrySelected: _navigateToNavigationEntry,
+        final content = Stack(
+          children: <Widget>[
+            AppContent(
+              routerState: _routerState,
+              currentScreen: currentScreen,
+              currentRouteEntry: currentRouteEntry,
+              currentRouteTitle: currentRouteTitle,
+              useTabletLayout: useTabletLayout,
+              isTabletSidebarExpanded: _isTabletSidebarExpanded,
+              canGoBack: _routerState.canPop,
+              enableNavigationAnimation: true,
+              isNavigatingBack: _isNavigatingBack,
+              topBarController: _topBarController,
+              appBarEntries: appBarEntries,
+              onGoBack: _goBack,
+              onNavigationButtonPressed: () {
+                if (useTabletLayout) {
+                  setState(() {
+                    _isTabletSidebarExpanded = !_isTabletSidebarExpanded;
+                  });
+                } else {
+                  _drawerOpenState.value = true;
+                }
+              },
+              onAppBarEntrySelected: _navigateToNavigationEntry,
+            ),
+          ],
         );
 
         return MainLayoutScope(
@@ -877,6 +881,7 @@ class _OperitMainScreenState extends State<OperitMainScreen> {
       },
     );
   }
+
 }
 
 bool _useEnglishForToolPkgText(BuildContext context) {

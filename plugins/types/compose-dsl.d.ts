@@ -2279,16 +2279,6 @@ export interface ComposeModifierOp {
 }
 
 /**
- * Serializable sequence of modifier operations attached to a Compose node.
- */
-export interface ComposeModifierValue {
-  /**
-   * Operations applied in chain order by the host renderer.
-   */
-  __modifierOps: ComposeModifierOp[];
-}
-
-/**
  * Stores a dynamically dispatched Compose modifier implementation.
  */
 export type ComposeModifierProxy = ComposeModifierProxyApi;
@@ -2569,10 +2559,6 @@ export interface ComposeModifierProxyApi {
    * Matches the final size of the containing box without affecting its measurement.
    */
   matchParentSize(): ComposeModifierProxy;
-  /**
-   * Serializes the accumulated modifier operations for transport to the host.
-   */
-  toJSON(): ComposeModifierValue;
 }
 
 /**
@@ -2616,7 +2602,7 @@ export interface ComposeCommonProps {
   /**
    * Ordered modifier operations applied to layout, drawing, and input.
    */
-  modifier?: ComposeModifierValue;
+  modifier?: ComposeModifierProxy;
   /**
    * Sibling draw order, with larger values rendered above smaller ones.
    */

@@ -189,7 +189,10 @@ apps/flutter/app/ohos/entry/src/main/resources/rawfile/ohos-vroot/
 # Plugin packaging outputs
 plugins/**/*.toolpkg
 core/crates/runtime/application/assets/plugins/buildin/**/*.toolpkg
+core/crates/runtime/application/assets/plugins/external/*.toolpkg
 core/crates/runtime/application/assets/plugins/buildin/**/*.js
+core/crates/runtime/application/assets/plugins/buildin/
+core/crates/runtime/application/assets/plugins/external/
 plugins/**/build/
 plugins/**/out/
 plugins/**/.cache/

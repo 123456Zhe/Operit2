@@ -133,7 +133,10 @@ class ModelSettingsPanelState extends State<ModelSettingsPanel> {
     _reload();
   }
 
-  Future<void> _createProvider() async {
+  /// Creates a provider after rejecting names already used by other profiles.
+  Future<void> _createProvider(
+    List<core_proxy.ProviderProfile> providers,
+  ) async {
     final catalogEntries = await widget.clients.preferencesModelConfigManager
         .getProviderCatalogEntries();
     if (!mounted) {
@@ -142,44 +145,59 @@ class ModelSettingsPanelState extends State<ModelSettingsPanel> {
     final result = await _ProviderEditorDialog.show(
       context: context,
       catalogEntries: catalogEntries,
+      occupiedProviderNames: _occupiedProviderNames(providers, null),
     );
     if (result == null || result is! _ProviderEditSaveResult) {
       return;
     }
-    final providerId = await widget.clients.preferencesModelConfigManager
-        .createProvider(
-          name: result.name,
-          providerTypeId: result.providerTypeId,
-          endpoint: result.endpoint,
-        );
-    final provider = await widget.clients.preferencesModelConfigManager
-        .getProviderProfile(providerId: providerId);
-    await widget.clients.preferencesModelConfigManager.updateProviderProfile(
-      provider: core_proxy.ProviderProfile(
-        id: provider.id,
-        name: provider.name,
-        providerTypeId: provider.providerTypeId,
-        providerType: provider.providerType,
-        endpoint: provider.endpoint,
-        apiKey: result.apiKey,
-        useMultipleApiKeys: provider.useMultipleApiKeys,
-        apiKeyPool: provider.apiKeyPool,
-        currentKeyIndex: provider.currentKeyIndex,
-        keyRotationMode: provider.keyRotationMode,
-        customHeaders: result.customHeaders,
-        requestLimitPerMinute: result.requestLimitPerMinute,
-        maxConcurrentRequests: result.maxConcurrentRequests,
-        thinkingConfigurations:
-            result.thinkingConfigurations ?? provider.thinkingConfigurations,
-        thinkingOptionId: provider.thinkingOptionId,
-        models: provider.models,
-      ),
-    );
-    _expandedProviderIds.add(providerId);
-    _reload();
+    try {
+      final providerId = await widget.clients.preferencesModelConfigManager
+          .createProvider(
+            name: result.name,
+            providerTypeId: result.providerTypeId,
+            endpoint: result.endpoint,
+          );
+      final provider = await widget.clients.preferencesModelConfigManager
+          .getProviderProfile(providerId: providerId);
+      await widget.clients.preferencesModelConfigManager.updateProviderProfile(
+        provider: core_proxy.ProviderProfile(
+          id: provider.id,
+          name: provider.name,
+          providerTypeId: provider.providerTypeId,
+          providerType: provider.providerType,
+          endpoint: provider.endpoint,
+          apiKey: result.apiKey,
+          useMultipleApiKeys: provider.useMultipleApiKeys,
+          apiKeyPool: provider.apiKeyPool,
+          currentKeyIndex: provider.currentKeyIndex,
+          keyRotationMode: provider.keyRotationMode,
+          customHeaders: result.customHeaders,
+          requestLimitPerMinute: result.requestLimitPerMinute,
+          maxConcurrentRequests: result.maxConcurrentRequests,
+          thinkingConfigurations:
+              result.thinkingConfigurations ?? provider.thinkingConfigurations,
+          thinkingOptionId: provider.thinkingOptionId,
+          models: provider.models,
+        ),
+      );
+      _expandedProviderIds.add(providerId);
+      _reload();
+    } on CoreLinkError catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await _showProviderConfigError(
+        title: AppLocalizations.of(context)!.settingsModelCreateProvider,
+        error: error,
+      );
+    }
   }
 
-  Future<void> _editProvider(core_proxy.ProviderProfile provider) async {
+  /// Updates a provider after rejecting names already used by other profiles.
+  Future<void> _editProvider(
+    core_proxy.ProviderProfile provider,
+    List<core_proxy.ProviderProfile> providers,
+  ) async {
     final catalogEntries = await widget.clients.preferencesModelConfigManager
         .getProviderCatalogEntries();
     if (!mounted) {
@@ -188,6 +206,7 @@ class ModelSettingsPanelState extends State<ModelSettingsPanel> {
     final result = await _ProviderEditorDialog.show(
       context: context,
       catalogEntries: catalogEntries,
+      occupiedProviderNames: _occupiedProviderNames(providers, provider.id),
       provider: provider,
     );
     if (result == null) {
@@ -198,29 +217,65 @@ class ModelSettingsPanelState extends State<ModelSettingsPanel> {
       return;
     }
     final saveResult = result as _ProviderEditSaveResult;
-    await widget.clients.preferencesModelConfigManager.updateProviderProfile(
-      provider: core_proxy.ProviderProfile(
-        id: provider.id,
-        name: saveResult.name,
-        providerTypeId: provider.providerTypeId,
-        providerType: provider.providerType,
-        endpoint: saveResult.endpoint,
-        apiKey: saveResult.apiKey,
-        useMultipleApiKeys: provider.useMultipleApiKeys,
-        apiKeyPool: provider.apiKeyPool,
-        currentKeyIndex: provider.currentKeyIndex,
-        keyRotationMode: provider.keyRotationMode,
-        customHeaders: saveResult.customHeaders,
-        requestLimitPerMinute: saveResult.requestLimitPerMinute,
-        maxConcurrentRequests: saveResult.maxConcurrentRequests,
-        thinkingConfigurations:
-            saveResult.thinkingConfigurations ??
-            provider.thinkingConfigurations,
-        thinkingOptionId: provider.thinkingOptionId,
-        models: provider.models,
-      ),
+    try {
+      await widget.clients.preferencesModelConfigManager.updateProviderProfile(
+        provider: core_proxy.ProviderProfile(
+          id: provider.id,
+          name: saveResult.name,
+          providerTypeId: provider.providerTypeId,
+          providerType: provider.providerType,
+          endpoint: saveResult.endpoint,
+          apiKey: saveResult.apiKey,
+          useMultipleApiKeys: provider.useMultipleApiKeys,
+          apiKeyPool: provider.apiKeyPool,
+          currentKeyIndex: provider.currentKeyIndex,
+          keyRotationMode: provider.keyRotationMode,
+          customHeaders: saveResult.customHeaders,
+          requestLimitPerMinute: saveResult.requestLimitPerMinute,
+          maxConcurrentRequests: saveResult.maxConcurrentRequests,
+          thinkingConfigurations:
+              saveResult.thinkingConfigurations ??
+              provider.thinkingConfigurations,
+          thinkingOptionId: provider.thinkingOptionId,
+          models: provider.models,
+        ),
+      );
+      _reload();
+    } on CoreLinkError catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await _showProviderConfigError(
+        title: AppLocalizations.of(context)!.settingsModelEditProvider,
+        error: error,
+      );
+    }
+  }
+
+  /// Collects trimmed provider names already taken by other profiles.
+  Set<String> _occupiedProviderNames(
+    List<core_proxy.ProviderProfile> providers,
+    String? currentProviderId,
+  ) {
+    return <String>{
+      for (final provider in providers)
+        if (provider.id != currentProviderId) provider.name.trim(),
+    };
+  }
+
+  /// Shows the runtime error returned while creating or updating a provider.
+  Future<void> _showProviderConfigError({
+    required String title,
+    required CoreLinkError error,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    await _ProviderConfigErrorDialog.show(
+      context: context,
+      title: title,
+      message: error.message,
     );
-    _reload();
   }
 
   Future<void> _deleteProvider(core_proxy.ProviderProfile provider) async {
@@ -575,7 +630,7 @@ class ModelSettingsPanelState extends State<ModelSettingsPanel> {
             _SectionCard(
               title: l10n.settingsModelProvidersSection,
               action: FilledButton.icon(
-                onPressed: _createProvider,
+                onPressed: () => _createProvider(data.providers),
                 style: SettingsControlStyles.sectionFilledButton(),
                 icon: const Icon(Icons.add, size: 18),
                 label: Text(l10n.create),
@@ -587,7 +642,8 @@ class ModelSettingsPanelState extends State<ModelSettingsPanel> {
                   chatBinding: data.chatBinding,
                   expandedProviderIds: _expandedProviderIds,
                   onToggleProviderExpanded: _toggleProviderExpanded,
-                  onEditProvider: _editProvider,
+                  onEditProvider: (provider) =>
+                      _editProvider(provider, data.providers),
                   onAddModel: _addProviderModel,
                   onSelectModel: _selectChatModel,
                   testingModelKey: _testingModelKey,
@@ -693,20 +749,27 @@ class _ProviderEditDeleteResult extends _ProviderEditResult {
 }
 
 class _ProviderEditorDialog extends StatefulWidget {
-  const _ProviderEditorDialog({required this.catalogEntries, this.provider});
+  const _ProviderEditorDialog({
+    required this.catalogEntries,
+    required this.occupiedProviderNames,
+    this.provider,
+  });
 
   final List<core_proxy.ProviderCatalogEntry> catalogEntries;
+  final Set<String> occupiedProviderNames;
   final core_proxy.ProviderProfile? provider;
 
   static Future<_ProviderEditResult?> show({
     required BuildContext context,
     required List<core_proxy.ProviderCatalogEntry> catalogEntries,
+    required Set<String> occupiedProviderNames,
     core_proxy.ProviderProfile? provider,
   }) {
     return showDialog<_ProviderEditResult>(
       context: context,
       builder: (context) => _ProviderEditorDialog(
         catalogEntries: catalogEntries,
+        occupiedProviderNames: occupiedProviderNames,
         provider: provider,
       ),
     );
@@ -955,6 +1018,14 @@ class _ProviderEditorDialogState extends State<_ProviderEditorDialog> {
                   controller: _nameController,
                   label: l10n.settingsModelProfileName,
                   requiredField: true,
+                  validator: (value) {
+                    final isDuplicate = widget.occupiedProviderNames.contains(
+                      value!.trim(),
+                    );
+                    return isDuplicate
+                        ? l10n.settingsModelDuplicateProviderName
+                        : null;
+                  },
                 ),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -4013,6 +4084,41 @@ class _ConnectionTestReportDialog extends StatelessWidget {
           ],
         ),
       ),
+      actions: <Widget>[
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.ok),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProviderConfigErrorDialog extends StatelessWidget {
+  const _ProviderConfigErrorDialog({required this.title, required this.message});
+
+  final String title;
+  final String message;
+
+  /// Shows the provider create/update runtime error dialog.
+  static Future<void> show({
+    required BuildContext context,
+    required String title,
+    required String message,
+  }) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) =>
+          _ProviderConfigErrorDialog(title: title, message: message),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return AlertDialog(
+      title: Text(title),
+      content: Text(message),
       actions: <Widget>[
         FilledButton(
           onPressed: () => Navigator.of(context).pop(),

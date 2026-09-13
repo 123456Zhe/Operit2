@@ -175,7 +175,7 @@ impl OperitTui {
         let is_loading = self.current_chat_is_loading();
         let input_state = self.current_chat_input_processing_state();
         let text = self.text();
-        let thinking_line = thinking_indicator_line(text.thinking());
+        let thinking_line = thinking_indicator_line(text.thinking_process());
         let split = split_transcript_inner(area);
         let content_width = split.content.width.max(1) as usize;
         let current_chat_id = self.current_chat_id_cache.clone();
@@ -214,7 +214,7 @@ impl OperitTui {
         }
     }
 
-    /// Draws the inner scrollbar with single-cell glyphs so it cannot punch through the border.
+    /// Draws the inner transcript scrollbar with classic block and triangle glyphs.
     fn render_transcript_scrollbar(&self, frame: &mut Frame, area: Rect, max_scroll: u16) {
         let pressed = self.scrollbar_pressed || self.scrollbar_dragging;
         let hovered = self.scrollbar_hovered;
@@ -1128,24 +1128,11 @@ fn thinking_indicator_line(text: &'static str) -> Line<'static> {
             0 => Style::default()
                 .fg(theme::ACCENT_STRONG)
                 .add_modifier(Modifier::BOLD),
-            1 => Style::default()
-                .fg(theme::ACCENT)
-                .add_modifier(Modifier::ITALIC),
-            2 => Style::default()
-                .fg(theme::TEXT_MUTED)
-                .add_modifier(Modifier::ITALIC),
-            _ => Style::default()
-                .fg(theme::TEXT_SUBTLE)
-                .add_modifier(Modifier::DIM | Modifier::ITALIC),
+            1 => Style::default().fg(theme::ACCENT),
+            2 => Style::default().fg(theme::TEXT_MUTED),
+            _ => Style::default().fg(theme::TEXT_SUBTLE),
         };
         spans.push(Span::styled(ch.to_string(), style));
     }
-    let dots = ((elapsed_ms / 360) % 4) as usize;
-    spans.push(Span::styled(
-        ".".repeat(dots),
-        Style::default()
-            .fg(theme::TEXT_SUBTLE)
-            .add_modifier(Modifier::DIM | Modifier::ITALIC),
-    ));
     Line::from(spans)
 }

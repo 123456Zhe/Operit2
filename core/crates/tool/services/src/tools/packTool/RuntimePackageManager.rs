@@ -8,6 +8,10 @@ use crate::tools::mcp::MCPManager::MCPManager;
 use crate::tools::mcp::MCPPackage::MCPPackage;
 use crate::tools::mcp::MCPServerConfig::MCPServerConfig;
 use crate::tools::mcp_runtime::MCPLocalServer::MCPLocalServer;
+use crate::tools::PackageLoadingProgress::{
+    ensurePluginLoadingItem, markPluginLoadingItemFailed, markPluginLoadingItemLoading,
+    markPluginLoadingItemSuccess, pluginLoadingSessionActive, PLUGIN_LOAD_KIND_PACKAGE,
+};
 use crate::tools::skill::SkillManager::SkillManager;
 use crate::tools::ToolJsRuntime::{JsExecutionEngine, JsExecutionProvider};
 use crate::tools::ToolResultDataClasses::stringResultData;
@@ -276,7 +280,6 @@ impl RuntimePackageManager {
             context,
             toolHandler,
         };
-        manager.loadAvailablePackages();
         manager
     }
 
@@ -2041,13 +2044,17 @@ impl RuntimePackageManager {
 
     #[allow(non_snake_case)]
     fn scanBuiltInPackageAssets(&self) -> PackageScanSnapshot {
-        let results = self
-            .toolHandler
-            .runtimeSupport()
-            .builtinPluginAssets()
-            .iter()
-            .map(|asset| self.parseBuiltInPackageAsset(asset))
-            .collect::<Vec<_>>();
+        let mut results = Vec::new();
+        for asset in self.toolHandler.runtimeSupport().builtinPluginAssets() {
+            if isProgressTrackedPackageSource(asset.name) {
+                beginPackageLoadProgress(asset.name);
+            }
+            let result = self.parseBuiltInPackageAsset(asset);
+            if isProgressTrackedPackageSource(asset.name) {
+                reportPackageScanProgress(&result);
+            }
+            results.push(result);
+        }
         self.mergePackageScanCandidateResults(results, None)
     }
 
@@ -2093,6 +2100,9 @@ impl RuntimePackageManager {
                     "external"
                 }
             );
+            if isExternalPackageCandidateFile(&file) {
+                beginPackageLoadProgress(&cacheKey);
+            }
             let result = previousCache
                 .get(&cacheKey)
                 .filter(|entry| entry.signature == signature)
@@ -2104,6 +2114,9 @@ impl RuntimePackageManager {
                         self.parseExternalPackageCandidate(&file)
                     }
                 });
+            if isExternalPackageCandidateFile(&file) {
+                reportPackageScanProgress(&result);
+            }
             nextCache.insert(
                 cacheKey,
                 ExternalPackageScanCacheEntry {
@@ -2282,7 +2295,7 @@ impl RuntimePackageManager {
                 )),
             }
         } else if lowerName.ends_with(".toolpkg") {
-            match self.loadToolPkgFromBuiltInAsset(asset.name, asset.bytes) {
+            match self.loadToolPkgFromBundledExternalAsset(asset.name, asset.bytes) {
                 Ok(loadResult) => result.toolPkgLoadResult = Some(loadResult),
                 Err(error) => logPackageManagerError(format!(
                     "Bundled external ToolPkg package load error [{}]: {error}",
@@ -3810,6 +3823,27 @@ impl RuntimePackageManager {
         })
     }
 
+    #[allow(non_snake_case)]
+    fn loadToolPkgFromBundledExternalAsset(
+        &self,
+        assetName: &str,
+        bytes: &'static [u8],
+    ) -> Result<ToolPkgLoadResult, String> {
+        self.withToolPkgRegistrationEngine(|registrationEngine| {
+            ToolPkgLoader::loadToolPkgFromBundledExternalAsset(
+                assetName,
+                bytes,
+                registrationEngine,
+                |packageName, error| {
+                    AppLogger::e(
+                        PACKAGE_MANAGER_LOG_TAG,
+                        &format!("Bundled external ToolPkg package load error [{packageName}]: {error}"),
+                    );
+                },
+            )
+        })
+    }
+
     /// Executes one ToolPkg load with a dedicated registration engine.
     #[allow(non_snake_case)]
     fn withToolPkgRegistrationEngine<T>(
@@ -4181,6 +4215,68 @@ fn buildConditionCapabilitiesSnapshot(
         ),
         ("ui.shower_display".to_string(), ConditionValue::Bool(false)),
     ])
+}
+
+fn isProgressTrackedPackageSource(sourcePath: &str) -> bool {
+    let Some(extension) = Path::new(sourcePath)
+        .extension()
+        .and_then(|value| value.to_str())
+    else {
+        return false;
+    };
+    matches!(
+        extension.to_ascii_lowercase().as_str(),
+        "js" | "ts" | "hjson" | "json" | "toolpkg"
+    )
+}
+
+fn packageProgressDisplayName(sourcePath: &str) -> String {
+    Path::new(sourcePath)
+        .file_stem()
+        .or_else(|| Path::new(sourcePath).file_name())
+        .map(|value| value.to_string_lossy().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| sourcePath.to_string())
+}
+
+fn beginPackageLoadProgress(sourcePath: &str) {
+    if !pluginLoadingSessionActive() {
+        return;
+    }
+    ensurePluginLoadingItem(
+        sourcePath,
+        &packageProgressDisplayName(sourcePath),
+        PLUGIN_LOAD_KIND_PACKAGE,
+    );
+    markPluginLoadingItemLoading(sourcePath, None);
+}
+
+fn reportPackageScanProgress(result: &PackageScanCandidateResult) {
+    if !pluginLoadingSessionActive() {
+        return;
+    }
+    let displayName = if let Some(package) = &result.toolPackage {
+        let resolved = package.display_name.resolve(false);
+        if resolved.trim().is_empty() {
+            package.name.clone()
+        } else {
+            resolved
+        }
+    } else if let Some(loadResult) = &result.toolPkgLoadResult {
+        let resolved = loadResult.containerRuntime.displayName.resolve(false);
+        if resolved.trim().is_empty() {
+            loadResult.containerRuntime.packageName.clone()
+        } else {
+            resolved
+        }
+    } else {
+        packageProgressDisplayName(&result.sourcePath)
+    };
+    if result.toolPackage.is_some() || result.toolPkgLoadResult.is_some() {
+        markPluginLoadingItemSuccess(&result.sourcePath, Some(&displayName));
+    } else {
+        markPluginLoadingItemFailed(&result.sourcePath, "failed", "");
+    }
 }
 
 #[allow(non_snake_case)]

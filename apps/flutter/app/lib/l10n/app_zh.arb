@@ -751,6 +751,7 @@
   "settingsModelCustomModel": "自定义模型",
   "settingsModelModelId": "模型 ID",
   "settingsModelDuplicateModelId": "该模型已添加到当前供应商。",
+  "settingsModelDuplicateProviderName": "已存在同名供应商。",
   "settingsModelMaxTokens": "Max tokens",
   "settingsModelMaxTokensDescription": "限制一次回复最多生成多少 Token。",
   "settingsModelTemperature": "Temperature",
@@ -1819,5 +1820,35 @@
   "settingsRuntimeControlRoleRelay": "中继节点",
   "settingsRuntimeControlRoleStorage": "存储节点",
   "settingsRuntimeControlRoleRunner": "执行节点",
-  "settingsRuntimeControlRoleUser": "普通用户"
+  "settingsRuntimeControlRoleUser": "普通用户",
+  "pluginLoadingTitle": "正在加载",
+  "pluginLoadingSkip": "跳过",
+  "pluginLoadingCollapse": "收起",
+  "pluginLoadingStatus": "已启动: {started} / {total}",
+  "@pluginLoadingStatus": {
+    "placeholders": {
+      "started": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "pluginLoadingCurrentTask": "正在加载 {task}",
+  "@pluginLoadingCurrentTask": {
+    "placeholders": {
+      "task": {
+        "type": "String"
+      }
+    }
+  },
+  "pluginLoadingSuccess": "加载成功",
+  "pluginLoadingFailed": "加载失败",
+  "pluginLoadingWaiting": "等待中",
+  "pluginLoadingKindPackage": "包",
+  "pluginLoadingKindMcp": "MCP",
+  "pluginLoadingCompleteSuccess": "包和插件已全部加载",
+  "pluginLoadingCompleteWithFailures": "部分包或插件加载失败",
+  "pluginLoadingNoLogs": "没有日志"
 }

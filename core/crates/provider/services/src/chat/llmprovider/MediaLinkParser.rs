@@ -1,6 +1,7 @@
 use std::sync::OnceLock;
 
 use operit_util::ImagePoolManager::ImagePoolManager;
+use operit_util::MediaPoolManager::MediaPoolManager;
 use regex::Regex;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -9,6 +10,7 @@ pub struct MediaLink {
     pub id: String,
     pub base64_data: String,
     pub mime_type: String,
+    pub file_name: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -23,6 +25,7 @@ pub struct ImageLink {
 pub struct MediaLinkTag {
     pub link_type: String,
     pub id: String,
+    pub file_name: Option<String>,
 }
 
 pub struct MediaLinkParser;
@@ -94,12 +97,18 @@ impl MediaLinkParser {
     pub fn extract_media_links(message: &str) -> Vec<MediaLink> {
         Self::extract_media_link_tags(message)
             .into_iter()
-            .filter(|tag| tag.link_type == "audio" || tag.link_type == "video")
-            .map(|tag| MediaLink {
-                link_type: tag.link_type,
-                id: tag.id,
-                base64_data: String::new(),
-                mime_type: String::new(),
+            .filter(|tag| {
+                matches!(tag.link_type.as_str(), "audio" | "video" | "file")
+            })
+            .filter_map(|tag| {
+                let media_data = MediaPoolManager::get_media(&tag.id)?;
+                Some(MediaLink {
+                    link_type: tag.link_type,
+                    id: tag.id,
+                    base64_data: media_data.base64,
+                    mime_type: media_data.mime_type,
+                    file_name: tag.file_name,
+                })
             })
             .collect()
     }
@@ -110,7 +119,14 @@ impl MediaLinkParser {
         let mut seen = Vec::<(String, String)>::new();
         for tag in parsed_link_tags(message) {
             if tag.id == "error"
-                || !matches!(tag.link_type.as_str(), "image" | "audio" | "video")
+                || !matches!(tag.link_type.as_str(), "image" | "audio" | "video" | "file")
+                || (tag.link_type == "file"
+                    && tag
+                        .file_name
+                        .as_deref()
+                        .map(str::trim)
+                        .unwrap_or_default()
+                        .is_empty())
                 || seen
                     .iter()
                     .any(|(seen_type, seen_id)| seen_type == &tag.link_type && seen_id == &tag.id)
@@ -121,6 +137,7 @@ impl MediaLinkParser {
             tags.push(MediaLinkTag {
                 link_type: tag.link_type,
                 id: tag.id,
+                file_name: tag.file_name,
             });
         }
         tags
@@ -129,7 +146,7 @@ impl MediaLinkParser {
     /// Replaces non-image media-link tags using the supplied transformer.
     pub fn replace_media_links(message: &str, replacer: impl Fn(&str, &str) -> String) -> String {
         Self::replace_links(message, |tag| {
-            if tag.link_type == "audio" || tag.link_type == "video" {
+            if matches!(tag.link_type.as_str(), "audio" | "video" | "file") {
                 if tag.id == "error" {
                     String::new()
                 } else {
@@ -146,11 +163,11 @@ impl MediaLinkParser {
         Self::replace_media_links(message, |_, _| String::new())
     }
 
-    /// Reports whether the message contains audio or video media-link tags.
+    /// Reports whether the message contains audio, video, or file media-link tags.
     pub fn has_media_links(message: &str) -> bool {
         parsed_link_tags(message)
             .iter()
-            .any(|tag| tag.link_type == "audio" || tag.link_type == "video")
+            .any(|tag| matches!(tag.link_type.as_str(), "audio" | "video" | "file"))
     }
 
     /// Replaces recognized link tags in one pass.
@@ -173,6 +190,7 @@ struct ParsedLinkTag<'a> {
     end: usize,
     link_type: String,
     id: String,
+    file_name: Option<String>,
 }
 
 /// Returns the compiled regex used to find link start tags.
@@ -217,7 +235,7 @@ fn parsed_link_tags(message: &str) -> Vec<ParsedLinkTag<'_>> {
         };
         let raw = &message[open_tag.start()..raw_end];
         cursor = raw_end;
-        let Some((link_type, id)) = parse_link_tag(open_text) else {
+        let Some((link_type, id, file_name)) = parse_link_tag(open_text) else {
             continue;
         };
         tags.push(ParsedLinkTag {
@@ -226,6 +244,7 @@ fn parsed_link_tags(message: &str) -> Vec<ParsedLinkTag<'_>> {
             end: raw_end,
             link_type,
             id,
+            file_name,
         });
     }
     tags
@@ -241,9 +260,10 @@ fn is_self_closing_link_start(tag_text: &str) -> bool {
 }
 
 /// Parses the type and id attributes from one link tag.
-fn parse_link_tag(tag_text: &str) -> Option<(String, String)> {
+fn parse_link_tag(tag_text: &str) -> Option<(String, String, Option<String>)> {
     let mut link_type = None;
     let mut id = None;
+    let mut file_name = None;
     for capture in link_attr_regex().captures_iter(tag_text) {
         let name = capture.get(1)?.as_str().to_ascii_lowercase();
         let value = capture
@@ -255,16 +275,28 @@ fn parse_link_tag(tag_text: &str) -> Option<(String, String)> {
         match name.as_str() {
             "type" => link_type = Some(value.to_ascii_lowercase()),
             "id" => id = Some(value),
+            "filename" => file_name = Some(unescape_xml_attribute(&value)),
             _ => {}
         }
     }
-    Some((link_type?, id?))
+    Some((link_type?, id?, file_name.filter(|value| !value.trim().is_empty())))
+}
+
+/// Decodes XML entities used inside media-link attributes.
+fn unescape_xml_attribute(value: &str) -> String {
+    value
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
 }
 
 #[cfg(test)]
 mod tests {
     use super::MediaLinkParser;
     use operit_util::ImagePoolManager::ImagePoolManager;
+    use operit_util::MediaPoolManager::MediaPoolManager;
 
     /// Verifies image tags resolve through the image pool.
     #[test]
@@ -301,6 +333,25 @@ mod tests {
         );
     }
 
+    /// Verifies file links preserve their decoded filename and encounter order.
+    #[test]
+    fn fileLinksPreserveDecodedFilename() {
+        let message = concat!(
+            "<link filename=\"report&amp;one.pdf\" id=\"f1\" type=\"file\">",
+            "PDF</link><link type=\"audio\" id=\"a1\">Audio</link>"
+        );
+
+        let tags = MediaLinkParser::extract_media_link_tags(message);
+
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0].link_type, "file");
+        assert_eq!(tags[0].id, "f1");
+        assert_eq!(tags[0].file_name.as_deref(), Some("report&one.pdf"));
+        assert_eq!(tags[1].link_type, "audio");
+        assert_eq!(tags[1].file_name, None);
+        assert_eq!(MediaLinkParser::remove_media_links(message), "");
+    }
+
     /// Verifies error image tags are detected and removed without producing ids.
     #[test]
     fn errorImageTagsAreDetectedAndRemoved() {
@@ -313,5 +364,27 @@ mod tests {
             MediaLinkParser::replace_image_links(message, |_| "x".to_string()),
             "a  b"
         );
+    }
+
+    /// Verifies audio and video tags resolve through the media pool.
+    #[test]
+    fn extractMediaLinksReadsRegisteredMediaData() {
+        let audio_id = MediaPoolManager::add_media_bytes(b"audio", "audio/mpeg");
+        let video_id = MediaPoolManager::add_media_bytes(b"video", "video/mp4");
+        let message = format!(
+            "<link type=\"audio\" id=\"{audio_id}\"></link> <link type=\"video\" id=\"{video_id}\"/>"
+        );
+
+        let links = MediaLinkParser::extract_media_links(&message);
+
+        assert_eq!(links.len(), 2);
+        assert_eq!(links[0].id, audio_id);
+        assert_eq!(links[0].mime_type, "audio/mpeg");
+        assert_eq!(links[0].base64_data, "YXVkaW8=");
+        assert_eq!(links[1].id, video_id);
+        assert_eq!(links[1].mime_type, "video/mp4");
+        assert_eq!(links[1].base64_data, "dmlkZW8=");
+        MediaPoolManager::remove_media(&links[0].id);
+        MediaPoolManager::remove_media(&links[1].id);
     }
 }

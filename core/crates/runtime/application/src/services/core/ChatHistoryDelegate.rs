@@ -1224,6 +1224,20 @@ impl ChatHistoryDelegate {
                 self.currentChatIdFlow.set_value(None);
             }
         }
+
+        // The main runtime must always expose a concrete chat after startup.
+        // A missing (or stale) persisted selection is resolved against the
+        // deterministic first history row, while an empty store receives a
+        // newly-created chat that is persisted as the current selection.
+        if self.selectionMode == ChatSelectionMode::FOLLOW_GLOBAL
+            && self.currentChatIdFlow.value().is_none()
+        {
+            if let Some(history) = self.chatHistoriesFlow.value().first().cloned() {
+                self.switchChat(history.id, true);
+            } else {
+                self.createNewChat(None, None, None, false, true, None);
+            }
+        }
         self.isInitialized = true;
     }
 
