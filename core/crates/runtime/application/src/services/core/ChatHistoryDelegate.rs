@@ -6,6 +6,7 @@ use crate::plugins::toolpkg::ToolPkgChatViewHookBridge::{
     ChatViewEvent, ChatViewHookParams, ToolPkgChatViewHookBridge,
 };
 use operit_model::ActivePrompt::ActivePrompt;
+use operit_model::CharacterCard::CharacterCard;
 use operit_model::ChatDisplayWindowState::ChatDisplayWindowState;
 use operit_model::ChatHistory::ChatHistory;
 use operit_model::ChatHistoryListItem::ChatHistoryListItem;
@@ -1455,16 +1456,15 @@ impl ChatHistoryDelegate {
     }
 
     #[allow(non_snake_case)]
-    /// Creates a new chat and optionally makes it the active chat.
-    pub fn createNewChat(
-        &mut self,
+    /// Resolves group and character bindings for a newly requested chat.
+    fn resolveNewChatBinding(
+        &self,
         characterCardName: Option<String>,
         characterGroupId: Option<String>,
         group: Option<String>,
         inheritGroupFromCurrent: bool,
-        setAsCurrentChat: bool,
         characterCardId: Option<String>,
-    ) {
+    ) -> ResolvedNewChatBinding {
         let inheritGroupFromChatId = if inheritGroupFromCurrent {
             self.currentChatIdFlow.value()
         } else {
@@ -1502,23 +1502,97 @@ impl ChatHistoryDelegate {
         } else {
             None
         };
+        ResolvedNewChatBinding {
+            group: effectiveGroup,
+            characterGroupId: normalizedCharacterGroupId,
+            characterCardName: effectiveCharacterCardName,
+            resolvedCard,
+            explicitCharacterCardName,
+        }
+    }
+
+    #[allow(non_snake_case)]
+    /// Returns whether the current empty chat already satisfies a user new-chat request.
+    pub fn shouldKeepCurrentEmptyChatForNewChatRequest(
+        &self,
+        characterCardName: Option<String>,
+        characterGroupId: Option<String>,
+        group: Option<String>,
+        inheritGroupFromCurrent: bool,
+        setAsCurrentChat: bool,
+        characterCardId: Option<String>,
+    ) -> bool {
+        if !setAsCurrentChat {
+            return false;
+        }
+        let Some(currentChatId) = self.currentChatIdFlow.value() else {
+            return false;
+        };
+        let Some(currentChat) = self
+            .chatHistoriesFlow
+            .value()
+            .iter()
+            .find(|chat| chat.id == currentChatId)
+            .cloned()
+        else {
+            return false;
+        };
+        let currentHasUserMessage = self
+            .chatHistoryManager
+            .hasUserMessage(currentChatId)
+            .expect("ChatHistoryManager.hasUserMessage must succeed");
+        let binding = self.resolveNewChatBinding(
+            characterCardName,
+            characterGroupId,
+            group,
+            inheritGroupFromCurrent,
+            characterCardId,
+        );
+        shouldKeepCurrentEmptyChat(
+            Some(&currentChat),
+            currentHasUserMessage,
+            binding.group.as_deref(),
+            binding.characterCardName.as_deref(),
+            binding.characterGroupId.as_deref(),
+        )
+    }
+
+    #[allow(non_snake_case)]
+    /// Creates a new chat and optionally makes it the active chat.
+    pub fn createNewChat(
+        &mut self,
+        characterCardName: Option<String>,
+        characterGroupId: Option<String>,
+        group: Option<String>,
+        inheritGroupFromCurrent: bool,
+        setAsCurrentChat: bool,
+        characterCardId: Option<String>,
+    ) {
+        let binding = self.resolveNewChatBinding(
+            characterCardName,
+            characterGroupId,
+            group,
+            inheritGroupFromCurrent,
+            characterCardId,
+        );
         let newChat = self
             .chatHistoryManager
             .createNewChat(
                 None,
-                effectiveGroup,
-                effectiveCharacterCardName,
-                normalizedCharacterGroupId.clone(),
+                binding.group,
+                binding.characterCardName,
+                binding.characterGroupId.clone(),
             )
             .expect("ChatHistoryManager.createNewChat must succeed");
-        if normalizedCharacterGroupId.is_none()
-            && explicitCharacterCardName.is_none()
-            && resolvedCard
+        if binding.characterGroupId.is_none()
+            && binding.explicitCharacterCardName.is_none()
+            && binding
+                .resolvedCard
                 .as_ref()
                 .map(|card| !card.openingStatement.is_empty())
                 .unwrap_or(false)
         {
-            if let Some(card) = resolvedCard {
+            if let Some(card) = binding.resolvedCard {
                 let mut openingMessage =
                     ChatMessage::new_with_markdown("ai".to_string(), card.openingStatement);
                 openingMessage.roleName = card.name;
@@ -2692,6 +2766,15 @@ impl Default for ChatHistoryDelegate {
     }
 }
 
+/// Holds the character and group binding a newly requested chat would receive.
+struct ResolvedNewChatBinding {
+    group: Option<String>,
+    characterGroupId: Option<String>,
+    characterCardName: Option<String>,
+    resolvedCard: Option<CharacterCard>,
+    explicitCharacterCardName: Option<String>,
+}
+
 fn normalizedNonBlank(value: String) -> Option<String> {
     let normalized = value.trim().to_string();
     if normalized.is_empty() {
@@ -2699,6 +2782,57 @@ fn normalizedNonBlank(value: String) -> Option<String> {
     } else {
         Some(normalized)
     }
+}
+
+/// Normalizes optional binding text so blank strings compare as absent.
+fn normalizedBindingValue(value: Option<&str>) -> Option<&str> {
+    value.and_then(|text| {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    })
+}
+
+/// Returns whether two optional binding values identify the same chat binding.
+fn optionalBindingEquals(left: Option<&str>, right: Option<&str>) -> bool {
+    normalizedBindingValue(left) == normalizedBindingValue(right)
+}
+
+/// Returns whether a chat already uses the binding a new chat would receive.
+fn chatMatchesNewChatBinding(
+    chat: &ChatHistory,
+    group: Option<&str>,
+    characterCardName: Option<&str>,
+    characterGroupId: Option<&str>,
+) -> bool {
+    optionalBindingEquals(chat.group.as_deref(), group)
+        && optionalBindingEquals(chat.characterCardName.as_deref(), characterCardName)
+        && optionalBindingEquals(chat.characterGroupId.as_deref(), characterGroupId)
+}
+
+/// Returns whether the current empty chat already satisfies a new-chat request.
+fn shouldKeepCurrentEmptyChat(
+    currentChat: Option<&ChatHistory>,
+    currentHasUserMessage: bool,
+    requestedGroup: Option<&str>,
+    requestedCharacterCardName: Option<&str>,
+    requestedCharacterGroupId: Option<&str>,
+) -> bool {
+    let Some(currentChat) = currentChat else {
+        return false;
+    };
+    if currentHasUserMessage {
+        return false;
+    }
+    chatMatchesNewChatBinding(
+        currentChat,
+        requestedGroup,
+        requestedCharacterCardName,
+        requestedCharacterGroupId,
+    )
 }
 
 #[cfg(test)]
@@ -2737,5 +2871,86 @@ mod tests {
 
         assert_eq!(loaded.contentStream, previous.contentStream);
         assert_eq!(loaded.parts, previous.parts);
+    }
+
+    /// Builds a chat-history row for binding comparisons in unit tests.
+    fn testChatHistory(
+        id: &str,
+        group: Option<&str>,
+        characterCardName: Option<&str>,
+        characterGroupId: Option<&str>,
+    ) -> ChatHistory {
+        ChatHistory {
+            id: id.to_string(),
+            title: "New Chat".to_string(),
+            messages: Vec::new(),
+            createdAt: "0".to_string(),
+            updatedAt: "0".to_string(),
+            inputTokens: 0,
+            outputTokens: 0,
+            currentWindowSize: 0,
+            group: group.map(str::to_string),
+            displayOrder: 0,
+            workspace: None,
+            parentChatId: None,
+            characterCardName: characterCardName.map(str::to_string),
+            characterGroupId: characterGroupId.map(str::to_string),
+            locked: false,
+            pinned: false,
+        }
+    }
+
+    /// Verifies blank binding strings compare as absent values.
+    #[test]
+    fn optional_binding_equals_treats_blank_as_absent() {
+        assert!(optionalBindingEquals(None, Some("")));
+        assert!(optionalBindingEquals(Some("  "), Some("")));
+        assert!(optionalBindingEquals(Some("alpha"), Some(" alpha ")));
+        assert!(!optionalBindingEquals(Some("alpha"), Some("beta")));
+    }
+
+    /// Verifies an empty current chat with the same binding blocks another create.
+    #[test]
+    fn keeps_current_empty_chat_with_matching_binding() {
+        let current = testChatHistory("chat-1", Some("inbox"), Some("Operit"), None);
+        assert!(shouldKeepCurrentEmptyChat(
+            Some(&current),
+            false,
+            Some("inbox"),
+            Some("Operit"),
+            None,
+        ));
+    }
+
+    /// Verifies a used current chat still allows creating another chat.
+    #[test]
+    fn creates_when_current_chat_has_user_message() {
+        let current = testChatHistory("chat-1", None, None, None);
+        assert!(!shouldKeepCurrentEmptyChat(
+            Some(&current),
+            true,
+            None,
+            None,
+            None,
+        ));
+    }
+
+    /// Verifies an empty current chat in another group still allows creating.
+    #[test]
+    fn creates_when_empty_current_chat_uses_different_group() {
+        let current = testChatHistory("chat-1", Some("inbox"), None, None);
+        assert!(!shouldKeepCurrentEmptyChat(
+            Some(&current),
+            false,
+            Some("archive"),
+            None,
+            None,
+        ));
+    }
+
+    /// Verifies missing current selection still allows creating a chat.
+    #[test]
+    fn creates_when_no_current_chat_is_selected() {
+        assert!(!shouldKeepCurrentEmptyChat(None, false, None, None, None));
     }
 }

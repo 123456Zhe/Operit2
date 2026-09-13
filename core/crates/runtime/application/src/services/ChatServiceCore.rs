@@ -846,6 +846,19 @@ impl ChatServiceCore {
         setAsCurrentChat: bool,
         characterGroupId: Option<String>,
     ) {
+        if self
+            .chatHistoryDelegate
+            .shouldKeepCurrentEmptyChatForNewChatRequest(
+                characterCardName.clone(),
+                characterGroupId.clone(),
+                group.clone(),
+                inheritGroupFromCurrent,
+                setAsCurrentChat,
+                None,
+            )
+        {
+            return;
+        }
         self.chatHistoryDelegate.createNewChat(
             characterCardName,
             characterGroupId,

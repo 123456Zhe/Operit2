@@ -111,6 +111,31 @@ impl StandardChatManagerTool {
             Err(error) => return toolError(tool, error),
         };
 
+        if setAsCurrentChat {
+            if let Err(error) =
+                self.runtimeSupport
+                    .createChatRuntime(characterCardName, group, true)
+            {
+                return toolError(tool, error);
+            }
+            return match ChatHistoryManager::default()
+                .and_then(|manager| manager.currentChatIdFlow())
+            {
+                Ok(Some(chatId)) => successData(
+                    tool,
+                    ToolResultData::ChatCreationResultData(ChatCreationResultData {
+                        chatId,
+                        createdAt: currentTimeMillis(),
+                    }),
+                ),
+                Ok(None) => toolError(
+                    tool,
+                    "Failed to create chat, unable to get current chat ID".to_string(),
+                ),
+                Err(error) => toolError(tool, format!("Error creating chat: {error}")),
+            };
+        }
+
         let previousChatIds = match ChatHistoryManager::default() {
             Ok(manager) => match manager.loadChatHistories() {
                 Ok(histories) => histories
@@ -124,7 +149,7 @@ impl StandardChatManagerTool {
 
         if let Err(error) =
             self.runtimeSupport
-                .createChatRuntime(characterCardName, group, setAsCurrentChat)
+                .createChatRuntime(characterCardName, group, false)
         {
             return toolError(tool, error);
         }

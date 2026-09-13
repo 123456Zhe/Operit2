@@ -781,7 +781,10 @@ class _MarkdownNodeColumnState extends State<_MarkdownNodeColumn> {
       return rendered;
     }
 
-    /// Renders one merge match after its complete source range becomes visible.
+    /// Renders one merge match using the start node's visibility.
+    ///
+    /// A later matching result must not replay fade-in: the call node already
+    /// revealed this slot, so the merged row inherits that same visibility.
     Widget renderMergeMatch(
       MarkdownMergeMatch match,
       String renderInstanceKeyPrefix,
@@ -791,7 +794,7 @@ class _MarkdownNodeColumnState extends State<_MarkdownNodeColumn> {
       return KeyedSubtree(
         key: ValueKey<String>(mergeKey),
         child: _AnimatedMarkdownNode(
-          isVisible: isVisibleAt(match.endIndexInclusive),
+          isVisible: isVisibleAt(match.startIndex),
           child: widget.mergeRender.renderMerge(
             match: match,
             nodes: widget.nodes,
