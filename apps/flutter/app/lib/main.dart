@@ -9,6 +9,7 @@ import 'core/errors/UnhandledErrorReporter.dart';
 import 'core/logging/ClientLogger.dart';
 import 'core/notifications/NotificationActivationService.dart';
 import 'core/runtime/RuntimeBootstrapManager.dart';
+import 'ui/features/packages/screens/GitHubOAuthLoginCallback.dart';
 import 'ui/main/OperitApp.dart';
 import 'ui/window/DetachedChatWindowApp.dart';
 import 'ui/window/OperitWindowArguments.dart';
@@ -25,6 +26,7 @@ void main(List<String> arguments) async {
       final startupStopwatch = Stopwatch()..start();
       final bindingStopwatch = Stopwatch()..start();
       WidgetsFlutterBinding.ensureInitialized();
+      consumeGitHubOAuthWebCallbackAtStartup();
       final bindingElapsedMs = bindingStopwatch.elapsedMilliseconds;
       final loggerStopwatch = Stopwatch()..start();
       await ClientLogger.initialize();
