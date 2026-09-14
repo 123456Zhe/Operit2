@@ -943,14 +943,15 @@ class AppLocalizationsEn extends AppLocalizations {
       'Back up chats, characters, and model settings, restore backup content, and view data statistics.';
 
   @override
-  String get settingsCategoryAccessLinksTitle => 'Devices & Access';
+  String get settingsCategoryAccessLinksTitle => 'Device Space';
 
   @override
-  String get settingsCategoryAccessLinksSubtitle => 'Connect, sync, access';
+  String get settingsCategoryAccessLinksSubtitle =>
+      'Connect, sync, collaborate';
 
   @override
   String get settingsCategoryAccessLinksDescription =>
-      'Connect another device, sync data, or allow browsers to access this device.';
+      'Manage this device space, connect devices, and share data and routes.';
 
   @override
   String get settingsCategoryGroupAssistant => 'AI & Creation';
@@ -1003,6 +1004,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsModelCurrentActive => 'Active';
 
   @override
+  String get settingsModelMultimodalBadge => 'Multimodal';
+
+  @override
+  String get settingsModelNoModels => 'No models yet';
+
+  @override
+  String settingsModelProviderModelCount(int count) {
+    return '$count models';
+  }
+
+  @override
   String get settingsModelSetCurrentActive => 'Set active';
 
   @override
@@ -1021,6 +1033,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsModelProfilesSection => 'Model profiles';
+
+  @override
+  String get settingsModelFunctionFollowChat => 'Follow chat';
+
+  @override
+  String get settingsModelFunctionFollowChatAll => 'Follow all';
+
+  @override
+  String get settingsModelFunctionFollowChatHint =>
+      'Automatically uses the current chat model';
+
+  @override
+  String get settingsModelFunctionGroupBackground => 'Background helpers';
+
+  @override
+  String get settingsModelFunctionGroupMain => 'Main chat model';
+
+  @override
+  String get settingsModelFunctionGroupMultimodal => 'Multimodal recognition';
 
   @override
   String get settingsModelFunctionMappingsSection =>
@@ -1239,7 +1270,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsModelProviderId => 'Provider ID';
 
   @override
-  String get settingsModelProvidersSection => 'Providers';
+  String get settingsModelProvidersSection => 'LLM providers';
 
   @override
   String get settingsModelProviderType => 'Provider type';
@@ -2341,6 +2372,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsRuntimeCurrentSpace => 'Current device space';
+
+  @override
+  String get settingsRuntimeOverviewDescription =>
+      'Devices in the same space can connect and share data and routes.';
 
   @override
   String get settingsRuntimeRenameSpace => 'Rename device space';

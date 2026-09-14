@@ -917,14 +917,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsCategoryDataDescription => '备份聊天、角色和模型配置，恢复备份内容，并查看数据统计。';
 
   @override
-  String get settingsCategoryAccessLinksTitle => '设备与访问';
+  String get settingsCategoryAccessLinksTitle => '设备空间';
 
   @override
-  String get settingsCategoryAccessLinksSubtitle => '连接、同步、访问';
+  String get settingsCategoryAccessLinksSubtitle => '连接、同步、协同';
 
   @override
-  String get settingsCategoryAccessLinksDescription =>
-      '连接另一台设备，同步数据，或允许浏览器访问这台设备。';
+  String get settingsCategoryAccessLinksDescription => '管理当前设备空间，连接设备并同步数据和路由。';
 
   @override
   String get settingsCategoryGroupAssistant => 'AI 与创作';
@@ -974,6 +973,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsModelCurrentActive => '当前激活';
 
   @override
+  String get settingsModelMultimodalBadge => '多模态';
+
+  @override
+  String get settingsModelNoModels => '暂无模型';
+
+  @override
+  String settingsModelProviderModelCount(int count) {
+    return '$count 个模型';
+  }
+
+  @override
   String get settingsModelSetCurrentActive => '设为当前';
 
   @override
@@ -990,6 +1000,24 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsModelProfilesSection => '模型档案';
+
+  @override
+  String get settingsModelFunctionFollowChat => '跟随聊天';
+
+  @override
+  String get settingsModelFunctionFollowChatAll => '全部跟随';
+
+  @override
+  String get settingsModelFunctionFollowChatHint => '自动使用当前聊天模型';
+
+  @override
+  String get settingsModelFunctionGroupBackground => '后台辅助';
+
+  @override
+  String get settingsModelFunctionGroupMain => '主聊天模型';
+
+  @override
+  String get settingsModelFunctionGroupMultimodal => '多模态识别';
 
   @override
   String get settingsModelFunctionMappingsSection => '功能模型分配';
@@ -1196,7 +1224,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsModelProviderId => '供应商 ID';
 
   @override
-  String get settingsModelProvidersSection => '供应商';
+  String get settingsModelProvidersSection => 'LLM 供应商';
 
   @override
   String get settingsModelProviderType => '供应商类型';
@@ -2247,6 +2275,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsRuntimeCurrentSpace => '当前设备空间';
+
+  @override
+  String get settingsRuntimeOverviewDescription => '在同一设备空间内，设备可以建立连接，共享数据和路由。';
 
   @override
   String get settingsRuntimeRenameSpace => '重命名设备空间';
