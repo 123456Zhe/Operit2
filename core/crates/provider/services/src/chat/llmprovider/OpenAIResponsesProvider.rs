@@ -13,6 +13,8 @@ use crate::chat::llmprovider::AIService::{
 };
 use crate::runtime_support::ProviderRuntimeContext;
 use operit_model::ModelConfigData::{BuiltinToolRequestFormat, ModelBuiltinTool};
+use operit_model::PromptTurn::PromptTurn;
+use operit_model::ToolPrompt::ToolPrompt;
 use operit_util::stream::RevisableTextStream::{
     with_event_channel, RevisableTextStreamLike, TextStreamEventCarrier,
 };
@@ -1165,6 +1167,29 @@ impl AIService for OpenAIResponsesProvider {
         if let Some(mut parent) = activeParent {
             parent.cancel_streaming();
         }
+    }
+
+    async fn calculate_input_tokens(
+        &self,
+        chat_history: &[PromptTurn],
+        available_tools: &[ToolPrompt],
+    ) -> Result<i64, AiServiceError> {
+        // Responses requests use the same OpenAI-compatible history/tool shape
+        // and token cache as the parent transport. Delegate the preflight
+        // estimate instead of falling back to AIService's default
+        // ProviderNotImplemented implementation.
+        let parent = OpenAIProvider::new_with_capabilities(
+            self.responsesApiEndpoint.clone(),
+            self.api_key.clone(),
+            self.modelName.clone(),
+            "OPENAI_RESPONSES_PARENT".to_string(),
+            self.customHeaders.clone(),
+            self.supportsVision,
+            self.supportsAudio,
+            self.supportsVideo,
+            self.enableToolCall,
+        );
+        AIService::calculate_input_tokens(&parent, chat_history, available_tools).await
     }
 
     async fn send_message(
