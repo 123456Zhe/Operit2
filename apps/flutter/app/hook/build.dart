@@ -111,13 +111,13 @@ void main(List<String> args) async {
     if (shouldBuildWebAssets) {
       await _invalidateWebRuntimeArtifacts([webBuildDir]);
       await _run(
-        _command('cargo'),
+        'cargo',
         const ['build', '--release', '--target', 'wasm32-unknown-unknown'],
         workingDirectory: bridgeCrate.path,
         environment: await _wasmCargoEnvironment(repoRoot),
       );
 
-      await _run(Platform.isWindows ? 'wasm-bindgen.exe' : 'wasm-bindgen', [
+      await _run('wasm-bindgen', [
         '--target',
         'web',
         '--out-dir',
