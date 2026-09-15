@@ -6,11 +6,14 @@ use operit_access_runtime::{LinkAccessIdentity, LinkAccessStore, RemoteDeviceInf
 #[cfg(not(target_arch = "wasm32"))]
 use operit_access_runtime::{RemoteLinkServer, RemoteLinkServerConfig, RemoteWebAccessConfig};
 use operit_host_api::HostManager::HostManager;
+use operit_host_api::PluginSdkIpc::PluginSdkIpcEndpoint;
 use operit_node_runtime::{
     CoreNodeRouter::{CoreNodeLocalRuntime, CoreNodeRouter},
     RuntimeRemoteLinkService::RuntimeRemoteLinkService,
 };
 use operit_proxy_local::LocalCoreProxy;
+use operit_plugin_sdk_ipc::PluginSdkLinkTarget;
+use operit_plugin_sdk_ipc_bridge::OperitPluginSdkIpcBridge;
 use operit_runtime::core::application::OperitApplication::OperitApplication;
 
 type LocalClientConfigurator = Box<dyn FnOnce(&mut LocalCoreProxy) -> Result<(), String> + Send>;
@@ -96,6 +99,7 @@ pub struct CoreApplication {
     accessStore: LinkAccessStore,
     accessIdentity: LinkAccessIdentity,
     accessServices: RuntimeRemoteLinkService,
+    pluginSdkIpcBridge: Option<OperitPluginSdkIpcBridge>,
 }
 
 impl CoreApplication {
@@ -163,6 +167,22 @@ impl CoreApplication {
         if startSpaceSync {
             accessServices.startSpaceSync()?;
         }
+        let pluginSdkIpcBridge = localClient
+            .hostManager()
+            .pluginSdkIpcHost
+            .clone()
+            .map(|host| {
+                let target: Arc<dyn PluginSdkLinkTarget> = Arc::new(nodeRouter.clone());
+                OperitPluginSdkIpcBridge::new(
+                    host,
+                    PluginSdkIpcEndpoint::standard(),
+                    target,
+                    operit_proxy_local::pluginSdkSurface(),
+                )
+            });
+        if let Some(bridge) = &pluginSdkIpcBridge {
+            bridge.start().map_err(|error| error.to_string())?;
+        }
         Ok(Self {
             localClient,
             nodeRuntime,
@@ -170,6 +190,7 @@ impl CoreApplication {
             accessStore,
             accessIdentity,
             accessServices,
+            pluginSdkIpcBridge,
         })
     }
 
@@ -241,6 +262,9 @@ impl CoreApplication {
     /// Stops application-owned global route state from a synchronous host boundary.
     #[allow(non_snake_case)]
     pub fn shutdownNow(self) {
+        if let Some(bridge) = &self.pluginSdkIpcBridge {
+            let _ = bridge.stop();
+        }
         let _ = self.accessServices.stopSpaceSync();
         operit_link::clearCoreRouteRuntime();
     }
@@ -249,6 +273,9 @@ impl CoreApplication {
 impl Drop for CoreApplication {
     /// Releases process-local synchronization ownership when a Core tree is dropped.
     fn drop(&mut self) {
+        if let Some(bridge) = &self.pluginSdkIpcBridge {
+            let _ = bridge.stop();
+        }
         let _ = self.accessServices.stopSpaceSync();
     }
 }

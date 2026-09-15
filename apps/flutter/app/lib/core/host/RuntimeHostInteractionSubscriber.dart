@@ -83,16 +83,21 @@ class RuntimeHostInteractionSubscriber {
   static _BrowserInteractHostStats _browserInteractHostStats =
       _BrowserInteractHostStats();
 
+  /// Returns whether the owner host interaction stream is currently subscribed.
+  static bool get isInstalled => _subscription != null;
+
   /// Installs the owner host interaction stream listener.
   static void install() {
     if (_subscription != null) {
       return;
     }
-    _subscription = _clients.servicesRuntimeHostInteractionService
+    late final StreamSubscription<RuntimeHostInteractionRequest> subscription;
+    subscription = _clients.servicesRuntimeHostInteractionService
         .ownerHostInteractionEvents(kinds: _ownerKinds)
         .listen(
           (event) => unawaited(_handleEvent(event)),
           onError: (Object error, StackTrace stackTrace) {
+            _releaseSubscription(subscription);
             FlutterError.reportError(
               FlutterErrorDetails(
                 exception: error,
@@ -104,7 +109,16 @@ class RuntimeHostInteractionSubscriber {
               ),
             );
           },
+          onDone: () {
+            _releaseSubscription(subscription);
+            ClientLogger.d(
+              'owner host interaction stream closed',
+              tag: 'RuntimeHostInteraction',
+            );
+          },
+          cancelOnError: true,
         );
+    _subscription = subscription;
   }
 
   /// Stops the owner host interaction stream listener.
@@ -114,6 +128,16 @@ class RuntimeHostInteractionSubscriber {
     await subscription?.cancel();
   }
 
+  /// Clears the active subscription when the matching stream terminates.
+  static void _releaseSubscription(
+    StreamSubscription<RuntimeHostInteractionRequest> subscription,
+  ) {
+    if (identical(_subscription, subscription)) {
+      _subscription = null;
+    }
+  }
+
+  /// Handles one owner-host interaction request.
   static Future<void> _handleEvent(
     RuntimeHostInteractionRequest request,
   ) async {
@@ -410,7 +434,9 @@ class RuntimeHostInteractionSubscriber {
   static Future<RuntimeHostInteractionResponse> _handleComposeFilePicker(
     RuntimeHostInteractionComposeFilePickerPayload payload,
   ) async {
-    final resultJson = await ComposeDslFilePickerService.open(payload.requestJson);
+    final resultJson = await ComposeDslFilePickerService.open(
+      payload.requestJson,
+    );
     return _response(
       composeFilePicker: RuntimeHostInteractionComposeFilePickerResponse(
         resultJson: resultJson,

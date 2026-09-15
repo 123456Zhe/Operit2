@@ -15,6 +15,7 @@ use crate::dao::MessageDao::MessageDao;
 use crate::dao::MessagePartDao::MessagePartDao;
 use crate::dao::MessageVariantDao::MessageVariantDao;
 use crate::db::AppDatabase::{AppDatabase, AppDatabaseError};
+use crate::repository::WorkspacePreferenceStore::WorkspacePreferenceStore;
 use crate::sync::SqlChatSyncStore::{SqlChatSyncStore, SqlChatSyncStoreError};
 use operit_model::CharacterCardChatStats::CharacterCardChatStats;
 use operit_model::CharacterGroupChatStats::CharacterGroupChatStats;
@@ -30,6 +31,7 @@ use operit_model::OperitChatArchive::{
     OperitArchivedChat, OperitArchivedMessage, OperitArchivedMessageVariant, OperitChatArchive,
     ARCHIVE_TYPE, CURRENT_FORMAT_VERSION,
 };
+use operit_model::Workspace::{Workspace, WorkspaceFolder};
 use serde::{Deserialize, Serialize};
 
 const LOCATOR_PREVIEW_CHAR_COUNT: i32 = 48;
@@ -94,6 +96,7 @@ pub type ChatHistoryManagerResult<T> = Result<T, ChatHistoryManagerError>;
 pub struct ChatHistoryManager {
     database: Arc<AppDatabase>,
     chatDao: ChatDao,
+    workspaceStore: WorkspacePreferenceStore,
     messageDao: MessageDao,
     messagePartDao: MessagePartDao,
     messageVariantDao: MessageVariantDao,
@@ -153,6 +156,7 @@ impl ChatHistoryManager {
             PreferencesDataStore::new(paths.current_chat_id_preferences_path());
         let database = AppDatabase::getDatabase(paths.clone())?;
         let chatDao = database.chatDao();
+        let workspaceStore = WorkspacePreferenceStore::new(paths.clone());
         let messageDao = database.messageDao();
         let messagePartDao = database.messagePartDao();
         let messageVariantDao = database.messageVariantDao();
@@ -160,11 +164,10 @@ impl ChatHistoryManager {
         let bindingStore =
             CoreNodeBindingStore::default().map_err(ChatHistoryManagerError::IllegalState)?;
         Self::ensureChatBindings(&chatDao, &bindingStore)?;
-        let chatHistoriesFlow = chatDao.getAllChats()?.map(|chatEntities| {
-            chatEntities
-                .into_iter()
-                .map(|chatEntity| chatEntity.toChatHistory(Vec::new()))
-                .collect::<Vec<_>>()
+        let workspaceStoreForFlow = workspaceStore.clone();
+        let chatHistoriesFlow = chatDao.getAllChats()?.map(move |chatEntities| {
+            attachWorkspaceNames(&workspaceStoreForFlow, chatEntities)
+                .expect("workspace names must load for chat history flow")
         });
         let currentChatIdFlow = currentChatIdDataStore
             .dataFlow()
@@ -185,6 +188,7 @@ impl ChatHistoryManager {
         Ok(Self {
             database,
             chatDao,
+            workspaceStore,
             messageDao,
             messagePartDao,
             messageVariantDao,
@@ -405,12 +409,7 @@ impl ChatHistoryManager {
 
     /// Loads the current chat history list directly from persistent storage.
     pub fn loadChatHistories(&self) -> ChatHistoryManagerResult<Vec<ChatHistory>> {
-        Ok(self
-            .chatDao
-            .getAllChatsDirectly()?
-            .into_iter()
-            .map(|chatEntity| chatEntity.toChatHistory(Vec::new()))
-            .collect())
+        attachWorkspaceNames(&self.workspaceStore, self.chatDao.getAllChatsDirectly()?)
     }
 
     #[allow(non_snake_case)]
@@ -539,10 +538,21 @@ impl ChatHistoryManager {
             .into_iter()
             .map(|chatHistory| self.buildOperitArchivedChat(chatHistory))
             .collect::<ChatHistoryManagerResult<Vec<_>>>()?;
+        let workspaceIds = chats
+            .iter()
+            .filter_map(|chat| chat.workspaceId.clone())
+            .collect::<HashSet<_>>();
+        let workspaces = self
+            .workspaceStore
+            .getAll()?
+            .into_iter()
+            .filter(|workspace| workspaceIds.contains(&workspace.id))
+            .collect::<Vec<_>>();
         let archive = OperitChatArchive {
             archiveType: ARCHIVE_TYPE.to_string(),
             formatVersion: CURRENT_FORMAT_VERSION,
             exportedAt: currentTimeMillis(),
+            workspaces,
             chats,
         };
         serde_json::to_string_pretty(&archive)
@@ -604,6 +614,9 @@ impl ChatHistoryManager {
             updatedCount: 0,
             skippedCount: 0,
         };
+        for workspace in archive.workspaces {
+            self.upsertWorkspace(workspace)?;
+        }
         let totalChatCount = archive.chats.len();
         let mut processedChatCount = 0;
         for archivedChat in archive.chats {
@@ -1378,7 +1391,7 @@ impl ChatHistoryManager {
             currentWindowSize: 0,
             group,
             displayOrder: -timestamp,
-            workspace: None,
+            workspaceId: None,
             parentChatId: None,
             characterCardName,
             characterGroupId,
@@ -1392,15 +1405,158 @@ impl ChatHistoryManager {
         Ok(history)
     }
 
-    /// Updates the workspace binding for a chat.
-    pub fn updateChatWorkspace(
+    /// Updates the workspace id bound to a chat.
+    pub fn updateChatWorkspaceId(
         &self,
         chatId: String,
-        workspace: Option<String>,
+        workspaceId: Option<String>,
     ) -> ChatHistoryManagerResult<()> {
+        if let Some(workspaceId) = workspaceId.as_ref() {
+            let workspace = self.workspaceStore.getById(workspaceId)?.ok_or_else(|| {
+                ChatHistoryManagerError::IllegalArgument(format!(
+                    "workspace does not exist: {workspaceId}"
+                ))
+            })?;
+            workspace
+                .validate()
+                .map_err(ChatHistoryManagerError::IllegalArgument)?;
+        }
         self.chatDao
-            .updateChatWorkspace(&chatId, workspace, currentTimeMillis())?;
+            .updateChatWorkspaceId(&chatId, workspaceId, currentTimeMillis())?;
         self.recordChatMetadata(&chatId)?;
+        Ok(())
+    }
+
+    /// Loads every persisted workspace.
+    pub fn listWorkspaces(&self) -> ChatHistoryManagerResult<Vec<Workspace>> {
+        Ok(self.workspaceStore.getAll()?)
+    }
+
+    /// Loads one workspace by id.
+    pub fn getWorkspace(&self, workspaceId: &str) -> ChatHistoryManagerResult<Option<Workspace>> {
+        Ok(self.workspaceStore.getById(workspaceId)?)
+    }
+
+    /// Loads the workspace bound to a chat.
+    pub fn getWorkspaceForChat(
+        &self,
+        chatId: &str,
+    ) -> ChatHistoryManagerResult<Option<Workspace>> {
+        let chat = self.chatDao.getChatById(chatId)?.ok_or_else(|| {
+            ChatHistoryManagerError::IllegalArgument(format!("Chat does not exist: {chatId}"))
+        })?;
+        let Some(workspaceId) = chat.workspaceId else {
+            return Ok(None);
+        };
+        Ok(self.workspaceStore.getById(&workspaceId)?)
+    }
+
+    /// Creates a named workspace with the supplied folders.
+    pub fn createWorkspace(
+        &self,
+        name: String,
+        folders: Vec<WorkspaceFolder>,
+    ) -> ChatHistoryManagerResult<Workspace> {
+        let timestamp = currentTimeMillis();
+        let workspace = Workspace {
+            id: Uuid::new_v4().to_string(),
+            name,
+            folders,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+        };
+        workspace
+            .validate()
+            .map_err(ChatHistoryManagerError::IllegalArgument)?;
+        Ok(self.workspaceStore.upsert(workspace)?)
+    }
+
+    /// Persists an existing workspace record.
+    pub fn upsertWorkspace(&self, workspace: Workspace) -> ChatHistoryManagerResult<Workspace> {
+        workspace
+            .validate()
+            .map_err(ChatHistoryManagerError::IllegalArgument)?;
+        Ok(self.workspaceStore.upsert(workspace)?)
+    }
+
+    /// Renames a workspace.
+    pub fn renameWorkspace(
+        &self,
+        workspaceId: String,
+        name: String,
+    ) -> ChatHistoryManagerResult<Workspace> {
+        let mut workspace = self.workspaceStore.getById(&workspaceId)?.ok_or_else(|| {
+            ChatHistoryManagerError::IllegalArgument(format!(
+                "workspace does not exist: {workspaceId}"
+            ))
+        })?;
+        workspace.name = name;
+        workspace.updatedAt = currentTimeMillis();
+        workspace
+            .validate()
+            .map_err(ChatHistoryManagerError::IllegalArgument)?;
+        Ok(self.workspaceStore.upsert(workspace)?)
+    }
+
+    /// Adds a folder to an existing workspace.
+    pub fn addWorkspaceFolder(
+        &self,
+        workspaceId: String,
+        folder: WorkspaceFolder,
+    ) -> ChatHistoryManagerResult<Workspace> {
+        let mut workspace = self.workspaceStore.getById(&workspaceId)?.ok_or_else(|| {
+            ChatHistoryManagerError::IllegalArgument(format!(
+                "workspace does not exist: {workspaceId}"
+            ))
+        })?;
+        workspace.folders.push(folder);
+        workspace.updatedAt = currentTimeMillis();
+        workspace
+            .validate()
+            .map_err(ChatHistoryManagerError::IllegalArgument)?;
+        Ok(self.workspaceStore.upsert(workspace)?)
+    }
+
+    /// Removes a folder from an existing workspace.
+    pub fn removeWorkspaceFolder(
+        &self,
+        workspaceId: String,
+        folderName: String,
+    ) -> ChatHistoryManagerResult<Workspace> {
+        let mut workspace = self.workspaceStore.getById(&workspaceId)?.ok_or_else(|| {
+            ChatHistoryManagerError::IllegalArgument(format!(
+                "workspace does not exist: {workspaceId}"
+            ))
+        })?;
+        let originalLen = workspace.folders.len();
+        workspace
+            .folders
+            .retain(|folder| folder.name != folderName);
+        if workspace.folders.len() == originalLen {
+            return Err(ChatHistoryManagerError::IllegalArgument(format!(
+                "workspace folder not found: {folderName}"
+            )));
+        }
+        workspace.updatedAt = currentTimeMillis();
+        workspace
+            .validate()
+            .map_err(ChatHistoryManagerError::IllegalArgument)?;
+        Ok(self.workspaceStore.upsert(workspace)?)
+    }
+
+    /// Deletes a workspace that is not bound to any chat.
+    pub fn deleteWorkspace(&self, workspaceId: String) -> ChatHistoryManagerResult<()> {
+        let bound = self
+            .chatDao
+            .getAllChatsDirectly()?
+            .into_iter()
+            .any(|chat| chat.workspaceId.as_deref() == Some(workspaceId.as_str()));
+        if bound {
+            return Err(ChatHistoryManagerError::IllegalArgument(format!(
+                "workspace is bound to a chat: {workspaceId}"
+            )));
+        }
+        self.workspaceStore.delete(&workspaceId)?;
         Ok(())
     }
 
@@ -1536,7 +1692,7 @@ impl ChatHistoryManager {
             currentWindowSize: parentChat.currentWindowSize,
             group: parentChat.group,
             displayOrder: -timestamp,
-            workspace: parentChat.workspace,
+            workspaceId: parentChat.workspaceId,
             parentChatId: Some(parentChatId.clone()),
             characterCardName: parentChat.characterCardName,
             characterGroupId: parentChat.characterGroupId,
@@ -2067,4 +2223,30 @@ impl ChatImportResult {
 
 fn currentTimeMillis() -> i64 {
     operit_host_api::TimeUtils::currentTimeMillis()
+}
+
+/// Attaches workspace display names onto chat histories loaded from persistence.
+fn attachWorkspaceNames(
+    workspaceStore: &WorkspacePreferenceStore,
+    chatEntities: Vec<ChatEntity>,
+) -> ChatHistoryManagerResult<Vec<ChatHistory>> {
+    let workspaces = workspaceStore
+        .getAll()?
+        .into_iter()
+        .map(|workspace| (workspace.id.clone(), workspace))
+        .collect::<HashMap<_, _>>();
+    Ok(chatEntities
+        .into_iter()
+        .map(|chatEntity| {
+            let workspace = chatEntity
+                .workspaceId
+                .as_ref()
+                .and_then(|workspaceId| workspaces.get(workspaceId));
+            let mut history = chatEntity.toChatHistory(Vec::new());
+            history.workspaceName = workspace.map(|item| item.name.clone());
+            history.workspacePrimaryPath =
+                workspace.map(|item| item.primaryFolder().path.clone());
+            history
+        })
+        .collect())
 }

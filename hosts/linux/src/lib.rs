@@ -25,6 +25,8 @@ pub use operit_host_native_common::NativeHostJavaScriptRuntimeHost as LinuxHostJ
 pub use operit_host_native_common::NativeHostRuntimeEventSchedulerHost as LinuxHostRuntimeEventSchedulerHost;
 #[cfg(target_os = "linux")]
 pub use operit_host_native_common::NativeHostRuntimeTaskSchedulerHost as LinuxHostRuntimeTaskSchedulerHost;
+#[cfg(target_os = "linux")]
+pub use operit_host_native_plugin_sdk_ipc::UnixPluginSdkIpcHost as LinuxPluginSdkIpcHost;
 pub use tools::audio::LinuxAudioPlaybackHost;
 pub use tools::bluetooth::LinuxBluetoothHost;
 pub use tools::browser::{LinuxBrowserAutomationHost, LinuxWebVisitHost};
@@ -75,4 +77,5 @@ pub fn createRuntimeHostManager(
     .withHostRuntimeEventSchedulerHost(Arc::new(LinuxHostRuntimeEventSchedulerHost::new()))
     .withHostJavaScriptRuntimeHost(Arc::new(LinuxHostJavaScriptRuntimeHost::new()))
     .withHostRuntimeTaskSchedulerHost(Arc::new(LinuxHostRuntimeTaskSchedulerHost::new()))
+    .withPluginSdkIpcHost(Arc::new(LinuxPluginSdkIpcHost::new()))
 }

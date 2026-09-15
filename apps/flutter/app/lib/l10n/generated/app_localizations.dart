@@ -734,29 +734,53 @@ abstract class AppLocalizations {
   /// **'Provide a dedicated file environment for your AI projects'**
   String get workspaceSetupSubtitle;
 
-  /// No description provided for @workspaceCreateDefaultTitle.
+  /// No description provided for @workspaceCreateTitle.
   ///
   /// In en, this message translates to:
-  /// **'Create default'**
-  String get workspaceCreateDefaultTitle;
+  /// **'Create workspace'**
+  String get workspaceCreateTitle;
 
-  /// No description provided for @workspaceCreateDefaultDescription.
+  /// No description provided for @workspaceCreateDescription.
   ///
   /// In en, this message translates to:
-  /// **'Create a new workspace in the app'**
-  String get workspaceCreateDefaultDescription;
+  /// **'Create a named workspace'**
+  String get workspaceCreateDescription;
+
+  /// No description provided for @workspaceNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace name'**
+  String get workspaceNameLabel;
+
+  /// No description provided for @workspaceNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a workspace name'**
+  String get workspaceNameHint;
 
   /// No description provided for @workspaceBindExistingTitle.
   ///
   /// In en, this message translates to:
-  /// **'Choose existing'**
+  /// **'Choose workspace'**
   String get workspaceBindExistingTitle;
 
   /// No description provided for @workspaceBindExistingDescription.
   ///
   /// In en, this message translates to:
-  /// **'Select a folder from this device'**
+  /// **'Bind an existing workspace'**
   String get workspaceBindExistingDescription;
+
+  /// No description provided for @workspaceAddFolderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add folder'**
+  String get workspaceAddFolderTitle;
+
+  /// No description provided for @workspaceAddFolderDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Mount another folder into the current workspace'**
+  String get workspaceAddFolderDescription;
 
   /// No description provided for @workspaceProjectTypeDialogTitle.
   ///

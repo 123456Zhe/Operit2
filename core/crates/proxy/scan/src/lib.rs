@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use quote::ToTokens;
+use syn::parse::Parser;
 use syn::punctuated::Punctuated;
 use syn::{
     Attribute, Expr, Fields, FnArg, ImplItem, ImplItemFn, Item, ItemEnum, ItemImpl, ItemStruct,

@@ -126,6 +126,7 @@ pub struct WorkspaceRuleFile {
 pub struct SystemPromptOptions {
     pub chat_id: Option<String>,
     pub workspace_path: Option<String>,
+    pub workspace_folders: Vec<String>,
     pub saf_bookmark_names: Vec<String>,
     pub use_english: bool,
     pub custom_system_prompt_template: String,
@@ -154,6 +155,7 @@ impl Default for SystemPromptOptions {
         Self {
             chat_id: None,
             workspace_path: None,
+            workspace_folders: Vec::new(),
             saf_bookmark_names: Vec::new(),
             use_english: false,
             custom_system_prompt_template: String::new(),
@@ -246,6 +248,7 @@ impl SystemPromptConfig {
 
         let workspace_guidelines = getWorkspaceGuidelines(
             options.workspace_path.as_deref(),
+            &options.workspace_folders,
             options.use_english,
             options.workspace_rule_file.as_ref(),
         );
@@ -383,6 +386,10 @@ impl SystemPromptConfig {
             (
                 "workspacePath".to_string(),
                 json!(options.base.workspace_path),
+            ),
+            (
+                "workspaceFolders".to_string(),
+                json!(options.base.workspace_folders),
             ),
             (
                 "hostEnvironment".to_string(),
@@ -553,9 +560,11 @@ fn buildWorkspaceRuleFileSection(
     }
 }
 
+/// Builds workspace instructions with every mounted folder visible to the model.
 #[allow(non_snake_case)]
 fn getWorkspaceGuidelines(
     workspace_path: Option<&str>,
+    workspace_folders: &[String],
     use_english: bool,
     workspace_rule_file: Option<&WorkspaceRuleFile>,
 ) -> String {
@@ -565,13 +574,19 @@ fn getWorkspaceGuidelines(
     if workspace_path.trim().is_empty() {
         return String::new();
     }
+    let mounted_folders = workspace_folders
+        .iter()
+        .filter(|folder| !folder.trim().is_empty())
+        .map(|folder| format!("- `{folder}`"))
+        .collect::<Vec<_>>()
+        .join("\n");
     let base_guidelines = if use_english {
         format!(
-            "WORKSPACE GUIDELINES:\n- The current workspace root is `{workspace_path}`.\n- Treat this exact VFS path as the base path for all workspace file operations.\n- File tools accept VFS paths only. Use absolute paths rooted at `{workspace_path}` for workspace files.\n- The workspace collection is under `/app/workspaces`; each workspace must be addressed by its full VFS path.\n- Root listing always shows `/app`; `/mnt` is listed when this host has mounted external entries.\n- `/sdcard` and `/data` are hidden Android aliases that can be opened directly on Android hosts.\n- Relative paths are only for file contents or project-internal references, not for tool parameters.\n- **Best Practice for Code Modifications**: Before modifying any file, use `grep_code` and `grep_context` to locate and understand relevant code with surrounding context. This ensures you understand the codebase structure before making changes."
+            "WORKSPACE GUIDELINES:\n- The current workspace root is `{workspace_path}`.\n- This workspace contains these mounted folders; every listed path belongs to the same workspace:\n{mounted_folders}\n- Treat every listed VFS path as an allowed workspace root; do not limit workspace operations to the first path.\n- File tools accept VFS paths only. Use absolute paths rooted at the relevant listed workspace folder.\n- The workspace collection is under `/app/workspaces`; each workspace must be addressed by its full VFS path.\n- Root listing always shows `/app`; `/mnt` is listed when this host has mounted external entries.\n- `/sdcard` and `/data` are hidden Android aliases that can be opened directly on Android hosts.\n- Relative paths are only for file contents or project-internal references, not for tool parameters.\n- **Best Practice for Code Modifications**: Before modifying any file, use `grep_code` and `grep_context` to locate and understand relevant code with surrounding context. This ensures you understand the codebase structure before making changes."
         )
     } else {
         format!(
-            "工作区指南：\n- 当前工作区根目录是 `{workspace_path}`。\n- 所有工作区文件操作都要把这个精确 VFS 路径当作根路径。\n- 文件工具只接受 VFS 路径；操作工作区文件时，请使用以 `{workspace_path}` 为根的绝对路径。\n- 工作区集合位于 `/app/workspaces`；每个工作区都必须用完整 VFS 路径访问。\n- 根目录列表固定展示 `/app`；当前 Host 存在外部挂载项时才展示 `/mnt`。\n- `/sdcard` 和 `/data` 是 Android 隐藏别名，只在 Android Host 上可直接访问。\n- 相对路径只用于文件内容里的项目内部引用，不用于工具参数。\n- **代码修改最佳实践**：修改任何文件之前，建议组合使用 `grep_code` 与 `grep_context` 定位并理解相关代码及其上下文，避免在未理解项目结构时盲改。"
+            "工作区指南：\n- 当前工作区根目录是 `{workspace_path}`。\n- 当前工作区包含以下挂载文件夹，所有列出的路径都属于同一个工作区：\n{mounted_folders}\n- 每个列出的 VFS 路径都是允许访问的工作区根目录，不能只使用第一个路径。\n- 文件工具只接受 VFS 路径；操作文件时，请使用以对应工作区文件夹为根的绝对路径。\n- 工作区集合位于 `/app/workspaces`；每个工作区都必须用完整 VFS 路径访问。\n- 根目录列表固定展示 `/app`；当前 Host 存在外部挂载项时才展示 `/mnt`。\n- `/sdcard` 和 `/data` 是 Android 隐藏别名，只在 Android Host 上可直接访问。\n- 相对路径只用于文件内容里的项目内部引用，不用于工具参数。\n- **代码修改最佳实践**：修改任何文件之前，建议组合使用 `grep_code` 与 `grep_context` 定位并理解相关代码及其上下文，避免在未理解项目结构时盲改。"
         )
     };
     let rule_section = buildWorkspaceRuleFileSection(workspace_rule_file, use_english);
@@ -638,5 +653,23 @@ mod tests {
 
         assert!(prompt.contains("<tool name=\"use_package\">"));
         assert!(prompt.contains("<param name=\"package_name\">"));
+    }
+
+    /// Verifies every mounted workspace folder is exposed in the model prompt.
+    #[test]
+    fn workspacePromptListsAllMountedFolders() {
+        let prompt = SystemPromptConfig::getSystemPrompt(SystemPromptOptions {
+            use_english: true,
+            workspace_path: Some("/app/workspaces/test".to_string()),
+            workspace_folders: vec![
+                "/app/workspaces/test".to_string(),
+                "/mnt/windows/d/Code/stm32".to_string(),
+            ],
+            ..SystemPromptOptions::default()
+        });
+
+        assert!(prompt.contains("/app/workspaces/test"));
+        assert!(prompt.contains("/mnt/windows/d/Code/stm32"));
+        assert!(prompt.contains("do not limit workspace operations to the first path"));
     }
 }

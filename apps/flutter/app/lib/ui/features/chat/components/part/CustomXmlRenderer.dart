@@ -509,7 +509,6 @@ class _ThinkPanelState extends State<_ThinkPanel> {
   late bool _expanded;
   late bool _bodyFullHeight;
   late final ScrollController _scrollController;
-  bool _skipCollapseAnimationOnce = false;
   bool _autoScrollEnabled = true;
   bool _userHasInteractedWithScroll = false;
   bool _isProgrammaticScroll = false;
@@ -536,22 +535,11 @@ class _ThinkPanelState extends State<_ThinkPanel> {
         _expandSession += 1;
       }
       if (!targetExpanded && oldWidget.isStreaming && !widget.isStreaming) {
-        _skipCollapseAnimationOnce = true;
         _bodyFullHeight = false;
       }
       _expanded = targetExpanded;
       if (_expanded) {
         _resetAutoScrollState();
-      }
-      if (_skipCollapseAnimationOnce) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) {
-            return;
-          }
-          setState(() {
-            _skipCollapseAnimationOnce = false;
-          });
-        });
       }
     }
 
@@ -581,7 +569,6 @@ class _ThinkPanelState extends State<_ThinkPanel> {
   /// Toggles visibility for the thinking body.
   void _handleHeaderTap() {
     setState(() {
-      _skipCollapseAnimationOnce = false;
       final nextExpanded = !_expanded;
       if (nextExpanded) {
         _expandSession += 1;
@@ -665,9 +652,7 @@ class _ThinkPanelState extends State<_ThinkPanel> {
     final bodyScrollPhysics = renderFullHeight
         ? const NeverScrollableScrollPhysics()
         : null;
-    final switchDuration = _skipCollapseAnimationOnce
-        ? Duration.zero
-        : const Duration(milliseconds: 220);
+    const switchDuration = Duration(milliseconds: 220);
     return Semantics(
       label: contentText.isEmpty
           ? thinkingTitle
@@ -687,9 +672,7 @@ class _ThinkPanelState extends State<_ThinkPanel> {
                     children: <Widget>[
                       AnimatedRotation(
                         turns: _expanded ? 0.25 : 0,
-                        duration: _skipCollapseAnimationOnce
-                            ? Duration.zero
-                            : const Duration(milliseconds: 300),
+                        duration: const Duration(milliseconds: 300),
                         child: Icon(
                           Icons.keyboard_arrow_right,
                           size: 20,

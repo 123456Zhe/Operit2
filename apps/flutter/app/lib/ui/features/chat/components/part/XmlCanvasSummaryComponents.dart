@@ -32,34 +32,41 @@ class CanvasToolSummaryRow extends StatelessWidget {
     final row = Semantics(
       button: onClick != null,
       label: semanticDescription,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: <Widget>[
-          Icon(leadingIcon, size: 16, color: titleColor.withValues(alpha: 0.7)),
-          const SizedBox(width: 8),
-          ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 80, maxWidth: 120),
-            child: Text(
-              toolName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelMedium?.copyWith(color: titleColor),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: <Widget>[
+            Icon(
+              leadingIcon,
+              size: 16,
+              color: titleColor.withValues(alpha: 0.7),
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _toCanvasSingleLineText(summary),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(color: summaryColor),
+            const SizedBox(width: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 80, maxWidth: 120),
+              child: Text(
+                toolName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelMedium?.copyWith(color: titleColor),
+              ),
             ),
-          ),
-          if (trailing != null) ...<Widget>[
-            const SizedBox(width: 6),
-            trailing!,
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _toCanvasSingleLineText(summary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(color: summaryColor),
+              ),
+            ),
+            if (trailing != null) ...<Widget>[
+              const SizedBox(width: 6),
+              trailing!,
+            ],
           ],
-        ],
+        ),
       ),
     );
 

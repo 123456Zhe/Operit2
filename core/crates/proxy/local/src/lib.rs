@@ -21,6 +21,15 @@ use tokio::sync::Mutex;
 
 include!(concat!(env!("OUT_DIR"), "/generated_core_dispatch.rs"));
 
+mod generated_plugin_sdk_surface {
+    include!(concat!(env!("OUT_DIR"), "/plugin_sdk_surface.rs"));
+}
+
+/// Returns the SDK route surface generated from explicit source annotations.
+pub fn pluginSdkSurface() -> operit_plugin_sdk_ipc::PluginSdkSurface {
+    generated_plugin_sdk_surface::pluginSdkSurface()
+}
+
 #[derive(Clone)]
 pub struct LocalCoreProxy {
     application: Arc<Mutex<OperitApplication>>,

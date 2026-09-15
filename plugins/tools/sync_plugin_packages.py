@@ -150,10 +150,12 @@ def _host_cargo_environment() -> dict[str, str]:
     return environment
 
 
+# Resolves an executable through PATH before handing it to subprocess.
 def _platform_command(executable: str) -> str:
-    if os.name == "nt":
-        return f"{executable}.cmd"
-    return executable
+    resolved = shutil.which(executable)
+    if resolved is None:
+        raise FileNotFoundError(f"Required executable is not available on PATH: {executable}")
+    return resolved
 
 
 def _generate_plugin_sdk_types(repo_root: Path, *, dry_run: bool) -> None:

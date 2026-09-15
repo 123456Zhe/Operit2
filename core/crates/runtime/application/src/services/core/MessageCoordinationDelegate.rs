@@ -184,7 +184,13 @@ impl MessageCoordinationDelegate {
             chatHistory: chatId
                 .map(|id| self.chatHistoryDelegate.getRuntimeChatHistory(id))
                 .unwrap_or_default(),
-            workspacePath: currentChat.clone().and_then(|chat| chat.workspace),
+            workspacePath: currentChat
+                .as_ref()
+                .and_then(|chat| self.chatHistoryDelegate.primaryWorkspacePathForChat(chat)),
+            workspaceFolders: currentChat
+                .iter()
+                .flat_map(|chat| self.chatHistoryDelegate.workspaceFolderPathsForChat(chat))
+                .collect(),
             promptFunctionType,
             roleCardId,
             currentRoleName,
@@ -445,7 +451,9 @@ impl MessageCoordinationDelegate {
             .iter()
             .find(|history| history.id == chatId)
             .cloned();
-        let workspacePath = currentChat.and_then(|chat| chat.workspace);
+        let workspacePath = currentChat
+            .as_ref()
+            .and_then(|chat| self.chatHistoryDelegate.primaryWorkspacePathForChat(chat));
         let enableThinking = ApiPreferences::getInstance()
             .enableThinkingModeFlow()
             .first()
@@ -753,7 +761,9 @@ impl MessageCoordinationDelegate {
             .iter()
             .find(|history| history.id == chatId)
             .cloned();
-        let workspacePath = currentChat.clone().and_then(|chat| chat.workspace);
+        let workspacePath = currentChat
+            .as_ref()
+            .and_then(|chat| self.chatHistoryDelegate.primaryWorkspacePathForChat(chat));
         let roleCardId = match roleCardIdOverride
             .clone()
             .map(|value| value.trim().to_string())
@@ -789,6 +799,10 @@ impl MessageCoordinationDelegate {
             .enableThinkingModeFlow()
             .first()
             .expect("enable_thinking_mode preference must be readable");
+        let workspaceFolders = currentChat
+            .as_ref()
+            .map(|chat| self.chatHistoryDelegate.workspaceFolderPathsForChat(chat))
+            .unwrap_or_default();
         let result = self
             .messageProcessingDelegate
             .sendUserMessage(SendUserMessageProcessingRequest {
@@ -799,6 +813,7 @@ impl MessageCoordinationDelegate {
                 chatHistory: runtimeChatHistory,
                 promptHistoryOverride: None,
                 workspacePath,
+                workspaceFolders,
                 promptFunctionType,
                 roleCardId,
                 currentRoleName: None,
@@ -1016,7 +1031,9 @@ impl MessageCoordinationDelegate {
             .iter()
             .find(|history| history.id == chatId)
             .cloned();
-        let workspacePath = currentChat.clone().and_then(|chat| chat.workspace);
+        let workspacePath = currentChat
+            .as_ref()
+            .and_then(|chat| self.chatHistoryDelegate.primaryWorkspacePathForChat(chat));
         let provisionalTitle = if !self.chatHistoryDelegate.hasUserMessage(chatId.clone()) {
             let title = MessageProcessingDelegate::provisionalConversationTitle(&attachments);
             self.chatHistoryDelegate

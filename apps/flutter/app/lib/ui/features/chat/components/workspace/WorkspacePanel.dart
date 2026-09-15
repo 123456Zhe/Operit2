@@ -12,8 +12,10 @@ import 'package:operit2/core/proxy/generated/CoreProxyModels.g.dart'
     as core_proxy;
 import 'package:operit2/core/web_visit/WebVisitModels.dart';
 
+import '../../../../../l10n/generated/app_localizations.dart';
 import '../../../../theme/OperitGlassSurface.dart';
 import '../../viewmodel/WorkspaceFileModels.dart';
+import 'WorkspaceOverviewModels.dart';
 import 'WorkspaceTabContent.dart';
 import 'WorkspaceTabModels.dart';
 import 'WorkspaceTabStrip.dart';
@@ -24,6 +26,7 @@ import 'terminal/WorkspaceTerminalSessions.dart';
 class WorkspacePanel extends StatefulWidget {
   const WorkspacePanel({
     super.key,
+    required this.currentChatId,
     required this.hasBoundWorkspace,
     required this.workspacePath,
     required this.onListWorkspaceFiles,
@@ -32,10 +35,11 @@ class WorkspacePanel extends StatefulWidget {
     required this.onReadWorkspaceFileBytes,
     required this.onWriteWorkspaceFileBytes,
     required this.onOpenWorkspaceFile,
-    required this.onCreateDefaultWorkspace,
+    required this.onCreateWorkspace,
     required this.onBindWorkspace,
   });
 
+  final String? currentChatId;
   final bool hasBoundWorkspace;
   final String? workspacePath;
   final Future<List<WorkspaceFileEntry>> Function(String path)
@@ -47,7 +51,7 @@ class WorkspacePanel extends StatefulWidget {
   final Future<void> Function(String path, Uint8List bytes)
   onWriteWorkspaceFileBytes;
   final Future<void> Function(String path) onOpenWorkspaceFile;
-  final Future<void> Function(String? projectType) onCreateDefaultWorkspace;
+  final Future<void> Function(String name) onCreateWorkspace;
   final Future<void> Function(String workspace) onBindWorkspace;
 
   @override
@@ -77,12 +81,30 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     ),
   ];
   int _selectedIndex = 0;
+  int _filesListingRevision = 0;
   List<WorkspaceTerminalSessionInfo> _terminalSessionEntries =
       const <WorkspaceTerminalSessionInfo>[];
   final ValueNotifier<int> _terminalSessionCount = ValueNotifier<int>(0);
   final ValueNotifier<int> _browserSessionCount = ValueNotifier<int>(0);
+  List<core_proxy.ChatHistoryListItem> _workspaceOverviewHistories =
+      const <core_proxy.ChatHistoryListItem>[];
+  List<WorkspaceFileEntry> _workspaceOverviewMountedFolders =
+      const <WorkspaceFileEntry>[];
+  Map<String, String> _workspaceOverviewCharacterAvatarsByName =
+      const <String, String>{};
+  bool _workspaceOverviewMountedFoldersLoading = false;
+  String? _workspaceOverviewMountedFoldersError;
+  int _workspaceOverviewMountedFoldersLoadGeneration = 0;
   StreamSubscription<List<WorkspaceTerminalSessionInfo>>?
   _terminalSessionSubscription;
+  StreamSubscription<List<core_proxy.ChatHistoryListItem>>?
+  _workspaceOverviewHistorySubscription;
+  StreamSubscription<List<String>>? _workspaceOverviewCharacterIdsSubscription;
+  final Map<String, StreamSubscription<core_proxy.CharacterCard>>
+  _workspaceOverviewCharacterSubscriptions =
+      <String, StreamSubscription<core_proxy.CharacterCard>>{};
+  final Map<String, String> _workspaceOverviewCharacterNamesById =
+      <String, String>{};
 
   @override
   void initState() {
@@ -91,6 +113,10 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     _browserSessionRegistry.addListener(_handleBrowserSessionRegistryChanged);
     _handleBrowserSessionRegistryChanged();
     _registerWebVisitControls();
+    _watchWorkspaceOverviewHistories();
+    _watchWorkspaceOverviewCharacterCards();
+    unawaited(_loadWorkspaceOverviewCharacters());
+    unawaited(_refreshWorkspaceOverviewMountedFolders());
     unawaited(_refreshTerminalSessionEntries());
     _terminalSessionSubscription = _terminalSessions.watchSessions().listen(
       (sessions) {
@@ -109,6 +135,13 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
   void didUpdateWidget(covariant WorkspacePanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     _registerWebVisitControls();
+    final workspaceBindingChanged =
+        oldWidget.currentChatId != widget.currentChatId ||
+        oldWidget.hasBoundWorkspace != widget.hasBoundWorkspace ||
+        oldWidget.workspacePath != widget.workspacePath;
+    if (workspaceBindingChanged) {
+      unawaited(_refreshWorkspaceOverviewMountedFolders());
+    }
     if (!oldWidget.hasBoundWorkspace && widget.hasBoundWorkspace) {
       _replaceSetupTabWithFilesTab();
     }
@@ -120,6 +153,12 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     _browserSessionRegistry.removeListener(
       _handleBrowserSessionRegistryChanged,
     );
+    unawaited(_workspaceOverviewHistorySubscription?.cancel());
+    unawaited(_workspaceOverviewCharacterIdsSubscription?.cancel());
+    for (final subscription
+        in _workspaceOverviewCharacterSubscriptions.values) {
+      unawaited(subscription.cancel());
+    }
     for (final entry in _webVisitCompleters.entries) {
       final completer = entry.value;
       if (!completer.isCompleted) {
@@ -187,6 +226,376 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     _webVisitSessionRegistry.setControls(openWebVisitTab: _openWebVisitTab);
   }
 
+  /// Watches chat histories used by the workspace overview.
+  void _watchWorkspaceOverviewHistories() {
+    _workspaceOverviewHistorySubscription = _coreClients.chatRuntimeHolderMain
+        .chatHistoryListItemsFlow()
+        .listen(
+          (histories) {
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _workspaceOverviewHistories =
+                  List<core_proxy.ChatHistoryListItem>.unmodifiable(histories);
+            });
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            debugPrint(
+              'Failed to watch workspace overview histories: $error\n$stackTrace',
+            );
+          },
+        );
+  }
+
+  /// Watches character cards used by the workspace overview.
+  void _watchWorkspaceOverviewCharacterCards() {
+    _workspaceOverviewCharacterIdsSubscription = _coreClients
+        .preferencesCharacterCardManager
+        .characterCardListFlow()
+        .listen(
+          (cardIds) {
+            unawaited(_syncWorkspaceOverviewCharacterSubscriptions(cardIds));
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            _reportWorkspaceOverviewCharacterError(error, stackTrace);
+          },
+        );
+  }
+
+  /// Loads current character-card metadata for the workspace overview.
+  Future<void> _loadWorkspaceOverviewCharacters() async {
+    try {
+      final characterCardCoreProxy =
+          _coreClients.preferencesCharacterCardManager;
+      final cards = await characterCardCoreProxy.getAllCharacterCards();
+      if (!mounted) {
+        return;
+      }
+      await _applyWorkspaceOverviewCharacterSubscriptions(
+        cards
+            .map((card) => card.id.trim())
+            .where((id) => id.isNotEmpty)
+            .toSet(),
+      );
+      if (!mounted) {
+        return;
+      }
+      _replaceWorkspaceOverviewCharacters(cards);
+    } catch (error, stackTrace) {
+      _reportWorkspaceOverviewCharacterError(error, stackTrace);
+    }
+  }
+
+  /// Synchronizes character-card subscriptions for workspace overview metadata.
+  Future<void> _syncWorkspaceOverviewCharacterSubscriptions(
+    List<String> cardIds,
+  ) async {
+    try {
+      final desiredCardIds = cardIds
+          .map((id) => id.trim())
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      await _applyWorkspaceOverviewCharacterSubscriptions(desiredCardIds);
+      final characterCardCoreProxy =
+          _coreClients.preferencesCharacterCardManager;
+      final cards = await Future.wait<core_proxy.CharacterCard>(
+        desiredCardIds.map(
+          (id) => characterCardCoreProxy.getCharacterCard(id: id),
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      _replaceWorkspaceOverviewCharacters(cards);
+    } catch (error, stackTrace) {
+      _reportWorkspaceOverviewCharacterError(error, stackTrace);
+    }
+  }
+
+  /// Applies the active set of character-card stream subscriptions.
+  Future<void> _applyWorkspaceOverviewCharacterSubscriptions(
+    Set<String> desiredCardIds,
+  ) async {
+    final removedCardIds = _workspaceOverviewCharacterSubscriptions.keys
+        .where((id) => !desiredCardIds.contains(id))
+        .toList(growable: false);
+    for (final cardId in removedCardIds) {
+      await _workspaceOverviewCharacterSubscriptions.remove(cardId)!.cancel();
+      final previousName = _workspaceOverviewCharacterNamesById.remove(cardId);
+      if (previousName != null) {
+        _removeWorkspaceOverviewCharacter(previousName);
+      }
+    }
+
+    final characterCardCoreProxy = _coreClients.preferencesCharacterCardManager;
+    for (final cardId in desiredCardIds) {
+      if (_workspaceOverviewCharacterSubscriptions.containsKey(cardId)) {
+        continue;
+      }
+      _workspaceOverviewCharacterSubscriptions[cardId] = characterCardCoreProxy
+          .getCharacterCardFlow(id: cardId)
+          .listen(
+            _updateWorkspaceOverviewCharacter,
+            onError: (Object error, StackTrace stackTrace) {
+              _reportWorkspaceOverviewCharacterError(error, stackTrace);
+            },
+          );
+    }
+  }
+
+  /// Replaces workspace overview character metadata.
+  void _replaceWorkspaceOverviewCharacters(
+    List<core_proxy.CharacterCard> cards,
+  ) {
+    final avatarUrisByName = <String, String>{};
+    _workspaceOverviewCharacterNamesById.clear();
+    for (final card in cards) {
+      final cardId = card.id.trim();
+      final cardName = card.name.trim();
+      if (cardId.isEmpty || cardName.isEmpty) {
+        continue;
+      }
+      _workspaceOverviewCharacterNamesById[cardId] = cardName;
+      final avatarUri = card.avatarUri?.trim();
+      if (avatarUri != null && avatarUri.isNotEmpty) {
+        avatarUrisByName[cardName] = avatarUri;
+      }
+    }
+    setState(() {
+      _workspaceOverviewCharacterAvatarsByName =
+          Map<String, String>.unmodifiable(avatarUrisByName);
+    });
+  }
+
+  /// Applies one character-card update to workspace overview metadata.
+  void _updateWorkspaceOverviewCharacter(core_proxy.CharacterCard card) {
+    if (!mounted) {
+      return;
+    }
+    final cardId = card.id.trim();
+    final cardName = card.name.trim();
+    if (cardId.isEmpty || cardName.isEmpty) {
+      return;
+    }
+    final avatarUrisByName = Map<String, String>.of(
+      _workspaceOverviewCharacterAvatarsByName,
+    );
+    final previousName = _workspaceOverviewCharacterNamesById[cardId];
+    if (previousName != null) {
+      avatarUrisByName.remove(previousName);
+    }
+    _workspaceOverviewCharacterNamesById[cardId] = cardName;
+    final avatarUri = card.avatarUri?.trim();
+    if (avatarUri != null && avatarUri.isNotEmpty) {
+      avatarUrisByName[cardName] = avatarUri;
+    }
+    setState(() {
+      _workspaceOverviewCharacterAvatarsByName =
+          Map<String, String>.unmodifiable(avatarUrisByName);
+    });
+  }
+
+  /// Removes one character-card entry from workspace overview metadata.
+  void _removeWorkspaceOverviewCharacter(String cardName) {
+    if (!mounted) {
+      return;
+    }
+    final avatarUrisByName = Map<String, String>.of(
+      _workspaceOverviewCharacterAvatarsByName,
+    )..remove(cardName);
+    setState(() {
+      _workspaceOverviewCharacterAvatarsByName =
+          Map<String, String>.unmodifiable(avatarUrisByName);
+    });
+  }
+
+  /// Reports workspace overview character-card subscription errors.
+  void _reportWorkspaceOverviewCharacterError(
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    debugPrint(
+      'Failed to watch workspace overview characters: $error\n$stackTrace',
+    );
+  }
+
+  /// Refreshes mounted folders shown by the workspace overview.
+  Future<void> _refreshWorkspaceOverviewMountedFolders() async {
+    final loadGeneration = ++_workspaceOverviewMountedFoldersLoadGeneration;
+    if (!widget.hasBoundWorkspace) {
+      setState(() {
+        _workspaceOverviewMountedFolders = const <WorkspaceFileEntry>[];
+        _workspaceOverviewMountedFoldersLoading = false;
+        _workspaceOverviewMountedFoldersError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _workspaceOverviewMountedFoldersLoading = true;
+      _workspaceOverviewMountedFoldersError = null;
+    });
+    try {
+      final entries = await widget.onListWorkspaceFiles('');
+      final mountedFolders = entries
+          .where((entry) => entry.isDirectory)
+          .toList(growable: false);
+      if (!mounted ||
+          loadGeneration != _workspaceOverviewMountedFoldersLoadGeneration) {
+        return;
+      }
+      setState(() {
+        _workspaceOverviewMountedFolders =
+            List<WorkspaceFileEntry>.unmodifiable(mountedFolders);
+        _workspaceOverviewMountedFoldersLoading = false;
+      });
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to refresh workspace overview folders: $error\n$stackTrace',
+      );
+      if (!mounted ||
+          loadGeneration != _workspaceOverviewMountedFoldersLoadGeneration) {
+        return;
+      }
+      setState(() {
+        _workspaceOverviewMountedFoldersLoading = false;
+        _workspaceOverviewMountedFoldersError = error.toString();
+      });
+    }
+  }
+
+  /// Converts mounted folder entries into overview display models.
+  List<WorkspaceMountedFolder> _workspaceOverviewMountedFolderModels() {
+    final mountedFolders = <WorkspaceMountedFolder>[];
+    for (final entry in _workspaceOverviewMountedFolders) {
+      final name = entry.name.trim();
+      final path = entry.path.trim();
+      final relativePath = entry.relativePath.trim();
+      if (name.isEmpty || path.isEmpty || relativePath.isEmpty) {
+        continue;
+      }
+      mountedFolders.add(
+        WorkspaceMountedFolder(
+          name: name,
+          path: path,
+          relativePath: relativePath,
+        ),
+      );
+    }
+    return List<WorkspaceMountedFolder>.unmodifiable(mountedFolders);
+  }
+
+  /// Creates a workspace overview snapshot with the current folder state.
+  WorkspaceOverviewUsage _workspaceOverviewSnapshot({
+    required String? workspaceName,
+    required int conversationCount,
+    required List<WorkspaceCharacterUsage> characterUsages,
+  }) {
+    final normalizedWorkspaceName = workspaceName?.trim();
+    final mountedFoldersError = _workspaceOverviewMountedFoldersError?.trim();
+    return WorkspaceOverviewUsage(
+      workspaceName:
+          normalizedWorkspaceName == null || normalizedWorkspaceName.isEmpty
+          ? null
+          : normalizedWorkspaceName,
+      conversationCount: conversationCount,
+      characterUsages: List<WorkspaceCharacterUsage>.unmodifiable(
+        characterUsages,
+      ),
+      mountedFolders: _workspaceOverviewMountedFolderModels(),
+      mountedFoldersLoading: _workspaceOverviewMountedFoldersLoading,
+      mountedFoldersError:
+          mountedFoldersError == null || mountedFoldersError.isEmpty
+          ? null
+          : mountedFoldersError,
+    );
+  }
+
+  /// Builds role usage for the workspace bound to the current chat.
+  WorkspaceOverviewUsage _workspaceOverviewUsage() {
+    final currentChatId = widget.currentChatId?.trim();
+    if (currentChatId == null || currentChatId.isEmpty) {
+      return _workspaceOverviewSnapshot(
+        workspaceName: null,
+        conversationCount: 0,
+        characterUsages: const <WorkspaceCharacterUsage>[],
+      );
+    }
+
+    core_proxy.ChatHistoryListItem? currentHistory;
+    for (final history in _workspaceOverviewHistories) {
+      if (history.id == currentChatId) {
+        currentHistory = history;
+        break;
+      }
+    }
+    if (currentHistory == null) {
+      return _workspaceOverviewSnapshot(
+        workspaceName: null,
+        conversationCount: 0,
+        characterUsages: const <WorkspaceCharacterUsage>[],
+      );
+    }
+
+    final currentWorkspaceId = currentHistory.workspaceId?.trim();
+    if (currentWorkspaceId == null || currentWorkspaceId.isEmpty) {
+      return _workspaceOverviewSnapshot(
+        workspaceName: currentHistory.workspaceName,
+        conversationCount: 0,
+        characterUsages: const <WorkspaceCharacterUsage>[],
+      );
+    }
+
+    var conversationCount = 0;
+    var order = 0;
+    final characterCountsByName = <String, int>{};
+    final firstOrderByName = <String, int>{};
+    for (final history in _workspaceOverviewHistories) {
+      final workspaceId = history.workspaceId?.trim();
+      if (workspaceId != currentWorkspaceId) {
+        continue;
+      }
+      conversationCount += 1;
+      final characterName = history.characterCardName?.trim();
+      if (characterName == null || characterName.isEmpty) {
+        continue;
+      }
+      characterCountsByName[characterName] =
+          (characterCountsByName[characterName] ?? 0) + 1;
+      firstOrderByName.putIfAbsent(characterName, () => order);
+      order += 1;
+    }
+
+    final usages = <WorkspaceCharacterUsage>[];
+    for (final entry in characterCountsByName.entries) {
+      usages.add(
+        WorkspaceCharacterUsage(
+          name: entry.key,
+          avatarUri: _workspaceOverviewCharacterAvatarsByName[entry.key],
+          conversationCount: entry.value,
+        ),
+      );
+    }
+    usages.sort((left, right) {
+      final countComparison = right.conversationCount.compareTo(
+        left.conversationCount,
+      );
+      if (countComparison != 0) {
+        return countComparison;
+      }
+      final leftOrder = firstOrderByName[left.name]!;
+      final rightOrder = firstOrderByName[right.name]!;
+      return leftOrder.compareTo(rightOrder);
+    });
+
+    return _workspaceOverviewSnapshot(
+      workspaceName: currentHistory.workspaceName,
+      conversationCount: conversationCount,
+      characterUsages: usages,
+    );
+  }
+
   void _selectTab(int index) {
     setState(() {
       _selectedIndex = index;
@@ -197,6 +606,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     final existingIndex = _tabs.indexWhere((item) => item.kind == tab.kind);
     setState(() {
       if (existingIndex >= 0) {
+        _tabs[existingIndex] = tab;
         _selectedIndex = existingIndex;
       } else {
         _tabs.add(tab);
@@ -302,6 +712,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     return WorkspaceTabContent(
       tab: tab,
       workspacePath: widget.workspacePath,
+      workspaceUsage: _workspaceOverviewUsage(),
       terminalSessionCountListenable: _terminalSessionCount,
       browserSessionCountListenable: _browserSessionCount,
       onListWorkspaceFiles: widget.onListWorkspaceFiles,
@@ -312,7 +723,9 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
       onWriteWorkspaceFileBytes: widget.onWriteWorkspaceFileBytes,
       onOpenWorkspaceFile: widget.onOpenWorkspaceFile,
       onOpenFile: _openFileTab,
-      onOpenFiles: _openFilesTab,
+      onOpenFolder: _openMountedFolder,
+      onAddFolder: _openWorkspaceBindingPickerTab,
+      filesListingRevision: _filesListingRevision,
       onOpenTerminal: _createAndOpenTerminalSession,
       onOpenTerminalSessions: _showTerminalSessionPicker,
       onOpenBrowserSessions: _showBrowserSessionPicker,
@@ -320,8 +733,9 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
       onFinishWebVisit: _finishWebVisitTab,
       onActivateCurrentTab: () => _selectWorkspaceTab(tab),
       onCloseCurrentTab: () => _closeWorkspaceTab(tab),
-      onCreateDefaultWorkspace: widget.onCreateDefaultWorkspace,
-      onBindWorkspace: widget.onBindWorkspace,
+      onOpenWorkspaceCreator: _openWorkspaceSetupTab,
+      onCreateWorkspace: _createWorkspace,
+      onBindWorkspace: _bindWorkspaceFolder,
       onChooseExistingWorkspace: _openWorkspaceBindingPickerTab,
       splitMarkdownContent: (content) => _coreClients.chatRuntimeHolderMain
           .splitMarkdownContent(content: content),
@@ -722,20 +1136,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     });
   }
 
-  void _openFilesTab() {
-    if (!widget.hasBoundWorkspace) {
-      _openWorkspaceSetupTab();
-      return;
-    }
-    _openSingletonTab(
-      const WorkspaceTab(
-        kind: WorkspaceTabKind.files,
-        title: '',
-        icon: Icons.folder_outlined,
-      ),
-    );
-  }
-
+  /// Opens the workspace creation and binding setup tab.
   void _openWorkspaceSetupTab() {
     _openSingletonTab(
       const WorkspaceTab(
@@ -746,16 +1147,63 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     );
   }
 
-  void _openWorkspaceBindingPickerTab() {
+  /// Opens the file tree for one mounted workspace folder.
+  void _openMountedFolder(WorkspaceMountedFolder folder) {
+    final relativePath = folder.relativePath.trim();
+    final title = folder.name.trim();
     _openSingletonTab(
-      const WorkspaceTab(
+      WorkspaceTab(
+        kind: WorkspaceTabKind.files,
+        title: title,
+        icon: Icons.folder_outlined,
+        filePath: relativePath,
+      ),
+    );
+  }
+
+  /// Opens the workspace folder picker for binding or mounting.
+  void _openWorkspaceBindingPickerTab() {
+    final l10n = AppLocalizations.of(context)!;
+    _openSingletonTab(
+      WorkspaceTab(
         kind: WorkspaceTabKind.workspacePicker,
-        title: '',
+        title: widget.hasBoundWorkspace ? l10n.workspaceAddFolderTitle : '',
         icon: Icons.folder_open_outlined,
       ),
     );
   }
 
+  /// Binds or mounts the selected folder, then shows the workspace file tree.
+  Future<void> _bindWorkspaceFolder(String workspace) async {
+    await widget.onBindWorkspace(workspace);
+    if (!mounted) {
+      return;
+    }
+    if (widget.hasBoundWorkspace) {
+      unawaited(_refreshWorkspaceOverviewMountedFolders());
+    }
+    setState(() {
+      _filesListingRevision += 1;
+    });
+    _replaceSetupTabWithFilesTab();
+  }
+
+  /// Creates a named workspace and switches the workspace panel back to files.
+  Future<void> _createWorkspace(String name) async {
+    await widget.onCreateWorkspace(name);
+    if (!mounted) {
+      return;
+    }
+    if (widget.hasBoundWorkspace) {
+      unawaited(_refreshWorkspaceOverviewMountedFolders());
+    }
+    setState(() {
+      _filesListingRevision += 1;
+    });
+    _replaceSetupTabWithFilesTab();
+  }
+
+  /// Replaces setup-style tabs with the workspace files tab.
   void _replaceSetupTabWithFilesTab() {
     final targetIndex = _tabs.indexWhere(
       (tab) =>
@@ -799,6 +1247,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     });
   }
 
+  /// Builds a stable workspace tab identity for diffing tab lists.
   String _tabIdentity(WorkspaceTab tab) {
     return <String>[
       tab.kind.name,

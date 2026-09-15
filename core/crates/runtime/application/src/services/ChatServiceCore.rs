@@ -1213,19 +1213,34 @@ impl ChatServiceCore {
             .expect("WorkspaceUtils.createAndGetDefaultWorkspace must succeed")
     }
 
-    /// Creates the default workspace for a chat and stores the workspace binding.
+    /// Creates a named workspace for a chat and stores the workspace binding.
     #[allow(non_snake_case)]
-    pub fn createAndBindDefaultWorkspace(
+    pub fn createAndBindWorkspace(
         &mut self,
         chatId: String,
-        projectType: Option<String>,
-    ) -> String {
+        name: String,
+    ) -> Result<String, String> {
+        PathMapper::workspacePath(&name)?;
         let workspacePath =
-            WorkspaceUtils::createAndGetDefaultWorkspace(chatId.clone(), projectType)
-                .expect("WorkspaceUtils.createAndGetDefaultWorkspace must succeed");
+            WorkspaceUtils::createAndGetDefaultWorkspace(name.clone(), Some("blank".to_string()))?;
+        let folderName =
+            operit_model::Workspace::Workspace::folderNameFromPath(&workspacePath)?;
+        let workspace = self
+            .chatHistoryDelegate
+            .chatHistoryManager
+            .createWorkspace(
+                name.clone(),
+                vec![operit_model::Workspace::WorkspaceFolder {
+                    name: folderName,
+                    path: workspacePath.clone(),
+                }],
+            )
+            .map_err(|error| error.to_string())?;
         self.chatHistoryDelegate
-            .bindChatToWorkspace(chatId, workspacePath.clone());
-        workspacePath
+            .chatHistoryManager
+            .updateChatWorkspaceId(chatId, Some(workspace.id))
+            .map_err(|error| error.to_string())?;
+        Ok(workspacePath)
     }
 
     /// Removes the workspace binding from a chat without deleting workspace files.
@@ -1413,7 +1428,7 @@ impl ChatServiceCore {
             .into_iter()
             .find(|history| history.id == chatId)?;
         let workspacePath = currentChat
-            .workspace
+            .workspacePrimaryPath
             .clone()
             .filter(|value| !value.trim().is_empty())?;
         Some((chatId, workspacePath, rewindTimestamp))
@@ -1853,9 +1868,8 @@ impl ChatServiceCore {
             .value()
             .into_iter()
             .find(|chat| chat.id == chatId)
-            .and_then(|chat| chat.workspace)
-            .map(|workspace| workspace.trim().to_string())
-            .filter(|workspace| !workspace.is_empty())
+            .and_then(|chat| chat.workspacePrimaryPath.clone())
+            .filter(|workspace| !workspace.trim().is_empty())
             .ok_or_else(|| "当前聊天未绑定工作区".to_string())
     }
 
@@ -2181,7 +2195,8 @@ impl ChatServiceCore {
                         .as_deref()
                         .and_then(|name| characterCardAvatarUriByName(&characterCardManager, name)),
                     currentCharacterCardName,
-                    currentWorkspacePath: currentChat.and_then(|chat| chat.workspace.clone()),
+                    currentWorkspacePath: currentChat
+                        .and_then(|chat| chat.workspacePrimaryPath.clone()),
                     isLoading: executionState.isLoading,
                     inputProcessingState: executionState.inputProcessingState,
                     hasOlderDisplayHistory: displayWindowState.hasOlderDisplayHistory,

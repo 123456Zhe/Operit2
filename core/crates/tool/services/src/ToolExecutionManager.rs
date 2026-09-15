@@ -42,6 +42,7 @@ pub struct ToolRuntimeContext {
     pub callerChatId: Option<String>,
     pub callerCardId: Option<String>,
     pub workspacePath: Option<String>,
+    pub workspaceFolders: Vec<String>,
     pub toolExposureMode: ToolExposureMode,
 }
 
@@ -208,6 +209,7 @@ impl ToolExecutionManager {
         callerChatId: Option<String>,
         callerCardId: Option<String>,
         workspacePath: Option<String>,
+        workspaceFolders: Vec<String>,
         toolExposureMode: ToolExposureMode,
     ) -> (Vec<String>, Vec<ToolResult>, Option<RouteChangeIntent>) {
         let mut emitted = Vec::new();
@@ -243,6 +245,7 @@ impl ToolExecutionManager {
                 callerChatId: callerChatId.clone(),
                 callerCardId: callerCardId.clone(),
                 workspacePath: workspacePath.clone(),
+                workspaceFolders: workspaceFolders.clone(),
                 toolExposureMode: toolExposureMode.clone(),
             });
         });

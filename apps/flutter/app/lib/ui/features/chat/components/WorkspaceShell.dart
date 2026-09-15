@@ -14,6 +14,7 @@ class WorkspaceShell extends StatelessWidget {
     super.key,
     required this.workspaceOpen,
     required this.onWorkspaceOpenChanged,
+    required this.currentChatId,
     required this.hasBoundWorkspace,
     required this.workspacePath,
     required this.onListWorkspaceFiles,
@@ -22,13 +23,14 @@ class WorkspaceShell extends StatelessWidget {
     required this.onReadWorkspaceFileBytes,
     required this.onWriteWorkspaceFileBytes,
     required this.onOpenWorkspaceFile,
-    required this.onCreateDefaultWorkspace,
+    required this.onCreateWorkspace,
     required this.onBindWorkspace,
     required this.child,
   });
 
   final bool workspaceOpen;
   final ValueChanged<bool> onWorkspaceOpenChanged;
+  final String? currentChatId;
   final bool hasBoundWorkspace;
   final String? workspacePath;
   final Future<List<WorkspaceFileEntry>> Function(String path)
@@ -40,7 +42,7 @@ class WorkspaceShell extends StatelessWidget {
   final Future<void> Function(String path, Uint8List bytes)
   onWriteWorkspaceFileBytes;
   final Future<void> Function(String path) onOpenWorkspaceFile;
-  final Future<void> Function(String? projectType) onCreateDefaultWorkspace;
+  final Future<void> Function(String name) onCreateWorkspace;
   final Future<void> Function(String workspace) onBindWorkspace;
   final Widget child;
 
@@ -58,6 +60,7 @@ class WorkspaceShell extends StatelessWidget {
       resizeHandleVisualWidth: workspaceResizeHandleVisualWidth,
       resizeHandleHeight: workspaceResizeHandleHeight,
       panel: WorkspacePanel(
+        currentChatId: currentChatId,
         hasBoundWorkspace: hasBoundWorkspace,
         workspacePath: workspacePath,
         onListWorkspaceFiles: onListWorkspaceFiles,
@@ -66,7 +69,7 @@ class WorkspaceShell extends StatelessWidget {
         onReadWorkspaceFileBytes: onReadWorkspaceFileBytes,
         onWriteWorkspaceFileBytes: onWriteWorkspaceFileBytes,
         onOpenWorkspaceFile: onOpenWorkspaceFile,
-        onCreateDefaultWorkspace: onCreateDefaultWorkspace,
+        onCreateWorkspace: onCreateWorkspace,
         onBindWorkspace: onBindWorkspace,
       ),
       child: child,

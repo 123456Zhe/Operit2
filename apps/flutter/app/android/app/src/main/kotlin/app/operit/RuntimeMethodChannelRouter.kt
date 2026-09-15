@@ -8,7 +8,7 @@ class RuntimeMethodChannelRouter(
     runtimeHost: AndroidRuntimeHost,
     ownerSystem: OwnerSystemCapabilityChannel,
 ) {
-    private val coreLinkChannel = RuntimeCoreLinkChannel(activity, runtimeHost)
+    private val coreLinkChannel = RuntimeCoreLinkChannel(runtimeHost)
     private val linkHostChannel = RuntimeLinkHostChannel(runtimeHost)
     private val ownerSystemChannel = ownerSystem
     private val androidPlatformChannel = AndroidPlatformChannel(activity, runtimeHost)

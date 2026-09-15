@@ -431,13 +431,13 @@ class ChatViewModel {
     return _chat.showLatestMessagesForCurrentChat();
   }
 
-  Future<String> createAndBindDefaultWorkspace(
+  Future<String> createAndBindWorkspace(
     String chatId,
-    String? projectType,
+    String name,
   ) {
-    return _chat.createAndBindDefaultWorkspace(
+    return _chat.createAndBindWorkspace(
       chatId: chatId,
-      projectType: projectType,
+      name: name,
     );
   }
 

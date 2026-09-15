@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use operit_proxy_dart_codegen::write_dart_proxy_artifacts;
 use operit_proxy_rust_codegen::write_rust_proxy_artifacts;
+use operit_plugin_sdk_codegen::{generate_plugin_sdk_client_bindings, generate_plugin_sdk_surface};
 use operit_proxy_scan::{scan_core_proxy, CoreProxyScanConfig};
 
 /// Runs the reusable core-app proxy code generator for this crate.
@@ -30,4 +31,19 @@ fn main() {
         &output.objects,
         &output.serializable_type_definitions,
     );
+    let repository_root = output
+        .proxy_manifest_dir
+        .parent()
+        .and_then(std::path::Path::parent)
+        .and_then(std::path::Path::parent)
+        .and_then(std::path::Path::parent)
+        .expect("proxy/local must live under core/crates/proxy");
+    generate_plugin_sdk_client_bindings(
+        &output.objects,
+        &output.serializable_type_definitions,
+        &repository_root.join("plugins/sdk/clients"),
+    )
+    .expect("write generated Plugin SDK clients");
+    generate_plugin_sdk_surface(&output.objects, &out_dir.join("plugin_sdk_surface.rs"))
+        .expect("write generated Plugin SDK route surface");
 }

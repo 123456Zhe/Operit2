@@ -1326,7 +1326,7 @@ class _AIChatSurfaceState extends State<_AIChatSurface> {
       isPendingQueueExpanded: state.isPendingQueueExpanded,
     );
     _updateTopBarTitle();
-    if (workspaceChanged && mounted) {
+    if ((workspaceChanged || chatChanged) && mounted) {
       setState(() {});
       _updateTopBarActions();
       _mainLayoutController?.refreshAttachment(owner: _mainLayoutOwner);
@@ -1967,6 +1967,7 @@ class _AIChatSurfaceState extends State<_AIChatSurface> {
     return WorkspaceShell(
       workspaceOpen: _workspaceOpen,
       onWorkspaceOpenChanged: _setWorkspaceOpen,
+      currentChatId: _currentChatId,
       hasBoundWorkspace: _currentWorkspacePath?.trim().isNotEmpty == true,
       workspacePath: _currentWorkspacePath,
       onListWorkspaceFiles: _viewModel.listWorkspaceFiles,
@@ -1976,7 +1977,7 @@ class _AIChatSurfaceState extends State<_AIChatSurface> {
       onReadWorkspaceFileBytes: _viewModel.readWorkspaceFileBytes,
       onWriteWorkspaceFileBytes: _viewModel.writeWorkspaceFileBytes,
       onOpenWorkspaceFile: _viewModel.openWorkspaceFile,
-      onCreateDefaultWorkspace: _createDefaultWorkspace,
+      onCreateWorkspace: _createWorkspace,
       onBindWorkspace: _bindWorkspace,
       child: content,
     );
@@ -2188,6 +2189,7 @@ class _AIChatSurfaceState extends State<_AIChatSurface> {
     return WorkspaceShell(
       workspaceOpen: _workspaceOpen,
       onWorkspaceOpenChanged: _setWorkspaceOpen,
+      currentChatId: _currentChatId,
       hasBoundWorkspace: _currentWorkspacePath?.trim().isNotEmpty == true,
       workspacePath: _currentWorkspacePath,
       onListWorkspaceFiles: _viewModel.listWorkspaceFiles,
@@ -2197,7 +2199,7 @@ class _AIChatSurfaceState extends State<_AIChatSurface> {
       onReadWorkspaceFileBytes: _viewModel.readWorkspaceFileBytes,
       onWriteWorkspaceFileBytes: _viewModel.writeWorkspaceFileBytes,
       onOpenWorkspaceFile: _viewModel.openWorkspaceFile,
-      onCreateDefaultWorkspace: _createDefaultWorkspace,
+      onCreateWorkspace: _createWorkspace,
       onBindWorkspace: _bindWorkspace,
       child: child,
     );
@@ -2260,12 +2262,12 @@ class _AIChatSurfaceState extends State<_AIChatSurface> {
     );
   }
 
-  Future<void> _createDefaultWorkspace(String? projectType) async {
+  Future<void> _createWorkspace(String name) async {
     final chatId = _currentChatId;
     if (chatId == null) {
       throw StateError('No current chat');
     }
-    await _viewModel.createAndBindDefaultWorkspace(chatId, projectType);
+    await _viewModel.createAndBindWorkspace(chatId, name);
   }
 
   Future<void> _bindWorkspace(String workspace) async {

@@ -385,6 +385,7 @@ impl OperitApplication {
 
     /// Observes package and plugin loading overlay progress.
     #[allow(non_snake_case)]
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn pluginLoadingProgressFlow(&self) -> StateFlow<PluginLoadingProgress> {
         observePluginLoadingProgress()
     }

@@ -1,31 +1,58 @@
 package app.operit
 
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import app.operit.util.AppLogger
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 class RuntimeCoreLinkChannel(
-    private val activity: MainActivity,
     private val runtimeHost: AndroidRuntimeHost,
 ) {
-    private val watchPumpLock = Any()
-    @Volatile
-    private var watchPumpRunning = false
-    @Volatile
-    private var runtimeChannel: MethodChannel? = null
-    private var watchPumpFrameIndex = 0L
+    private companion object {
+        private const val TAG = "RuntimeCoreLink"
+        private val mainHandler = Handler(Looper.getMainLooper())
+        private val watchPumpLock = Any()
+        private val watchChannelLock = Object()
 
+        @Volatile
+        private var watchPumpRunning = false
+
+        @Volatile
+        private var runtimeChannel: MethodChannel? = null
+
+        private var watchPumpFrameIndex = 0L
+    }
+
+    private var attachedChannel: MethodChannel? = null
+
+    /** Attaches the Dart runtime channel and wakes pending watch delivery. */
     fun attach(channel: MethodChannel) {
-        runtimeChannel = channel
-        AppLogger.d("RuntimeCoreLink", "runtime channel attached")
+        attachedChannel = channel
+        synchronized(watchChannelLock) {
+            runtimeChannel = channel
+            watchChannelLock.notifyAll()
+        }
+        AppLogger.d(TAG, "runtime channel attached")
     }
 
+    /** Clears this channel instance while preserving native watch queue ordering. */
     fun clear() {
-        runtimeChannel = null
-        AppLogger.d("RuntimeCoreLink", "runtime channel cleared")
+        val channel = attachedChannel
+        attachedChannel = null
+        synchronized(watchChannelLock) {
+            if (runtimeChannel === channel) {
+                runtimeChannel = null
+            }
+        }
+        AppLogger.d(TAG, "runtime channel cleared")
     }
 
+    /** Handles one Dart-to-native runtime channel method call. */
     fun handle(call: MethodCall, result: MethodChannel.Result): Boolean {
         when (call.method) {
             "call" -> callRuntime(call, result, OperitRuntimeNative::call)
@@ -40,6 +67,7 @@ class RuntimeCoreLinkChannel(
         return true
     }
 
+    /** Runs one encoded Core call on the runtime executor. */
     private fun callRuntime(
         call: MethodCall,
         result: MethodChannel.Result,
@@ -55,6 +83,7 @@ class RuntimeCoreLinkChannel(
         }
     }
 
+    /** Opens one Core watch stream and starts the shared event pump. */
     private fun watchStream(call: MethodCall, result: MethodChannel.Result) {
         val request = call.arguments as? ByteArray
         if (request == null) {
@@ -62,7 +91,7 @@ class RuntimeCoreLinkChannel(
             return
         }
         AppLogger.d(
-            "RuntimeCoreLink",
+            TAG,
             "watch stream open requested bytes=${request.size}",
         )
         runtimeHost.runRuntime(result) {
@@ -71,7 +100,7 @@ class RuntimeCoreLinkChannel(
                 request,
             )
             AppLogger.d(
-                "RuntimeCoreLink",
+                TAG,
                 "watch stream native open returned bytes=${response.size}",
             )
             ensureWatchPump()
@@ -79,6 +108,7 @@ class RuntimeCoreLinkChannel(
         }
     }
 
+    /** Closes one Core watch stream by subscription id. */
     private fun closeWatchStream(call: MethodCall, result: MethodChannel.Result) {
         val subscriptionId = call.arguments as? String
         if (subscriptionId == null) {
@@ -86,7 +116,7 @@ class RuntimeCoreLinkChannel(
             return
         }
         AppLogger.d(
-            "RuntimeCoreLink",
+            TAG,
             "watch stream close requested subscription=$subscriptionId",
         )
         runtimeHost.runRuntime(result) {
@@ -106,24 +136,26 @@ class RuntimeCoreLinkChannel(
         }
     }
 
+    /** Starts the shared native watch pump when it is not already active. */
     private fun ensureWatchPump() {
         synchronized(watchPumpLock) {
             if (watchPumpRunning) {
-                AppLogger.d("RuntimeCoreLink", "watch pump already running")
+                AppLogger.d(TAG, "watch pump already running")
                 return
             }
             watchPumpRunning = true
         }
-        AppLogger.d("RuntimeCoreLink", "watch pump started")
+        AppLogger.d(TAG, "watch pump started")
         runtimeHost.runBackground {
             try {
                 while (watchPumpRunning) {
+                    waitForRuntimeChannel()
                     val frame = OperitRuntimeNative.nextWatchChannelEvent(
                         runtimeHost.ensureRuntimeHandle(),
                     )
                     if (frame == null) {
                         AppLogger.d(
-                            "RuntimeCoreLink",
+                            TAG,
                             "watch pump stopped reason=native_channel_closed",
                         )
                         synchronized(watchPumpLock) { watchPumpRunning = false }
@@ -138,37 +170,109 @@ class RuntimeCoreLinkChannel(
                     val sampled = frameIndex < 20L || frameIndex % 50L == 0L
                     if (sampled) {
                         AppLogger.d(
-                            "RuntimeCoreLink",
+                            TAG,
                             "watch frame dequeued index=$frameIndex bytes=${frame.size}",
                         )
                     }
-                    val channel = runtimeChannel
-                    if (channel != null) {
-                        activity.runOnUiThread {
-                            if (sampled) {
-                                AppLogger.d(
-                                    "RuntimeCoreLink",
-                                    "watch frame delivered index=$frameIndex uiQueueMs=${SystemClock.elapsedRealtime() - dequeuedAt}",
-                                )
-                            }
-                            channel.invokeMethod("watchChannelEvent", frame)
-                        }
-                    } else if (sampled) {
-                        AppLogger.d(
-                            "RuntimeCoreLink",
-                            "watch frame dropped index=$frameIndex reason=channel_unattached",
-                        )
-                    }
+                    deliverWatchFrame(frame, frameIndex, dequeuedAt, sampled)
                 }
             } catch (error: Throwable) {
                 AppLogger.e(
-                    "RuntimeCoreLink",
+                    TAG,
                     "watch pump failed running=$watchPumpRunning",
                     error,
                 )
                 synchronized(watchPumpLock) {
                     watchPumpRunning = false
                 }
+            }
+        }
+    }
+
+    /** Waits until a Dart runtime channel is attached. */
+    private fun waitForRuntimeChannel(): MethodChannel {
+        synchronized(watchChannelLock) {
+            while (true) {
+                val channel = runtimeChannel
+                if (channel != null) {
+                    return channel
+                }
+                watchChannelLock.wait()
+            }
+        }
+    }
+
+    /** Delivers one watch frame to the currently attached Dart runtime channel. */
+    private fun deliverWatchFrame(
+        frame: ByteArray,
+        frameIndex: Long,
+        dequeuedAt: Long,
+        sampled: Boolean,
+    ) {
+        while (watchPumpRunning) {
+            val channel = waitForRuntimeChannel()
+            val delivered = AtomicBoolean(false)
+            val deliveryError = AtomicReference<Throwable?>()
+            val latch = CountDownLatch(1)
+            mainHandler.post {
+                try {
+                    if (runtimeChannel !== channel) {
+                        latch.countDown()
+                        return@post
+                    }
+                    channel.invokeMethod(
+                        "watchChannelEvent",
+                        frame,
+                        object : MethodChannel.Result {
+                            /** Records successful Dart receipt of one watch frame. */
+                            override fun success(result: Any?) {
+                                delivered.set(true)
+                                latch.countDown()
+                            }
+
+                            /** Records Dart-side delivery errors for the pump thread. */
+                            override fun error(
+                                errorCode: String,
+                                errorMessage: String?,
+                                errorDetails: Any?,
+                            ) {
+                                deliveryError.set(
+                                    IllegalStateException(
+                                        "watchChannelEvent failed: $errorCode $errorMessage",
+                                    ),
+                                )
+                                latch.countDown()
+                            }
+
+                            /** Records a missing Dart handler for the pump thread. */
+                            override fun notImplemented() {
+                                deliveryError.set(
+                                    IllegalStateException(
+                                        "watchChannelEvent is not implemented",
+                                    ),
+                                )
+                                latch.countDown()
+                            }
+                        },
+                    )
+                } catch (error: Throwable) {
+                    deliveryError.set(error)
+                    latch.countDown()
+                }
+            }
+            latch.await()
+            val error = deliveryError.get()
+            if (error != null) {
+                throw error
+            }
+            if (delivered.get()) {
+                if (sampled) {
+                    AppLogger.d(
+                        TAG,
+                        "watch frame delivered index=$frameIndex uiQueueMs=${SystemClock.elapsedRealtime() - dequeuedAt}",
+                    )
+                }
+                return
             }
         }
     }

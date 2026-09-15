@@ -1,7 +1,13 @@
 #![allow(non_snake_case)]
 
 pub mod HostManager;
+pub mod PluginSdkIpc;
 pub mod TimeUtils;
+
+pub use PluginSdkIpc::{
+    pluginSdkIpcError, PluginSdkIpcEndpoint, PluginSdkIpcHost, PluginSdkIpcSessionCallbacks,
+    PluginSdkIpcSessionId, PLUGIN_SDK_IPC_ENDPOINT_NAME,
+};
 
 use std::any::Any;
 use std::collections::BTreeMap;

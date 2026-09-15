@@ -3,18 +3,18 @@
 part of 'TtsSettingsPanel.dart';
 
 class _SectionCard extends StatelessWidget {
+  /// Creates one expandable settings section card.
   const _SectionCard({
     required this.title,
     required this.children,
     this.action,
-    this.initiallyExpanded = true,
   });
 
   final String title;
   final List<Widget> children;
   final Widget? action;
-  final bool initiallyExpanded;
 
+  /// Builds the section card with its content expanded by default.
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -36,7 +36,7 @@ class _SectionCard extends StatelessWidget {
           material: true,
           clip: false,
           child: ExpansionTile(
-            initiallyExpanded: initiallyExpanded,
+            initiallyExpanded: true,
             tilePadding: const EdgeInsets.symmetric(horizontal: 14),
             childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
             shape: RoundedRectangleBorder(borderRadius: radius),
@@ -46,9 +46,7 @@ class _SectionCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
-                    style: SettingsControlStyles.sectionTitleTextStyle(
-                      context,
-                    ),
+                    style: SettingsControlStyles.sectionTitleTextStyle(context),
                   ),
                 ),
                 ?action,
@@ -375,10 +373,7 @@ class _TtsVoiceTile extends StatelessWidget {
               if (current)
                 const SettingsActivePill(label: '全局当前')
               else
-                SettingsSetActiveButton(
-                  label: '设为全局',
-                  onPressed: onSetCurrent,
-                ),
+                SettingsSetActiveButton(label: '设为全局', onPressed: onSetCurrent),
             ],
           ),
         ),

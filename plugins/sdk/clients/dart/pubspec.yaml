@@ -1,0 +1,13 @@
+name: operit_plugin_sdk
+description: Plugin SDK client surface for third-party Operit integrations.
+version: 0.1.0
+
+environment:
+  sdk: ^3.10.8
+
+dependencies:
+  msgpack_dart: ^1.0.1
+
+dev_dependencies:
+  test: ^1.26.2
+  lints: ^6.0.0

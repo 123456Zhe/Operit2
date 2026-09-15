@@ -27,6 +27,7 @@ operit-host-api = { version = "0.1.0", path = "../../foundation/host-api" }
 operit-link = { path = "../../foundation/link" }
 operit-model = { version = "2.0.0-preview.6", path = "../../foundation/model" }
 operit-plugin-sdk = { version = "2.0.0-preview.6", path = "../../plugin/sdk" }
+operit-route-macros = { path = "../../node/route-macros" }
 operit-store = { version = "0.1.0", path = "../../persistence/store" }
 operit-util = { version = "2.0.0-preview.6", path = "../../foundation/util" }
 regex.workspace = true

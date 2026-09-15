@@ -9,6 +9,8 @@ members = [
     "crates/provider/local-model",
     "crates/tool/services",
     "crates/plugin/sdk",
+    "crates/plugin/sdk-ipc",
+    "crates/plugin/sdk-ipc-bridge",
     "crates/plugin/codegen",
     "crates/plugin/javascript-bridge",
     "crates/runtime/application",

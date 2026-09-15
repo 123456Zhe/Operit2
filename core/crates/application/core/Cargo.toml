@@ -11,4 +11,6 @@ operit-host-api = { path = "../../foundation/host-api" }
 operit-link = { path = "../../foundation/link" }
 operit-node-runtime = { path = "../../node/runtime" }
 operit-proxy-local = { path = "../../proxy/local" }
+operit-plugin-sdk-ipc = { path = "../../plugin/sdk-ipc" }
+operit-plugin-sdk-ipc-bridge = { path = "../../plugin/sdk-ipc-bridge" }
 operit-runtime = { path = "../../runtime/application", default-features = false, features = ["javascript"] }

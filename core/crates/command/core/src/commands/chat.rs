@@ -929,7 +929,7 @@ fn print_chat_history_header(chat: &ChatHistory, output: &mut CoreCommandOutput)
     output.push_stdout_line(format!("Display order: {}", chat.displayOrder));
     output.push_stdout_line(format!(
         "Workspace: {}",
-        chat.workspace.clone().unwrap_or_default()
+        chat.workspacePrimaryPath.clone().unwrap_or_default()
     ));
     output.push_stdout_line(format!(
         "Parent chat: {}",

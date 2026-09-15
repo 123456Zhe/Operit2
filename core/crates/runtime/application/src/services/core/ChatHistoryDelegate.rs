@@ -13,6 +13,7 @@ use operit_model::ChatHistoryListItem::ChatHistoryListItem;
 use operit_model::ChatMessage::ChatMessage;
 use operit_model::ChatMessageLocatorPreview::ChatMessageLocatorPreview;
 use operit_store::repository::ChatHistoryManager::ChatHistoryManager;
+use operit_tools::files::PathMapper::PathMapper;
 use operit_store::PreferencesDataStore::{mutableStateFlow, MutableStateFlow, StateFlow};
 use operit_store::SyncOperationStore::SyncClock;
 use operit_util::AppLogger::AppLogger;
@@ -632,7 +633,10 @@ impl ChatHistoryDelegate {
     fn buildChatViewHookParams(&self, chatId: &str) -> ChatViewHookParams {
         let histories = self.chatHistoriesFlow.value();
         let (workspacePath, title) = match histories.iter().find(|chat| chat.id == chatId) {
-            Some(chat) => (chat.workspace.clone(), Some(chat.title.clone())),
+            Some(chat) => (
+                self.primaryWorkspacePathForChat(chat),
+                Some(chat.title.clone()),
+            ),
             None => (None, None),
         };
         ChatViewHookParams {
@@ -1470,15 +1474,18 @@ impl ChatHistoryDelegate {
         } else {
             None
         };
-        let effectiveGroup = match group {
-            Some(value) => Some(value),
-            None => inheritGroupFromChatId.and_then(|chatId| {
+        let inheritedChat = inheritGroupFromChatId
+            .as_ref()
+            .and_then(|chatId| {
                 self.chatHistoriesFlow
                     .value()
                     .iter()
-                    .find(|chat| chat.id == chatId)
-                    .and_then(|chat| chat.group.clone())
-            }),
+                    .find(|chat| chat.id == chatId.as_ref())
+                    .cloned()
+            });
+        let effectiveGroup = match group {
+            Some(value) => Some(value),
+            None => inheritedChat.as_ref().and_then(|chat| chat.group.clone()),
         };
         let normalizedCharacterGroupId =
             characterGroupId.and_then(|value| normalizedNonBlank(value));
@@ -1502,12 +1509,18 @@ impl ChatHistoryDelegate {
         } else {
             None
         };
+        let effectiveWorkspaceId = if inheritGroupFromCurrent {
+            inheritedChat.as_ref().and_then(|chat| chat.workspaceId.clone())
+        } else {
+            None
+        };
         ResolvedNewChatBinding {
             group: effectiveGroup,
             characterGroupId: normalizedCharacterGroupId,
             characterCardName: effectiveCharacterCardName,
             resolvedCard,
             explicitCharacterCardName,
+            workspaceId: effectiveWorkspaceId,
         }
     }
 
@@ -1584,6 +1597,11 @@ impl ChatHistoryDelegate {
                 binding.characterGroupId.clone(),
             )
             .expect("ChatHistoryManager.createNewChat must succeed");
+        if let Some(workspaceId) = binding.workspaceId.clone() {
+            self.chatHistoryManager
+                .updateChatWorkspaceId(newChat.id.clone(), Some(workspaceId))
+                .expect("ChatHistoryManager.updateChatWorkspaceId must succeed");
+        }
         if binding.characterGroupId.is_none()
             && binding.explicitCharacterCardName.is_none()
             && binding
@@ -2107,12 +2125,77 @@ impl ChatHistoryDelegate {
     #[allow(non_snake_case)]
     /// Binds a chat to a workspace.
     pub fn bindChatToWorkspace(&mut self, chatId: String, workspace: String) {
-        self.chatHistoryManager
-            .updateChatWorkspace(chatId.clone(), Some(workspace.clone()))
-            .expect("ChatHistoryManager.updateChatWorkspace must succeed");
+        self.bindChatToFolderPath(chatId, workspace)
+            .expect("ChatHistoryDelegate.bindChatToFolderPath must succeed");
+    }
+
+    /// Mounts a VFS folder onto the chat's workspace, creating the workspace when needed.
+    pub fn bindChatToFolderPath(
+        &mut self,
+        chatId: String,
+        folderPath: String,
+    ) -> Result<operit_model::Workspace::Workspace, String> {
+        let folderPath = PathMapper::normalizeWorkspaceBindingPath(&folderPath)?;
+        let folderName = operit_model::Workspace::Workspace::folderNameFromPath(&folderPath)?;
+        let workspace = match self
+            .chatHistoryManager
+            .getWorkspaceForChat(&chatId)
+            .map_err(|error| error.to_string())?
+        {
+            Some(existing) => self
+                .chatHistoryManager
+                .addWorkspaceFolder(
+                    existing.id,
+                    operit_model::Workspace::WorkspaceFolder {
+                        name: folderName,
+                        path: folderPath,
+                    },
+                )
+                .map_err(|error| error.to_string())?,
+            None => {
+                let created = self
+                    .chatHistoryManager
+                    .createWorkspace(
+                        folderName.clone(),
+                        vec![operit_model::Workspace::WorkspaceFolder {
+                            name: folderName,
+                            path: folderPath,
+                        }],
+                    )
+                    .map_err(|error| error.to_string())?;
+                self.chatHistoryManager
+                    .updateChatWorkspaceId(chatId.clone(), Some(created.id.clone()))
+                    .map_err(|error| error.to_string())?;
+                created
+            }
+        };
         if self.currentChatIdFlow.value().as_ref() == Some(&chatId) {
             self.dispatchChatViewEvent(ChatViewEvent::ViewUpdated, &chatId);
         }
+        Ok(workspace)
+    }
+
+    /// Returns the primary folder path for a chat history row.
+    pub fn primaryWorkspacePathForChat(&self, chat: &ChatHistory) -> Option<String> {
+        let workspaceId = chat.workspaceId.as_ref()?;
+        self.chatHistoryManager
+            .getWorkspace(workspaceId)
+            .ok()
+            .flatten()
+            .map(|workspace| workspace.primaryFolder().path.clone())
+    }
+
+    /// Returns every mounted folder path for a chat.
+    pub fn workspaceFolderPathsForChat(&self, chat: &ChatHistory) -> Vec<String> {
+        let Some(workspaceId) = chat.workspaceId.as_ref() else {
+            return Vec::new();
+        };
+        self.chatHistoryManager
+            .getWorkspace(workspaceId)
+            .ok()
+            .flatten()
+            .map(|workspace| workspace.folderPaths())
+            .unwrap_or_default()
     }
 
     #[allow(non_snake_case)]
@@ -2152,8 +2235,8 @@ impl ChatHistoryDelegate {
     /// Removes the workspace binding from a chat.
     pub fn unbindChatFromWorkspace(&mut self, chatId: String) {
         self.chatHistoryManager
-            .updateChatWorkspace(chatId.clone(), None)
-            .expect("ChatHistoryManager.updateChatWorkspace must succeed");
+            .updateChatWorkspaceId(chatId.clone(), None)
+            .expect("ChatHistoryManager.updateChatWorkspaceId must succeed");
         if self.currentChatIdFlow.value().as_ref() == Some(&chatId) {
             self.dispatchChatViewEvent(ChatViewEvent::ViewUpdated, &chatId);
         }
@@ -2773,6 +2856,7 @@ struct ResolvedNewChatBinding {
     characterCardName: Option<String>,
     resolvedCard: Option<CharacterCard>,
     explicitCharacterCardName: Option<String>,
+    workspaceId: Option<String>,
 }
 
 fn normalizedNonBlank(value: String) -> Option<String> {
@@ -2891,7 +2975,9 @@ mod tests {
             currentWindowSize: 0,
             group: group.map(str::to_string),
             displayOrder: 0,
-            workspace: None,
+            workspaceId: None,
+            workspaceName: None,
+            workspacePrimaryPath: None,
             parentChatId: None,
             characterCardName: characterCardName.map(str::to_string),
             characterGroupId: characterGroupId.map(str::to_string),

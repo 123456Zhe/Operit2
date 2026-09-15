@@ -59,6 +59,7 @@ class WorkspaceBrowserViewStore extends ChangeNotifier {
   final Set<String> _closedSurfaceInteractionDropLogged = <String>{};
   final ValueNotifier<int> sessionCount = ValueNotifier<int>(0);
   Future<void>? _loadFuture;
+  bool _loaded = false;
   WorkspaceBrowserViewDelegate? _delegate;
   int _selectedIndex = 0;
   int _openingCount = 0;
@@ -105,13 +106,22 @@ class WorkspaceBrowserViewStore extends ChangeNotifier {
 
   /// Loads local browser chrome stores and existing Core sessions.
   Future<void> ensureLoaded() {
+    if (_loaded) {
+      return Future<void>.value();
+    }
     final current = _loadFuture;
     if (current != null) {
       return current;
     }
-    final next = _load();
+    final next = _load().then((_) {
+      _loaded = true;
+    });
     _loadFuture = next;
-    return next;
+    return next.whenComplete(() {
+      if (identical(_loadFuture, next)) {
+        _loadFuture = null;
+      }
+    });
   }
 
   /// Initializes the first visible browser surface.

@@ -27,8 +27,8 @@ const Duration _messageJumpRetryDelay = Duration(milliseconds: 90);
 const Duration _messageJumpSettleDelay = Duration(milliseconds: 280);
 const double _messageJumpPositionTolerance = 2;
 const Duration _bottomFollowRateWindow = Duration(milliseconds: 600);
-const double _bottomFollowOutputVelocityGain = 1.15;
-const double _bottomFollowGapVelocityGain = 4;
+const double _bottomFollowOutputVelocityGain = 0.65;
+const double _bottomFollowGapCorrectionRate = 0.8;
 const double _bottomFollowPositionTolerance = 1;
 
 class ChatArea extends StatefulWidget {
@@ -140,6 +140,8 @@ class _ChatAreaState extends State<ChatArea>
       Queue<_BottomGrowthSample>();
   late final Ticker _bottomFollowTicker;
   int? _bottomFollowLastFrameMicroseconds;
+  bool _bottomFollowCompleting = false;
+  double? _lastScrollMaxExtent;
   int? _pendingJumpToMessageTimestamp;
   Timer? _pendingMessageJumpTimer;
   double? _lastEstimatedPendingJumpOffset;
@@ -314,16 +316,44 @@ class _ChatAreaState extends State<ChatArea>
   bool _handleScrollMetricsNotification(
     ScrollMetricsNotification notification,
   ) {
+    final maxScrollExtentDelta = _updateLastScrollMaxExtent(
+      notification.metrics.maxScrollExtent,
+    );
     final viewportDimension = notification.metrics.viewportDimension;
+    final completedStreamExtentHandled = _handleCompletedStreamExtentChange(
+      maxScrollExtentDelta,
+    );
     if (_scrollViewportDimension != viewportDimension) {
       _scrollViewportDimension = viewportDimension;
       _scheduleViewportResizeUpdate();
-      _scheduleBottomJump();
+      if (!completedStreamExtentHandled) {
+        _scheduleBottomJump();
+      }
       return false;
     }
     _scheduleMessageAnchorCollection();
-    _scheduleBottomJump();
+    if (!completedStreamExtentHandled) {
+      _scheduleBottomJump();
+    }
     return false;
+  }
+
+  /// Updates the remembered bottom extent and returns the measured delta.
+  double _updateLastScrollMaxExtent(double maxScrollExtent) {
+    final previousMaxScrollExtent = _lastScrollMaxExtent;
+    _lastScrollMaxExtent = maxScrollExtent;
+    return previousMaxScrollExtent == null
+        ? 0
+        : maxScrollExtent - previousMaxScrollExtent;
+  }
+
+  /// Routes completed stream extent changes through the frame follower.
+  bool _handleCompletedStreamExtentChange(double maxScrollExtentDelta) {
+    if (!_isCompletingBottomFollow()) {
+      return false;
+    }
+    _scheduleBottomFollow(maxScrollExtentDelta);
+    return true;
   }
 
   /// Rechecks a pending message jump after a chat row changes size.
@@ -440,6 +470,7 @@ class _ChatAreaState extends State<ChatArea>
   void _scheduleBottomJump() {
     if (_bottomJumpScheduled ||
         _hasLiveBottomStream() ||
+        _isCompletingBottomFollow() ||
         !widget.autoScrollToBottomListenable.value ||
         widget.hasNewerDisplayHistory ||
         widget.isLoadingDisplayWindow ||
@@ -451,6 +482,7 @@ class _ChatAreaState extends State<ChatArea>
       _bottomJumpScheduled = false;
       if (!mounted ||
           _hasLiveBottomStream() ||
+          _isCompletingBottomFollow() ||
           !widget.autoScrollToBottomListenable.value ||
           widget.hasNewerDisplayHistory ||
           widget.isLoadingDisplayWindow ||
@@ -468,15 +500,15 @@ class _ChatAreaState extends State<ChatArea>
 
   /// Records measured live growth and starts the frame-driven bottom follower.
   void _scheduleBottomFollow(double heightDelta) {
+    final nowMicroseconds = _bottomFollowClock.elapsedMicroseconds;
     if (!mounted ||
-        !_hasLiveBottomStream() ||
+        !_shouldRunBottomFollow() ||
         !widget.autoScrollToBottomListenable.value ||
         widget.hasNewerDisplayHistory ||
         widget.isLoadingDisplayWindow ||
         !widget.scrollController.hasClients) {
       return;
     }
-    final nowMicroseconds = _bottomFollowClock.elapsedMicroseconds;
     if (heightDelta > _bottomFollowPositionTolerance) {
       _bottomGrowthSamples.add(
         _BottomGrowthSample(
@@ -494,8 +526,9 @@ class _ChatAreaState extends State<ChatArea>
 
   /// Advances the scroll position from recent output growth and baseline error.
   void _tickBottomFollow(Duration elapsed) {
+    final nowMicroseconds = _bottomFollowClock.elapsedMicroseconds;
     if (!mounted ||
-        !_hasLiveBottomStream() ||
+        !_shouldRunBottomFollow() ||
         !widget.autoScrollToBottomListenable.value ||
         widget.hasNewerDisplayHistory ||
         widget.isLoadingDisplayWindow ||
@@ -503,7 +536,6 @@ class _ChatAreaState extends State<ChatArea>
       _stopBottomFollow();
       return;
     }
-    final nowMicroseconds = _bottomFollowClock.elapsedMicroseconds;
     final previousMicroseconds = _bottomFollowLastFrameMicroseconds!;
     _bottomFollowLastFrameMicroseconds = nowMicroseconds;
     _pruneBottomGrowthSamples(nowMicroseconds);
@@ -519,11 +551,13 @@ class _ChatAreaState extends State<ChatArea>
     final elapsedSeconds =
         (nowMicroseconds - previousMicroseconds) /
         Duration.microsecondsPerSecond;
-    final outputVelocity = _bottomOutputVelocity(nowMicroseconds);
-    final scrollVelocity =
-        outputVelocity * _bottomFollowOutputVelocityGain +
-        gap * _bottomFollowGapVelocityGain;
-    final scrollDelta = scrollVelocity * elapsedSeconds;
+    final outputDelta =
+        _bottomOutputVelocity(nowMicroseconds) *
+        _bottomFollowOutputVelocityGain *
+        elapsedSeconds;
+    final gapCorrectionDelta =
+        gap * _bottomFollowGapCorrectionRate * elapsedSeconds;
+    final scrollDelta = outputDelta + gapCorrectionDelta;
     final target = (position.pixels + scrollDelta).clamp(
       position.pixels,
       position.maxScrollExtent,
@@ -560,7 +594,35 @@ class _ChatAreaState extends State<ChatArea>
   void _stopBottomFollow() {
     _bottomFollowTicker.stop();
     _bottomFollowLastFrameMicroseconds = null;
+    _bottomFollowCompleting = false;
     _bottomGrowthSamples.clear();
+  }
+
+  /// Reports whether bottom following should continue for live or completing rows.
+  bool _shouldRunBottomFollow() {
+    return _hasLiveBottomStream() || _isCompletingBottomFollow();
+  }
+
+  /// Reports whether a finished bottom stream is still settling its final layout.
+  bool _isCompletingBottomFollow() {
+    return _bottomFollowCompleting;
+  }
+
+  /// Starts the final smooth-follow window for a completed bottom stream.
+  void _beginBottomFollowCompletion() {
+    if (!mounted ||
+        !widget.autoScrollToBottomListenable.value ||
+        widget.hasNewerDisplayHistory ||
+        widget.isLoadingDisplayWindow ||
+        !widget.scrollController.hasClients) {
+      return;
+    }
+    final nowMicroseconds = _bottomFollowClock.elapsedMicroseconds;
+    _bottomFollowCompleting = true;
+    if (!_bottomFollowTicker.isActive) {
+      _bottomFollowLastFrameMicroseconds = nowMicroseconds;
+      _bottomFollowTicker.start();
+    }
   }
 
   /// Reports whether the visible bottom message is receiving live AI output.
@@ -837,6 +899,7 @@ class _ChatAreaState extends State<ChatArea>
     final chatChanged = oldWidget.currentChatId != widget.currentChatId;
     if (chatChanged) {
       _stopBottomFollow();
+      _lastScrollMaxExtent = null;
       _messageKeys.clear();
       _messageRowCache.clear();
       _messageAnchorsNotifier.value = const <int, ChatScrollMessageAnchor>{};
@@ -846,6 +909,9 @@ class _ChatAreaState extends State<ChatArea>
       _clearPendingMessageJump();
       _pendingMessageJumpScheduled = false;
       _pendingMessageJumpInFlight = false;
+    }
+    if (_bottomStreamCompleted(oldWidget)) {
+      _beginBottomFollowCompletion();
     }
     final messagesChanged =
         chatChanged ||
@@ -1052,6 +1118,20 @@ class _ChatAreaState extends State<ChatArea>
     }
     final message = widget.messages[index];
     return message.sender == 'ai' && message.contentStream != null;
+  }
+
+  /// Reports whether the same bottom AI message just finished streaming.
+  bool _bottomStreamCompleted(ChatArea oldWidget) {
+    final oldMessage = oldWidget.messages.lastOrNull;
+    final message = widget.messages.lastOrNull;
+    return oldWidget.currentChatId == widget.currentChatId &&
+        oldMessage != null &&
+        message != null &&
+        oldMessage.timestamp == message.timestamp &&
+        oldMessage.sender == 'ai' &&
+        message.sender == 'ai' &&
+        oldMessage.contentStream != null &&
+        message.contentStream == null;
   }
 }
 

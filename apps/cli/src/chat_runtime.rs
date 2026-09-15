@@ -1153,7 +1153,7 @@ fn print_chat_history_header(chat: &operit_model::ChatHistory::ChatHistory) {
     println!("Context window: {}", chat.currentWindowSize);
     println!("Group: {}", chat.group.clone().unwrap_or_default());
     println!("Display order: {}", chat.displayOrder);
-    println!("Workspace: {}", chat.workspace.clone().unwrap_or_default());
+    println!("Workspace: {}", chat.workspacePrimaryPath.clone().unwrap_or_default());
     println!(
         "parentChatId={}",
         chat.parentChatId.clone().unwrap_or_default()

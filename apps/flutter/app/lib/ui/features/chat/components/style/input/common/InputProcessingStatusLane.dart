@@ -7,7 +7,7 @@ import '../../../../../../../core/proxy/generated/CoreProxyModels.g.dart'
 import '../../../../../../../l10n/generated/app_localizations.dart';
 
 /// The fixed vertical space reserved at the bottom of the transcript.
-const double inputProcessingStatusLaneHeight = 32;
+const double inputProcessingStatusLaneHeight = 56;
 
 /// Paints the input-processing status inside the transcript overlay lane.
 class InputProcessingStatusLane extends StatelessWidget {

@@ -846,6 +846,7 @@ fn scan_method(function: &ImplItemFn, resolver: &TypeResolver) -> SourceMethod {
     }
     SourceMethod {
         name,
+        sdk_exposed: has_sdk_exposure_attribute(function),
         args,
         rust_return_type,
         is_async,
@@ -853,6 +854,32 @@ fn scan_method(function: &ImplItemFn, resolver: &TypeResolver) -> SourceMethod {
         doc_lines,
         protocol,
     }
+}
+
+/// Returns whether a routed method is explicitly part of the external SDK surface.
+fn has_sdk_exposure_attribute(function: &ImplItemFn) -> bool {
+    function.attrs.iter().any(|attribute| {
+        let Some(segment) = attribute.path().segments.last() else {
+            return false;
+        };
+        if segment.ident == "operit_plugin_sdk_expose" {
+            return true;
+        }
+        if segment.ident != "operit_core_route" {
+            return false;
+        }
+        let syn::Meta::List(list) = &attribute.meta else {
+            return false;
+        };
+        let Ok(entries) = Punctuated::<Meta, Token![,]>::parse_terminated
+            .parse2(list.tokens.clone())
+        else {
+            return false;
+        };
+        entries.iter().any(|entry| {
+            matches!(entry, Meta::Path(path) if path.is_ident("sdk"))
+        })
+    })
 }
 
 fn doc_lines(function: &ImplItemFn) -> Vec<String> {

@@ -79,7 +79,7 @@ where
             currentWindowSize: chat.currentWindowSize,
             group: chat.group,
             displayOrder: chat.displayOrder,
-            workspace: fileImportPlan.rewriteChatWorkspace(chat.workspace)?,
+            workspaceId: fileImportPlan.rewriteChatWorkspace(chat.workspace)?,
             parentChatId: chat.parentChatId,
             characterCardName: chat.characterCardName,
             characterGroupId: None,
@@ -87,12 +87,7 @@ where
             pinned: false,
         });
     }
-    Ok(OperitChatArchive {
-        archiveType: ARCHIVE_TYPE.to_string(),
-        formatVersion: CURRENT_FORMAT_VERSION,
-        exportedAt: currentTimeMillis(),
-        chats,
-    })
+    archiveFromOperit1Chats(chats)
 }
 
 /// Builds a chat archive from the Operit1 Room schemas 20 and 21.
@@ -154,7 +149,7 @@ where
             currentWindowSize: chat.currentWindowSize,
             group: chat.group,
             displayOrder: chat.displayOrder,
-            workspace: fileImportPlan.rewriteChatWorkspace(chat.workspace)?,
+            workspaceId: fileImportPlan.rewriteChatWorkspace(chat.workspace)?,
             parentChatId: chat.parentChatId,
             characterCardName: chat.characterCardName,
             characterGroupId: chat.characterGroupId,
@@ -162,10 +157,44 @@ where
             pinned: chat.pinned,
         });
     }
+    archiveFromOperit1Chats(chats)
+}
+
+/// Converts Operit1 workspace paths into named single-folder workspaces.
+fn archiveFromOperit1Chats(mut chats: Vec<OperitArchivedChat>) -> Result<OperitChatArchive, String> {
+    let mut workspaces = Vec::new();
+    let mut pathToId = std::collections::BTreeMap::<String, String>::new();
+    let timestamp = currentTimeMillis();
+    for chat in &mut chats {
+        let Some(path) = chat.workspaceId.take() else {
+            continue;
+        };
+        if let Some(workspaceId) = pathToId.get(&path) {
+            chat.workspaceId = Some(workspaceId.clone());
+            continue;
+        }
+        let folderName = operit_model::Workspace::Workspace::folderNameFromPath(&path)?;
+        let workspaceName = if chat.title.trim().is_empty() {
+            folderName.clone()
+        } else {
+            chat.title.clone()
+        };
+        let workspace = operit_model::Workspace::Workspace::fromSingleFolder(
+            workspaceName,
+            folderName,
+            path.clone(),
+            timestamp,
+        );
+        workspace.validate()?;
+        chat.workspaceId = Some(workspace.id.clone());
+        pathToId.insert(path, workspace.id.clone());
+        workspaces.push(workspace);
+    }
     Ok(OperitChatArchive {
         archiveType: ARCHIVE_TYPE.to_string(),
         formatVersion: CURRENT_FORMAT_VERSION,
-        exportedAt: currentTimeMillis(),
+        exportedAt: timestamp,
+        workspaces,
         chats,
     })
 }

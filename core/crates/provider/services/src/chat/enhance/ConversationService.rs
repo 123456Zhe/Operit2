@@ -34,6 +34,7 @@ pub struct PrepareConversationHistoryRequest {
     pub processed_input: String,
     pub chat_id: Option<String>,
     pub workspace_path: Option<String>,
+    pub workspace_folders: Vec<String>,
     pub prompt_function_type: String,
     pub custom_system_prompt_template: Option<String>,
     pub role_card_id: Option<String>,
@@ -717,6 +718,7 @@ fn extract_xml_tag_body_case_insensitive<'a>(content: &'a str, tag_name: &str) -
     Some(&content[body_start..close_start])
 }
 
+/// Builds hook metadata for one prompt-history preparation request.
 fn build_prepare_history_metadata(
     request: &PrepareConversationHistoryRequest,
 ) -> BTreeMap<String, String> {
@@ -725,6 +727,11 @@ fn build_prepare_history_metadata(
         &mut metadata,
         "workspacePath",
         request.workspace_path.as_ref(),
+    );
+    metadata.insert(
+        "workspaceFolders".to_string(),
+        serde_json::to_string(&request.workspace_folders)
+            .expect("workspace folder paths must serialize"),
     );
     insert_option(
         &mut metadata,

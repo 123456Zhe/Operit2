@@ -359,18 +359,29 @@ class AppLocalizationsEn extends AppLocalizations {
       'Provide a dedicated file environment for your AI projects';
 
   @override
-  String get workspaceCreateDefaultTitle => 'Create default';
+  String get workspaceCreateTitle => 'Create workspace';
 
   @override
-  String get workspaceCreateDefaultDescription =>
-      'Create a new workspace in the app';
+  String get workspaceCreateDescription => 'Create a named workspace';
 
   @override
-  String get workspaceBindExistingTitle => 'Choose existing';
+  String get workspaceNameLabel => 'Workspace name';
 
   @override
-  String get workspaceBindExistingDescription =>
-      'Select a folder from this device';
+  String get workspaceNameHint => 'Enter a workspace name';
+
+  @override
+  String get workspaceBindExistingTitle => 'Choose workspace';
+
+  @override
+  String get workspaceBindExistingDescription => 'Bind an existing workspace';
+
+  @override
+  String get workspaceAddFolderTitle => 'Add folder';
+
+  @override
+  String get workspaceAddFolderDescription =>
+      'Mount another folder into the current workspace';
 
   @override
   String get workspaceProjectTypeDialogTitle => 'Choose project type';

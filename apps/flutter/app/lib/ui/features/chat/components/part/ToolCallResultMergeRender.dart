@@ -222,7 +222,7 @@ class _MergedToolResultActions extends StatelessWidget {
   final String resultText;
   final bool isStreaming;
 
-  /// Builds fixed-height result actions without changing the tool row geometry.
+  /// Builds result actions at the same 16px content height as the tool row.
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -230,7 +230,7 @@ class _MergedToolResultActions extends StatelessWidget {
         ? theme.colorScheme.primary
         : theme.colorScheme.error;
     return SizedBox(
-      height: 20,
+      height: 16,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[

@@ -13,6 +13,7 @@ import 'browser/automation/WorkspaceWebVisitContent.dart';
 import 'WorkspaceFileBrowserContent.dart';
 import 'WorkspaceFilePreviewContent.dart';
 import 'WorkspaceHomeContent.dart';
+import 'WorkspaceOverviewModels.dart';
 import 'WorkspaceSetupContent.dart';
 import 'WorkspaceTabModels.dart';
 import 'terminal/WorkspaceTerminalContent.dart';
@@ -22,6 +23,7 @@ class WorkspaceTabContent extends StatelessWidget {
     super.key,
     required this.tab,
     required this.workspacePath,
+    required this.workspaceUsage,
     required this.terminalSessionCountListenable,
     required this.browserSessionCountListenable,
     required this.onListWorkspaceFiles,
@@ -31,7 +33,9 @@ class WorkspaceTabContent extends StatelessWidget {
     required this.onWriteWorkspaceFileBytes,
     required this.onOpenWorkspaceFile,
     required this.onOpenFile,
-    required this.onOpenFiles,
+    required this.onOpenFolder,
+    required this.onAddFolder,
+    required this.filesListingRevision,
     required this.onOpenTerminal,
     required this.onOpenTerminalSessions,
     required this.onOpenBrowserSessions,
@@ -39,7 +43,8 @@ class WorkspaceTabContent extends StatelessWidget {
     required this.onFinishWebVisit,
     required this.onActivateCurrentTab,
     required this.onCloseCurrentTab,
-    required this.onCreateDefaultWorkspace,
+    required this.onOpenWorkspaceCreator,
+    required this.onCreateWorkspace,
     required this.onBindWorkspace,
     required this.onChooseExistingWorkspace,
     required this.splitMarkdownContent,
@@ -47,6 +52,7 @@ class WorkspaceTabContent extends StatelessWidget {
 
   final WorkspaceTab tab;
   final String? workspacePath;
+  final WorkspaceOverviewUsage workspaceUsage;
   final ValueListenable<int> terminalSessionCountListenable;
   final ValueListenable<int> browserSessionCountListenable;
   final Future<List<WorkspaceFileEntry>> Function(String path)
@@ -59,7 +65,9 @@ class WorkspaceTabContent extends StatelessWidget {
   onWriteWorkspaceFileBytes;
   final Future<void> Function(String path) onOpenWorkspaceFile;
   final Future<void> Function(WorkspaceFileEntry entry) onOpenFile;
-  final VoidCallback onOpenFiles;
+  final ValueChanged<WorkspaceMountedFolder> onOpenFolder;
+  final VoidCallback onAddFolder;
+  final int filesListingRevision;
   final VoidCallback onOpenTerminal;
   final VoidCallback onOpenTerminalSessions;
   final VoidCallback onOpenBrowserSessions;
@@ -73,7 +81,8 @@ class WorkspaceTabContent extends StatelessWidget {
   onFinishWebVisit;
   final VoidCallback onActivateCurrentTab;
   final VoidCallback onCloseCurrentTab;
-  final Future<void> Function(String? projectType) onCreateDefaultWorkspace;
+  final VoidCallback onOpenWorkspaceCreator;
+  final Future<void> Function(String name) onCreateWorkspace;
   final Future<void> Function(String workspace) onBindWorkspace;
   final VoidCallback onChooseExistingWorkspace;
   final MarkdownContentSplitter splitMarkdownContent;
@@ -85,9 +94,13 @@ class WorkspaceTabContent extends StatelessWidget {
       case WorkspaceTabKind.home:
         return WorkspaceHomeContent(
           workspacePath: workspacePath,
+          workspaceUsage: workspaceUsage,
           terminalSessionCountListenable: terminalSessionCountListenable,
           browserSessionCountListenable: browserSessionCountListenable,
-          onOpenFiles: onOpenFiles,
+          onOpenFolder: onOpenFolder,
+          onAddFolder: onAddFolder,
+          onCreateWorkspace: onOpenWorkspaceCreator,
+          onChooseExistingWorkspace: onChooseExistingWorkspace,
           onOpenTerminal: onOpenTerminal,
           onOpenTerminalSessions: onOpenTerminalSessions,
           onOpenBrowserSessions: onOpenBrowserSessions,
@@ -95,7 +108,7 @@ class WorkspaceTabContent extends StatelessWidget {
         );
       case WorkspaceTabKind.setup:
         return WorkspaceSetupContent(
-          onCreateDefaultWorkspace: onCreateDefaultWorkspace,
+          onCreateWorkspace: onCreateWorkspace,
           onChooseExistingWorkspace: onChooseExistingWorkspace,
         );
       case WorkspaceTabKind.workspacePicker:
@@ -115,9 +128,11 @@ class WorkspaceTabContent extends StatelessWidget {
             subtitle: l10n.noWorkspaceBound,
           );
         }
+        final initialRelativePath = tab.filePath?.trim() ?? '';
         return WorkspaceFileBrowserContent(
+          key: ValueKey<String>('$filesListingRevision:${tab.filePath ?? ''}'),
           rootLabel: rootPath,
-          rootRelativePath: '',
+          rootRelativePath: initialRelativePath,
           onListWorkspaceFiles: onListWorkspaceFiles,
           onOpenFile: onOpenFile,
         );

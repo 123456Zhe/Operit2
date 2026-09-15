@@ -351,6 +351,7 @@ pub struct SendUserMessageProcessingRequest<'a> {
     pub chatHistory: Vec<ChatMessage>,
     pub promptHistoryOverride: Option<Vec<PromptTurn>>,
     pub workspacePath: Option<String>,
+    pub workspaceFolders: Vec<String>,
     pub promptFunctionType: PromptFunctionType,
     pub roleCardId: String,
     pub currentRoleName: Option<String>,
@@ -1516,6 +1517,7 @@ impl MessageProcessingDelegate {
             chatHistory: request.chatHistory,
             promptHistoryOverride: request.promptHistoryOverride.clone(),
             workspacePath: request.workspacePath.clone(),
+            workspaceFolders: request.workspaceFolders.clone(),
             promptFunctionType: request.promptFunctionType.clone(),
             enableThinking: request.enableThinking,
             enableMemoryAutoUpdate: request.enableMemoryAutoUpdate,
@@ -1638,6 +1640,7 @@ impl MessageProcessingDelegate {
             Arc::new(Mutex::new(request.chatHistoryDelegate.clone_for_core()));
         let workerMessageProcessingDelegate = Arc::new(Mutex::new(self.clone_for_core()));
         let completionContextWorkspacePath = request.workspacePath.clone();
+        let completionContextWorkspaceFolders = request.workspaceFolders.clone();
         let completionContextPromptFunctionType = request.promptFunctionType.clone();
         let completionContextRoleCardId = request.roleCardId.clone();
         let completionContextRoleName = currentRoleName.clone();
@@ -1969,6 +1972,7 @@ impl MessageProcessingDelegate {
                                     messageContent: String::new(),
                                     chatHistory: completionChatHistory,
                                     workspacePath: completionContextWorkspacePath,
+                                    workspaceFolders: completionContextWorkspaceFolders,
                                     promptFunctionType: completionContextPromptFunctionType,
                                     roleCardId: Some(completionContextRoleCardId),
                                     currentRoleName: Some(completionContextRoleName),
@@ -2135,6 +2139,14 @@ impl MessageProcessingDelegate {
         request: RegenerateAiMessageVariantRequest<'_>,
     ) -> Result<ChatMessage, operit_providers::chat::llmprovider::AIService::AiServiceError> {
         let targetMessageTimestamp = request.targetMessageTimestamp;
+        let workspaceFolders = request
+            .chatHistoryDelegate
+            .chatHistoryManager
+            .getWorkspaceForChat(&request.chatId)
+            .ok()
+            .flatten()
+            .map(|workspace| workspace.folderPaths())
+            .unwrap_or_default();
         let result = self
             .sendUserMessage(SendUserMessageProcessingRequest {
                 enhancedAiService: request.enhancedAiService,
@@ -2144,6 +2156,7 @@ impl MessageProcessingDelegate {
                 chatHistory: request.requestHistory,
                 promptHistoryOverride: None,
                 workspacePath: request.workspacePath,
+                workspaceFolders,
                 promptFunctionType: request.promptFunctionType,
                 roleCardId: request.roleCardId,
                 currentRoleName: Some(request.currentRoleName),

@@ -309,6 +309,8 @@ pub const CHARACTER_CARDS_PREFERENCES_PATH: &str =
     "runtime/config/preferences/character_cards.preferences.json";
 pub const CHARACTER_GROUPS_PREFERENCES_PATH: &str =
     "runtime/config/preferences/character_groups.preferences.json";
+pub const WORKSPACES_PREFERENCES_PATH: &str =
+    "runtime/config/preferences/workspaces.preferences.json";
 pub const PROMPT_TAGS_PREFERENCES_PATH: &str =
     "runtime/config/preferences/prompt_tags.preferences.json";
 pub const SHARED_MEMORY_STORES_PREFERENCES_PATH: &str =

@@ -22,3 +22,6 @@ pub use tools::storage::AppleRuntimeStorageHost;
 pub use tools::system::AppleSystemOperationHost;
 pub use tools::terminal::AppleTerminalHost;
 pub use tools::tts::{AppleTtsPlaybackCommand, AppleTtsPlaybackHost, AppleTtsSynthesisHost};
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+pub use operit_host_native_plugin_sdk_ipc::UnixPluginSdkIpcHost as ApplePluginSdkIpcHost;

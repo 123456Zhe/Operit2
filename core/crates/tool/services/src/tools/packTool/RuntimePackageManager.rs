@@ -284,6 +284,7 @@ impl RuntimePackageManager {
     }
 
     /// Marks a package as active for the current prompt session.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn activatePackage(&mut self, packageName: &str) -> bool {
         self.pluginPackageManager.activatePackage(packageName)
     }
@@ -828,12 +829,14 @@ impl RuntimePackageManager {
     }
 
     /// Returns whether a package has been activated for the current prompt session.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn isPackageActivated(&self, packageName: &str) -> bool {
         self.pluginPackageManager.isPackageActivated(packageName)
     }
 
     #[allow(non_snake_case)]
     /// Activates a package and returns its system prompt contribution.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn usePackage(&mut self, packageName: &str) -> String {
         let normalizedPackageName = self.normalizePackageName(packageName);
 
@@ -886,6 +889,7 @@ impl RuntimePackageManager {
 
     #[allow(non_snake_case)]
     /// Executes the built-in package activation tool.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn executeUsePackageTool(&mut self, toolName: &str, packageName: &str) -> ToolResult {
         if packageName.trim().is_empty() {
             return ToolResult {
@@ -939,6 +943,7 @@ impl RuntimePackageManager {
 
     #[allow(non_snake_case)]
     /// Returns package names enabled in preferences after applying disabled package records.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn getEnabledPackageNames(&self) -> Vec<String> {
         let mut enabledPackageNames =
             BTreeSet::from_iter(self.decodeEnabledPackageNamesFromPrefs());
@@ -966,6 +971,7 @@ impl RuntimePackageManager {
 
     #[allow(non_snake_case)]
     /// Returns whether a package is enabled and not disabled by ToolPkg subpackage state.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn isPackageEnabled(&self, packageName: &str) -> bool {
         let normalizedPackageName = self.normalizePackageName(packageName);
         let enabledPackageSet = self.getEnabledPackageNameSetInternal();
@@ -983,12 +989,14 @@ impl RuntimePackageManager {
 
     #[allow(non_snake_case)]
     /// Returns package names currently active in the prompt session.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn getActivePackageNames(&self) -> Vec<String> {
         self.pluginPackageManager.activePackageNames()
     }
 
     #[allow(non_snake_case)]
     /// Enables a package and loads its tools into available package state.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn enablePackage(&mut self, packageName: &str) -> String {
         let normalizedPackageName = self.normalizePackageName(packageName);
         if normalizedPackageName.trim().is_empty() {
@@ -1125,6 +1133,7 @@ impl RuntimePackageManager {
 
     #[allow(non_snake_case)]
     /// Disables a package and removes its tools from active package state.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn disablePackage(&mut self, packageName: &str) -> String {
         let normalizedPackageName = self.normalizePackageName(packageName);
         let mut enabledPackageNames = BTreeSet::from_iter(self.getEnabledPackageNames());
@@ -1367,6 +1376,7 @@ impl RuntimePackageManager {
 
     #[allow(non_snake_case)]
     /// Returns localized details for all registered ToolPkg containers.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn getToolPkgPluginContainerDetails(
         &self,
         useEnglish: bool,
@@ -1387,12 +1397,14 @@ impl RuntimePackageManager {
 
     #[allow(non_snake_case)]
     /// Returns all registered ToolPkg container runtimes.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn getToolPkgContainerRuntimes(&self) -> Vec<ToolPkgContainerRuntime> {
         self.toolPkgManager().getToolPkgContainerRuntimes()
     }
 
     #[allow(non_snake_case)]
     /// Returns localized details for a ToolPkg container.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn getToolPkgContainerDetails(
         &self,
         packageName: &str,
@@ -1403,6 +1415,7 @@ impl RuntimePackageManager {
 
     #[allow(non_snake_case)]
     /// Reads the manifest-declared logo bytes for one ToolPkg container.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn readToolPkgLogoBytes(&self, packageName: &str) -> Option<ToolPkgLogoBytes> {
         self.ensureInitialized();
         let normalizedPackageName = self.normalizePackageName(packageName);
@@ -1767,12 +1780,14 @@ impl RuntimePackageManager {
 
     #[allow(non_snake_case)]
     /// Returns package tools with active state applied.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn getEffectivePackageTools(&self, packageName: &str) -> Option<ToolPackage> {
         self.pluginPackageManager.effectivePackage(packageName)
     }
 
     #[allow(non_snake_case)]
     /// Returns raw package tool metadata by package name.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn getPackageTools(&self, packageName: &str) -> Option<ToolPackage> {
         self.pluginPackageManager.package(packageName)
     }
@@ -1795,6 +1810,7 @@ impl RuntimePackageManager {
 
     #[allow(non_snake_case)]
     /// Returns all package definitions currently available to the manager.
+    #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn getAvailablePackages(&self) -> BTreeMap<String, ToolPackage> {
         self.pluginPackageManager.availablePackages()
     }

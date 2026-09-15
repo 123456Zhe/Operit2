@@ -810,34 +810,39 @@ impl AIToolHandler {
                     "File tool execution requires tool runtime context".to_string(),
                 )
             })?;
-        let workspacePath = runtimeContext
-            .workspacePath
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| {
-                WorkspaceBoundaryError::RequiresApproval(
-                    "File tool execution requires a current workspace".to_string(),
-                )
-            })?;
+        let workspaceFolders = runtimeContext
+            .workspaceFolders
+            .iter()
+            .map(|folder| folder.trim().to_string())
+            .filter(|folder| !folder.is_empty())
+            .collect::<Vec<_>>();
+        if workspaceFolders.is_empty() {
+            return Err(WorkspaceBoundaryError::RequiresApproval(
+                "File tool execution requires a current workspace".to_string(),
+            ));
+        }
 
         let paths = RuntimeStorePaths::default();
         let mapper = PathMapper::new(paths.runtime_dir().to_path_buf(), paths.workspace_dir());
-        let resolvedWorkspace = mapper
-            .resolve(workspacePath)
-            .map_err(WorkspaceBoundaryError::InvalidRequest)?;
         let resolvedPath = mapper
             .resolve(path)
             .map_err(WorkspaceBoundaryError::InvalidRequest)?;
-        let relative = PathMapper::relativePath(&resolvedWorkspace.vfsPath, &resolvedPath.vfsPath)
-            .map_err(WorkspaceBoundaryError::InvalidRequest)?;
-        if relative.is_none() {
-            return Err(WorkspaceBoundaryError::RequiresApproval(format!(
-                "{:?} file access is limited to current workspace: {}",
-                effect, resolvedWorkspace.vfsPath
-            )));
+        for folder in &workspaceFolders {
+            let resolvedWorkspace = mapper
+                .resolve(folder)
+                .map_err(WorkspaceBoundaryError::InvalidRequest)?;
+            let relative =
+                PathMapper::relativePath(&resolvedWorkspace.vfsPath, &resolvedPath.vfsPath)
+                    .map_err(WorkspaceBoundaryError::InvalidRequest)?;
+            if relative.is_some() {
+                return Ok(());
+            }
         }
-        Ok(())
+        return Err(WorkspaceBoundaryError::RequiresApproval(format!(
+            "{:?} file access is limited to current workspace folders: {}",
+            effect,
+            workspaceFolders.join(", ")
+        )));
     }
 
     /// Executes an AI-originated tool through permission checks and a resolved executor.

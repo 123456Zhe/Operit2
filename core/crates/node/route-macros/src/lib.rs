@@ -8,24 +8,30 @@ use syn::{
 
 struct CoreRouteArguments {
     binding: Ident,
+    sdk: bool,
 }
 
 impl Parse for CoreRouteArguments {
     /// Parses the binding identifier owned by one routed method annotation.
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-        let name: Ident = input.parse()?;
-        if name != "binding" {
-            return Err(Error::new(name.span(), "expected `binding = argument`"));
+        let mut binding = None;
+        let mut sdk = false;
+        while !input.is_empty() {
+            let name: Ident = input.parse()?;
+            if name == "binding" {
+                input.parse::<Token![=]>()?;
+                binding = Some(input.parse::<Ident>()?);
+            } else if name == "sdk" {
+                sdk = true;
+            } else {
+                return Err(Error::new(name.span(), "expected `binding = argument` or `sdk`"));
+            }
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+            }
         }
-        input.parse::<Token![=]>()?;
-        let binding = input.parse::<Ident>()?;
-        if input.peek(Token![,]) {
-            input.parse::<Token![,]>()?;
-        }
-        if !input.is_empty() {
-            return Err(input.error("only one `binding = argument` entry is supported"));
-        }
-        Ok(Self { binding })
+        let binding = binding.ok_or_else(|| input.error("missing `binding = argument`"))?;
+        Ok(Self { binding, sdk })
     }
 }
 
@@ -38,6 +44,12 @@ pub fn operit_core_route(attribute: TokenStream, item: TokenStream) -> TokenStre
         Ok(tokens) => tokens.into(),
         Err(error) => error.into_compile_error().into(),
     }
+}
+
+/// Marks one reverse-stream method as an explicit external Plugin SDK route.
+#[proc_macro_attribute]
+pub fn operit_plugin_sdk_expose(_attribute: TokenStream, item: TokenStream) -> TokenStream {
+    item
 }
 
 /// Generates the public routed entry point and its protocol-safe local implementation.

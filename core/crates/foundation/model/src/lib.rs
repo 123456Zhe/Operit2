@@ -116,6 +116,8 @@ pub mod TtsConfig;
 pub mod Workflow;
 #[path = "WorkflowExecutionLog.rs"]
 pub mod WorkflowExecutionLog;
+#[path = "Workspace.rs"]
+pub mod Workspace;
 #[path = "WorkspaceRenameResult.rs"]
 pub mod WorkspaceRenameResult;
 
@@ -177,4 +179,5 @@ pub use TtsCatalog::*;
 pub use TtsConfig::*;
 pub use Workflow::*;
 pub use WorkflowExecutionLog::*;
+pub use Workspace::*;
 pub use WorkspaceRenameResult::*;

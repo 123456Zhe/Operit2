@@ -76,6 +76,7 @@ class _DrawerContentState extends State<DrawerContent> {
   List<core_proxy.ChatHistoryListItem>? _pendingOrderedHistories;
   int _historyRenderLimit = _collapsedHistoryLimit;
   bool _searchExpanded = false;
+  _HistoryGroupingMode _groupingMode = _HistoryGroupingMode.character;
 
   GeneratedChatRuntimeHolderMainCoreProxy get _chatCoreProxy =>
       GeneratedCoreProxyClients(widget.bridge).chatRuntimeHolderMain;
@@ -160,6 +161,15 @@ class _DrawerContentState extends State<DrawerContent> {
   void _toggleSearchExpanded() {
     setState(() {
       _searchExpanded = !_searchExpanded;
+    });
+  }
+
+  /// Switches the conversation list between character-card and workspace grouping.
+  void _toggleGroupingMode() {
+    setState(() {
+      _groupingMode = _groupingMode == _HistoryGroupingMode.character
+          ? _HistoryGroupingMode.workspace
+          : _HistoryGroupingMode.character;
     });
   }
 
@@ -543,6 +553,8 @@ class _DrawerContentState extends State<DrawerContent> {
           updatedAt: history.updatedAt,
           group: history.id == moved.id ? targetGroup : history.group,
           displayOrder: index,
+          workspaceId: history.workspaceId,
+          workspaceName: history.workspaceName,
           characterCardName: history.characterCardName,
           characterGroupId: history.characterGroupId,
           locked: history.locked,
@@ -697,8 +709,14 @@ class _DrawerContentState extends State<DrawerContent> {
     );
   }
 
-  /// Builds the key used to place a conversation in a character section.
+  /// Builds the key used to place a conversation in a top-level section.
   String _characterSectionKey(core_proxy.ChatHistoryListItem history) {
+    if (_groupingMode == _HistoryGroupingMode.workspace) {
+      final workspaceId = history.workspaceId?.trim();
+      return workspaceId == null || workspaceId.isEmpty
+          ? 'workspace:unbound'
+          : 'workspace:$workspaceId';
+    }
     final characterGroupId = history.characterGroupId?.trim();
     if (characterGroupId != null && characterGroupId.isNotEmpty) {
       return 'character-group:$characterGroupId';
@@ -709,7 +727,11 @@ class _DrawerContentState extends State<DrawerContent> {
         : 'character:$name';
   }
 
+  /// Resolves the visual section kind for the active history grouping.
   _HistoryBindingKind _bindingKind(core_proxy.ChatHistoryListItem history) {
+    if (_groupingMode == _HistoryGroupingMode.workspace) {
+      return _HistoryBindingKind.workspace;
+    }
     final characterGroupId = history.characterGroupId?.trim();
     if (characterGroupId != null && characterGroupId.isNotEmpty) {
       return _HistoryBindingKind.characterGroup;
@@ -721,6 +743,12 @@ class _DrawerContentState extends State<DrawerContent> {
   }
 
   String _bindingLabel(core_proxy.ChatHistoryListItem history) {
+    if (_groupingMode == _HistoryGroupingMode.workspace) {
+      final workspaceName = history.workspaceName?.trim();
+      return workspaceName == null || workspaceName.isEmpty
+          ? '未绑定工作区'
+          : workspaceName;
+    }
     final characterGroupId = history.characterGroupId?.trim();
     if (characterGroupId != null && characterGroupId.isNotEmpty) {
       return widget.characterGroupNamesById[characterGroupId] ??
@@ -891,6 +919,21 @@ class _DrawerContentState extends State<DrawerContent> {
                             ),
                           ),
                           IconButton(
+                            onPressed: _toggleGroupingMode,
+                            visualDensity: VisualDensity.compact,
+                            tooltip:
+                                _groupingMode == _HistoryGroupingMode.workspace
+                                ? '按角色卡分组'
+                                : '按工作区分组',
+                            icon: Icon(
+                              _groupingMode == _HistoryGroupingMode.workspace
+                                  ? Icons.badge_outlined
+                                  : Icons.work_outline,
+                              size: 20,
+                              color: widget.appearance.itemColor,
+                            ),
+                          ),
+                          IconButton(
                             onPressed: () => themeController.toggle(context),
                             visualDensity: VisualDensity.compact,
                             tooltip: darkThemeActive ? '切换白天模式' : '切换黑夜模式',
@@ -979,6 +1022,8 @@ class _DrawerContentState extends State<DrawerContent> {
                         _GroupHeaderEntry(:final group) => _GroupSectionHeader(
                           label: group.label,
                           count: group.historyCount,
+                          workspaceStyle:
+                              _groupingMode == _HistoryGroupingMode.workspace,
                           expanded: !_collapsedGroupSections.contains(
                             group.key,
                           ),
@@ -998,6 +1043,8 @@ class _DrawerContentState extends State<DrawerContent> {
                             ),
                             appearance: widget.appearance,
                             nested: true,
+                            workspaceStyle:
+                                _groupingMode == _HistoryGroupingMode.workspace,
                             onClick: () => _switchConversation(history),
                             onRename: () {
                               _showRenameConversationDialog(history);
@@ -1159,7 +1206,9 @@ class _CharacterHistorySection {
   }
 }
 
-enum _HistoryBindingKind { characterCard, characterGroup, unbound }
+enum _HistoryGroupingMode { character, workspace }
+
+enum _HistoryBindingKind { workspace, characterCard, characterGroup, unbound }
 
 class _HistoryGroupSection {
   _HistoryGroupSection({
@@ -1244,8 +1293,68 @@ class _CharacterSectionHeader extends StatelessWidget {
   final NavigationDrawerAppearance appearance;
   final VoidCallback onToggleExpanded;
 
+  /// Builds the top-level history section header.
   @override
   Widget build(BuildContext context) {
+    final workspaceStyle = kind == _HistoryBindingKind.workspace;
+    if (workspaceStyle) {
+      return Padding(
+        padding: const EdgeInsetsDirectional.only(
+          start: 18,
+          end: 12,
+          top: 8,
+          bottom: 4,
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onToggleExpanded,
+          child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(2, 3, 4, 3),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 3,
+                  height: 17,
+                  decoration: BoxDecoration(
+                    color: appearance.statusAvailableColor.withValues(
+                      alpha: 0.62,
+                    ),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Icon(
+                  Icons.work_outline,
+                  size: 15,
+                  color: appearance.itemColor.withValues(alpha: 0.82),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: appearance.titleColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _HistoryCountBadge(count: count, appearance: appearance),
+                const SizedBox(width: 6),
+                Icon(
+                  expanded ? Icons.expand_less : Icons.expand_more,
+                  size: 18,
+                  color: appearance.itemColor.withValues(alpha: 0.70),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final avatarContainerColor = appearance.buttonContainerColor;
     return Padding(
       padding: const EdgeInsetsDirectional.only(
@@ -1276,6 +1385,8 @@ class _CharacterSectionHeader extends StatelessWidget {
                     )
                   : Icon(
                       switch (kind) {
+                        _HistoryBindingKind.workspace =>
+                          Icons.workspaces_outline,
                         _HistoryBindingKind.characterGroup =>
                           Icons.groups_outlined,
                         _HistoryBindingKind.unbound =>
@@ -1335,9 +1446,11 @@ class _CharacterSectionHeader extends StatelessWidget {
 }
 
 class _GroupSectionHeader extends StatelessWidget {
+  /// Creates a collapsible group header for history entries.
   const _GroupSectionHeader({
     required this.label,
     required this.count,
+    required this.workspaceStyle,
     required this.expanded,
     required this.appearance,
     required this.onToggleExpanded,
@@ -1345,14 +1458,85 @@ class _GroupSectionHeader extends StatelessWidget {
 
   final String label;
   final int count;
+  final bool workspaceStyle;
   final bool expanded;
   final NavigationDrawerAppearance appearance;
   final VoidCallback onToggleExpanded;
 
   static const double _endPadding = 12;
 
+  /// Builds a history group header in the current drawer style.
   @override
   Widget build(BuildContext context) {
+    if (workspaceStyle) {
+      return Padding(
+        padding: EdgeInsetsDirectional.only(
+          start: 28,
+          end: _endPadding,
+          top: 2,
+          bottom: expanded ? 2 : 0,
+        ),
+        child: Row(
+          children: <Widget>[
+            HistoryRail(
+              height: 25,
+              appearance: appearance,
+              width: 16,
+              thickness: 1,
+            ),
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: onToggleExpanded,
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.fromSTEB(8, 5, 6, 5),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          Icons.folder_outlined,
+                          size: 14,
+                          color: appearance.itemColor.withValues(alpha: 0.76),
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: appearance.titleColor.withValues(
+                                    alpha: 0.86,
+                                  ),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _HistoryCountBadge(
+                          count: count,
+                          appearance: appearance,
+                        ),
+                        const SizedBox(width: 3),
+                        Icon(
+                          expanded ? Icons.expand_less : Icons.expand_more,
+                          size: 17,
+                          color: appearance.itemColor.withValues(alpha: 0.62),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: EdgeInsetsDirectional.only(
         start: 22,
@@ -1415,6 +1599,37 @@ class _GroupSectionHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HistoryCountBadge extends StatelessWidget {
+  /// Creates a compact count badge for history section rows.
+  const _HistoryCountBadge({required this.count, required this.appearance});
+
+  final int count;
+  final NavigationDrawerAppearance appearance;
+
+  /// Builds a small outlined count badge.
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: appearance.dividerColor),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        count.toString(),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: appearance.itemColor.withValues(alpha: 0.70),
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

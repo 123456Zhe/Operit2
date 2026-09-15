@@ -64,6 +64,7 @@ pub struct SendMessageRequest<'a> {
     pub chatHistory: Vec<ChatMessage>,
     pub promptHistoryOverride: Option<Vec<PromptTurn>>,
     pub workspacePath: Option<String>,
+    pub workspaceFolders: Vec<String>,
     pub promptFunctionType: PromptFunctionType,
     pub enableThinking: bool,
     pub enableMemoryAutoUpdate: bool,
@@ -92,6 +93,7 @@ pub struct StableContextWindowRequest<'a> {
     pub messageContent: String,
     pub chatHistory: Vec<ChatMessage>,
     pub workspacePath: Option<String>,
+    pub workspaceFolders: Vec<String>,
     pub promptFunctionType: PromptFunctionType,
     pub roleCardId: Option<String>,
     pub currentRoleName: Option<String>,
@@ -313,6 +315,7 @@ impl AIMessageManager {
         options.chatId = request.chatId;
         options.chatHistory = memoryForRequest;
         options.workspacePath = request.workspacePath;
+        options.workspaceFolders = request.workspaceFolders;
         options.promptFunctionType = request.promptFunctionType;
         options.enableThinking = request.enableThinking;
         options.enableMemoryAutoUpdate = request.enableMemoryAutoUpdate;
@@ -525,6 +528,7 @@ impl AIMessageManager {
         }))
     }
 
+    /// Calculates a stable context window with the complete workspace folder set.
     #[allow(non_snake_case)]
     pub async fn calculateStableContextWindow(
         request: StableContextWindowRequest<'_>,
@@ -542,6 +546,7 @@ impl AIMessageManager {
                 memory,
                 request.chatId,
                 request.workspacePath,
+                request.workspaceFolders,
                 request.promptFunctionType,
                 request.roleCardId,
                 request.groupOrchestrationMode,

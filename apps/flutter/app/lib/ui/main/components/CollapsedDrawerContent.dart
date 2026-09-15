@@ -345,23 +345,29 @@ class ConversationSearchField extends StatelessWidget {
 }
 
 class HistoryRail extends StatelessWidget {
+  /// Creates the nested history rail.
   const HistoryRail({
     super.key,
     required this.height,
     required this.appearance,
+    this.width = 24,
+    this.thickness = 2,
   });
 
   final double height;
   final NavigationDrawerAppearance appearance;
+  final double width;
+  final double thickness;
 
+  /// Builds the vertical rail for nested history rows.
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 24,
+      width: width,
       height: height,
       child: Center(
         child: Container(
-          width: 2,
+          width: thickness,
           height: height,
           decoration: BoxDecoration(
             color: appearance.dividerColor,
@@ -374,6 +380,7 @@ class HistoryRail extends StatelessWidget {
 }
 
 class ConversationDrawerItem extends StatelessWidget {
+  /// Creates one conversation row for the navigation drawer.
   const ConversationDrawerItem({
     super.key,
     required this.history,
@@ -390,6 +397,7 @@ class ConversationDrawerItem extends StatelessWidget {
     required this.canDetach,
     required this.onDetach,
     this.nested = false,
+    this.workspaceStyle = false,
   });
 
   final core_proxy.ChatHistoryListItem history;
@@ -406,6 +414,7 @@ class ConversationDrawerItem extends StatelessWidget {
   final bool canDetach;
   final VoidCallback onDetach;
   final bool nested;
+  final bool workspaceStyle;
 
   static const double _endPadding = 12;
   static const double _runningIndicatorSize = 20;
@@ -413,11 +422,20 @@ class ConversationDrawerItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final itemShape = BorderRadius.circular(12);
+    final itemShape = BorderRadius.circular(workspaceStyle ? 8 : 12);
     final windowSize = MediaQuery.sizeOf(context);
     final contentColor = selected
         ? appearance.selectedContentColor
         : appearance.itemColor;
+    final selectedContainerColor = workspaceStyle
+        ? appearance.selectedContainerColor.withValues(alpha: 0.62)
+        : appearance.selectedContainerColor;
+    final horizontalPadding = workspaceStyle ? 8.0 : 12.0;
+    final verticalPadding = workspaceStyle ? 4.0 : 5.0;
+    final runningIndicatorSize = workspaceStyle ? 16.0 : _runningIndicatorSize;
+    final runningIndicatorStrokeWidth = workspaceStyle
+        ? 2.0
+        : _runningIndicatorStrokeWidth;
     return DragTarget<core_proxy.ChatHistoryListItem>(
       onWillAcceptWithDetails: (details) =>
           details.data.id != history.id && canAcceptDrop(details.data),
@@ -426,13 +444,19 @@ class ConversationDrawerItem extends StatelessWidget {
         final dragHovering = candidateData.isNotEmpty;
         return Padding(
           padding: EdgeInsetsDirectional.only(
-            start: nested ? 22 : 12,
+            start: nested ? (workspaceStyle ? 28 : 22) : 12,
             end: _endPadding,
-            bottom: 3,
+            bottom: workspaceStyle ? 2 : 3,
           ),
           child: Row(
             children: <Widget>[
-              if (nested) HistoryRail(height: 34, appearance: appearance),
+              if (nested)
+                HistoryRail(
+                  height: workspaceStyle ? 28 : 34,
+                  appearance: appearance,
+                  width: workspaceStyle ? 16 : 24,
+                  thickness: workspaceStyle ? 1 : 2,
+                ),
               Expanded(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -469,7 +493,7 @@ class ConversationDrawerItem extends StatelessWidget {
                     ),
                     child: Material(
                       color: selected
-                          ? appearance.selectedContainerColor
+                          ? selectedContainerColor
                           : Colors.transparent,
                       borderRadius: itemShape,
                       child: InkWell(
@@ -477,9 +501,9 @@ class ConversationDrawerItem extends StatelessWidget {
                         onTap: onClick,
                         onLongPress: onLongPress,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 5,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: horizontalPadding,
+                            vertical: verticalPadding,
                           ),
                           child: Row(
                             children: <Widget>[
@@ -518,14 +542,16 @@ class ConversationDrawerItem extends StatelessWidget {
                                   child: _HistoryDragHandle(
                                     selected: selected,
                                     appearance: appearance,
+                                    compact: workspaceStyle,
                                   ),
                                 ),
                                 child: _HistoryDragHandle(
                                   selected: selected,
                                   appearance: appearance,
+                                  compact: workspaceStyle,
                                 ),
                               ),
-                              const SizedBox(width: 6),
+                              SizedBox(width: workspaceStyle ? 3 : 6),
                               Expanded(
                                 child: Text(
                                   title,
@@ -536,6 +562,8 @@ class ConversationDrawerItem extends StatelessWidget {
                                         color: contentColor,
                                         fontWeight: selected
                                             ? FontWeight.w600
+                                            : workspaceStyle
+                                            ? FontWeight.w500
                                             : FontWeight.w400,
                                       ),
                                 ),
@@ -548,10 +576,10 @@ class ConversationDrawerItem extends StatelessWidget {
                                     key: const ValueKey<String>(
                                       'conversation-running-indicator',
                                     ),
-                                    width: _runningIndicatorSize,
-                                    height: _runningIndicatorSize,
+                                    width: runningIndicatorSize,
+                                    height: runningIndicatorSize,
                                     child: CircularProgressIndicator(
-                                      strokeWidth: _runningIndicatorStrokeWidth,
+                                      strokeWidth: runningIndicatorStrokeWidth,
                                       color: contentColor.withValues(
                                         alpha: 0.65,
                                       ),
@@ -757,19 +785,29 @@ class BottomSidebarAction extends StatelessWidget {
 }
 
 class _HistoryDragHandle extends StatelessWidget {
-  const _HistoryDragHandle({required this.selected, required this.appearance});
+  /// Creates the draggable handle shown beside a conversation title.
+  const _HistoryDragHandle({
+    required this.selected,
+    required this.appearance,
+    this.compact = false,
+  });
 
   final bool selected;
   final NavigationDrawerAppearance appearance;
+  final bool compact;
 
+  /// Builds the conversation drag handle.
   @override
   Widget build(BuildContext context) {
     final color =
         (selected ? appearance.selectedContentColor : appearance.itemColor)
-            .withValues(alpha: 0.72);
+            .withValues(alpha: compact ? 0.58 : 0.72);
+    final side = compact ? 22.0 : 28.0;
+    final icon = compact ? Icons.drag_indicator : Icons.drag_handle;
+    final iconSize = compact ? 15.0 : 18.0;
     return SizedBox(
-      width: 28,
-      height: 28,
+      width: side,
+      height: side,
       child: Tooltip(
         message: '拖动对话',
         child: Material(
@@ -777,10 +815,10 @@ class _HistoryDragHandle extends StatelessWidget {
           shape: const CircleBorder(),
           child: InkResponse(
             onTap: () {},
-            radius: 16,
+            radius: compact ? 12 : 16,
             containedInkWell: true,
             customBorder: const CircleBorder(),
-            child: Icon(Icons.drag_handle, size: 18, color: color),
+            child: Icon(icon, size: iconSize, color: color),
           ),
         ),
       ),

@@ -15,6 +15,7 @@ operit-access-runtime = { path = "../../access/runtime" }
 operit-local-models = { path = "../../provider/local-model" }
 operit-model = { path = "../../foundation/model" }
 operit-plugin-sdk = { path = "../../plugin/sdk" }
+operit-plugin-sdk-ipc = { path = "../../plugin/sdk-ipc" }
 operit-providers = { path = "../../provider/services" }
 operit-runtime = { path = "../../runtime/application", default-features = false, features = ["javascript"] }
 operit-store = { path = "../../persistence/store" }
@@ -28,6 +29,7 @@ tokio = { workspace = true, features = ["macros", "sync"] }
 operit-proxy-scan = { path = "../scan" }
 operit-proxy-dart-codegen = { path = "../dart-codegen" }
 operit-proxy-rust-codegen = { path = "../rust-codegen" }
+operit-plugin-sdk-codegen = { path = "../../plugin/codegen" }
 
 [dev-dependencies]
 operit-host-native-common = { path = "../../../../hosts/common/operit-host-native-common", default-features = false, features = ["fs", "http", "scheduler", "storage"] }

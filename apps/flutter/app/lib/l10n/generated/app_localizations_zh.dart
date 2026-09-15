@@ -351,16 +351,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get workspaceSetupSubtitle => '为您的AI项目提供一个专属的文件环境';
 
   @override
-  String get workspaceCreateDefaultTitle => '创建默认';
+  String get workspaceCreateTitle => '创建工作区';
 
   @override
-  String get workspaceCreateDefaultDescription => '在应用内创建新工作区';
+  String get workspaceCreateDescription => '创建一个指定名字的工作区';
 
   @override
-  String get workspaceBindExistingTitle => '选择已有';
+  String get workspaceNameLabel => '工作区名称';
 
   @override
-  String get workspaceBindExistingDescription => '从设备选择文件夹';
+  String get workspaceNameHint => '请输入工作区名称';
+
+  @override
+  String get workspaceBindExistingTitle => '选择工作区';
+
+  @override
+  String get workspaceBindExistingDescription => '绑定已有工作区';
+
+  @override
+  String get workspaceAddFolderTitle => '添加文件夹';
+
+  @override
+  String get workspaceAddFolderDescription => '把另一个文件夹挂进当前工作区';
 
   @override
   String get workspaceProjectTypeDialogTitle => '选择语言类型';

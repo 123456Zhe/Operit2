@@ -54,6 +54,8 @@ pub use terminal::AndroidTerminalHost;
 pub use tts_playback::{AndroidTtsPlaybackCommand, AndroidTtsPlaybackHost};
 pub use tts_synthesis::AndroidTtsSynthesisHost;
 pub use web_visit::AndroidWebVisitHost;
+#[cfg(target_os = "android")]
+pub use operit_host_native_plugin_sdk_ipc::UnixPluginSdkIpcHost as AndroidPluginSdkIpcHost;
 
 /// Creates the Android-owned runtime host manager for explicit storage roots.
 #[cfg(target_os = "android")]
@@ -93,4 +95,5 @@ pub fn createRuntimeHostManager(
     .withHostRuntimeEventSchedulerHost(Arc::new(AndroidHostRuntimeEventSchedulerHost::new()))
     .withHostJavaScriptRuntimeHost(Arc::new(AndroidHostJavaScriptRuntimeHost::new()))
     .withHostRuntimeTaskSchedulerHost(Arc::new(AndroidHostRuntimeTaskSchedulerHost::new()))
+    .withPluginSdkIpcHost(Arc::new(AndroidPluginSdkIpcHost::new()))
 }

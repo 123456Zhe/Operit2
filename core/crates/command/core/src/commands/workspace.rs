@@ -180,10 +180,10 @@ fn list_workspaces(
     let mut workspaces = BTreeMap::<String, usize>::new();
     let chats = with_main_chat_core(application, |core| core.chatHistoriesFlow().value())?;
     for chat in chats {
-        let Some(workspace) = chat.workspace else {
+        let Some(workspaceId) = chat.workspaceId else {
             continue;
         };
-        let entry = workspaces.entry(workspace).or_insert(0);
+        let entry = workspaces.entry(workspaceId).or_insert(0);
         *entry += 1;
     }
     output.push_stdout_line(format!("Workspaces: {}", workspaces.len()));
@@ -207,7 +207,10 @@ fn list_workspace_chats(
         .ok_or_else(|| "usage: operit2 workspace chats <workspace>".to_string())?;
     let chats = with_main_chat_core(application, |core| core.chatHistoriesFlow().value())?
         .into_iter()
-        .filter(|chat| chat.workspace.as_deref() == Some(workspace.as_str()))
+        .filter(|chat| {
+            chat.workspaceId.as_deref() == Some(workspace.as_str())
+                || chat.workspacePrimaryPath.as_deref() == Some(workspace.as_str())
+        })
         .collect::<Vec<_>>();
     output.push_stdout_line(format!("Chats in workspace: {}", chats.len()));
     output.push_stdout_line(format!("Workspace: {workspace}"));
@@ -300,7 +303,7 @@ fn workspace_path_for_chat(
             .find(|chat| chat.id == chatId)
             .ok_or_else(|| format!("chat not found: {chatId}"))
     })??;
-    chat.workspace
+    chat.workspacePrimaryPath
         .and_then(nonBlankString)
         .ok_or_else(|| format!("chat has no workspace: {chatId}"))
 }

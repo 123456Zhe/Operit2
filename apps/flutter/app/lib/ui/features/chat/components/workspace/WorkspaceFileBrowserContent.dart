@@ -39,6 +39,7 @@ class _WorkspaceFileBrowserContentState
   bool _editingPath = false;
   bool _selectingCurrentDirectory = false;
   String? _selectionError;
+  String? _pathError;
   Future<List<WorkspaceFileEntry>>? _entriesFuture;
 
   @override
@@ -58,9 +59,11 @@ class _WorkspaceFileBrowserContentState
   @override
   void didUpdateWidget(WorkspaceFileBrowserContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.rootRelativePath != widget.rootRelativePath) {
+    if (oldWidget.rootLabel != widget.rootLabel ||
+        oldWidget.rootRelativePath != widget.rootRelativePath) {
       _history.clear();
       _currentPath = widget.rootRelativePath;
+      _pathError = null;
       _loadCurrentPath();
     }
   }
@@ -86,6 +89,19 @@ class _WorkspaceFileBrowserContentState
           onEditToggle: _startEditingPath,
           onSubmitted: _submitEditedPath,
         ),
+        if (_pathError != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+              child: Text(
+                _pathError!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
+          ),
         Expanded(
           child: FutureBuilder<List<WorkspaceFileEntry>>(
             future: _entriesFuture,
@@ -174,28 +190,47 @@ class _WorkspaceFileBrowserContentState
   bool get _directorySelectionEnabled =>
       widget.onSelectCurrentDirectory != null;
 
+  /// Requests entries for the current path only after validating its namespace.
   void _loadCurrentPath() {
+    if (!_directorySelectionEnabled &&
+        !_isWorkspaceRelativePath(_currentPath)) {
+      _entriesFuture = Future<List<WorkspaceFileEntry>>.error(
+        StateError('工作区目录路径必须是相对路径'),
+      );
+      return;
+    }
     _entriesFuture = widget.onListWorkspaceFiles(_currentPath);
   }
 
+  /// Opens a directory returned by the active workspace listing service.
   void _openDirectory(String path) {
+    if (!_directorySelectionEnabled && !_isWorkspaceRelativePath(path)) {
+      setState(() {
+        _pathError = '工作区目录路径必须是相对路径';
+      });
+      return;
+    }
     setState(() {
       _history.add(_currentPath);
       _currentPath = path;
       _selectionError = null;
+      _pathError = null;
       _loadCurrentPath();
     });
   }
 
+  /// Restores the previous valid workspace-relative directory.
   void _openPreviousPath() {
     setState(() {
       _currentPath = _history.removeLast();
       _editingPath = false;
       _selectionError = null;
+      _pathError = null;
       _loadCurrentPath();
     });
   }
 
+  /// Starts editing the displayed workspace path.
   void _startEditingPath() {
     setState(() {
       _pathController.text = _displayPath();
@@ -206,17 +241,27 @@ class _WorkspaceFileBrowserContentState
     });
   }
 
+  /// Converts and submits a displayed path within the current workspace root.
   void _submitEditedPath(String value) {
     final normalizedPath = _relativePathFromDisplay(value);
+    if (normalizedPath == null) {
+      setState(() {
+        _editingPath = false;
+        _pathError = '路径必须位于当前工作区内';
+      });
+      return;
+    }
     setState(() {
       _history.add(_currentPath);
       _currentPath = normalizedPath;
       _editingPath = false;
       _selectionError = null;
+      _pathError = null;
       _loadCurrentPath();
     });
   }
 
+  /// Builds the user-facing path while keeping API paths relative.
   String _displayPath() {
     if (_directorySelectionEnabled) {
       return _currentPath;
@@ -227,19 +272,36 @@ class _WorkspaceFileBrowserContentState
     return '${widget.rootLabel}/$_currentPath';
   }
 
-  String _relativePathFromDisplay(String value) {
+  /// Converts a displayed workspace path into its relative API path.
+  String? _relativePathFromDisplay(String value) {
     final normalizedValue = value.trim().replaceAll('\\', '/');
     if (_directorySelectionEnabled) {
       return normalizedValue;
     }
-    final normalizedRoot = widget.rootLabel.trim().replaceAll('\\', '/');
+    final normalizedRoot = widget.rootLabel
+        .trim()
+        .replaceAll('\\', '/')
+        .replaceFirst(RegExp(r'/+$'), '');
     if (normalizedValue == normalizedRoot) {
       return '';
     }
     if (normalizedValue.startsWith('$normalizedRoot/')) {
-      return normalizedValue.substring(normalizedRoot.length + 1);
+      final relativePath = normalizedValue.substring(normalizedRoot.length + 1);
+      return _isWorkspaceRelativePath(relativePath) ? relativePath : null;
     }
-    return normalizedValue.replaceFirst(RegExp(r'^/+'), '');
+    return null;
+  }
+
+  /// Validates that a file-browser path stays in the workspace-relative namespace.
+  bool _isWorkspaceRelativePath(String path) {
+    final normalizedPath = path.trim().replaceAll('\\', '/');
+    if (normalizedPath.isEmpty || normalizedPath.startsWith('/')) {
+      return normalizedPath.isEmpty;
+    }
+    final segments = normalizedPath.split('/');
+    return segments.every(
+      (segment) => segment.isNotEmpty && segment != '.' && segment != '..',
+    );
   }
 
   Widget _buildDirectorySelectionBar(BuildContext context) {

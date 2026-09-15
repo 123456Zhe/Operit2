@@ -1796,6 +1796,8 @@ dependencies = [
  "operit-host-api",
  "operit-link",
  "operit-node-runtime",
+ "operit-plugin-sdk-ipc",
+ "operit-plugin-sdk-ipc-bridge",
  "operit-proxy-local",
  "operit-runtime",
 ]
@@ -1845,6 +1847,14 @@ dependencies = [
  "reqwest",
  "tokio",
  "tungstenite",
+]
+
+[[package]]
+name = "operit-host-native-plugin-sdk-ipc"
+version = "0.1.0"
+dependencies = [
+ "operit-host-api",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1991,10 +2001,32 @@ dependencies = [
 name = "operit-plugin-sdk-codegen"
 version = "2.0.0-preview.6"
 dependencies = [
+ "operit-rslink-codegen",
  "quote",
  "syn",
  "tree-sitter",
  "tree-sitter-javascript",
+]
+
+[[package]]
+name = "operit-plugin-sdk-ipc"
+version = "2.0.0-preview.6"
+dependencies = [
+ "async-trait",
+ "operit-host-api",
+ "operit-host-native-plugin-sdk-ipc",
+ "operit-link",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "operit-plugin-sdk-ipc-bridge"
+version = "2.0.0-preview.6"
+dependencies = [
+ "operit-host-api",
+ "operit-link",
+ "operit-plugin-sdk-ipc",
 ]
 
 [[package]]
@@ -2067,6 +2099,8 @@ dependencies = [
  "operit-model",
  "operit-node-runtime",
  "operit-plugin-sdk",
+ "operit-plugin-sdk-codegen",
+ "operit-plugin-sdk-ipc",
  "operit-providers",
  "operit-proxy-bridge",
  "operit-proxy-dart-codegen",
@@ -2213,6 +2247,7 @@ dependencies = [
  "operit-model",
  "operit-plugin-sdk",
  "operit-plugin-sdk-codegen",
+ "operit-route-macros",
  "operit-store",
  "operit-util",
  "quickjs-wasm-rs",

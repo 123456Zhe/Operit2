@@ -464,7 +464,7 @@ fn upsertOperation(sequence: i64, content: &str) -> SyncOperation {
         semantics: SyncOperationSemantics::EntityState,
         payload: serde_json::to_value(payload).unwrap(),
         createdAt: sequence,
-        schemaVersion: 5,
+        schemaVersion: 6,
     }
 }
 

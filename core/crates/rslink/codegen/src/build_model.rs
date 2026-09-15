@@ -210,6 +210,7 @@ impl SourceObject {
 #[derive(Clone, Debug)]
 pub struct SourceMethod {
     pub name: String,
+    pub sdk_exposed: bool,
     pub args: Vec<SourceArg>,
     pub rust_return_type: String,
     pub is_async: bool,

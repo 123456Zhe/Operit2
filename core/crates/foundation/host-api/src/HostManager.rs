@@ -5,9 +5,9 @@ use crate::{
     BrowserSessionHost, ComposeDslWebViewHost, DeviceIoHost, FileSystemHost,
     HostEnvironmentDescriptor, HostJavaScriptRuntimeHost, HostRuntimeEventHost,
     HostRuntimeEventSchedulerHost, HostRuntimeTaskSchedulerHost, HostSecretStore, HttpHost,
-    LocalInferenceHost, ManagedRuntimeHost, RobotFaceHost, RuntimeSqliteHost, RuntimeStorageHost,
-    RuntimeStorageWriteHost, SystemOperationHost, TerminalHost, TtsPlaybackHost, TtsSynthesisHost,
-    WebSocketHost, WebVisitHost,
+    LocalInferenceHost, ManagedRuntimeHost, PluginSdkIpc::PluginSdkIpcHost, RobotFaceHost,
+    RuntimeSqliteHost, RuntimeStorageHost, RuntimeStorageWriteHost, SystemOperationHost,
+    TerminalHost, TtsPlaybackHost, TtsSynthesisHost, WebSocketHost, WebVisitHost,
 };
 
 static DEFAULT_HTTP_HOST: OnceLock<Arc<dyn HttpHost>> = OnceLock::new();
@@ -109,6 +109,7 @@ pub struct HostManager {
     pub hostRuntimeEventSchedulerHost: Option<Arc<dyn HostRuntimeEventSchedulerHost>>,
     pub hostRuntimeTaskSchedulerHost: Option<Arc<dyn HostRuntimeTaskSchedulerHost>>,
     pub hostJavaScriptRuntimeHost: Option<Arc<dyn HostJavaScriptRuntimeHost>>,
+    pub pluginSdkIpcHost: Option<Arc<dyn PluginSdkIpcHost>>,
     pub hostEnvironment: HostEnvironmentDescriptor,
     pub coreCommandExecutor: Option<CoreCommandExecutor>,
 }
@@ -143,6 +144,7 @@ impl HostManager {
             hostRuntimeEventSchedulerHost: None,
             hostRuntimeTaskSchedulerHost: None,
             hostJavaScriptRuntimeHost: None,
+            pluginSdkIpcHost: None,
             hostEnvironment: HostEnvironmentDescriptor::android(),
             coreCommandExecutor: None,
         }
@@ -179,6 +181,7 @@ impl HostManager {
             hostRuntimeEventSchedulerHost: None,
             hostRuntimeTaskSchedulerHost: None,
             hostJavaScriptRuntimeHost: None,
+            pluginSdkIpcHost: None,
             hostEnvironment,
             coreCommandExecutor: None,
         }
@@ -218,6 +221,7 @@ impl HostManager {
             hostRuntimeEventSchedulerHost: None,
             hostRuntimeTaskSchedulerHost: None,
             hostJavaScriptRuntimeHost: None,
+            pluginSdkIpcHost: None,
             hostEnvironment,
             coreCommandExecutor: None,
         }
@@ -258,6 +262,7 @@ impl HostManager {
             hostRuntimeEventSchedulerHost: None,
             hostRuntimeTaskSchedulerHost: None,
             hostJavaScriptRuntimeHost: None,
+            pluginSdkIpcHost: None,
             hostEnvironment,
             coreCommandExecutor: None,
         }
@@ -302,6 +307,7 @@ impl HostManager {
             hostRuntimeEventSchedulerHost: None,
             hostRuntimeTaskSchedulerHost: None,
             hostJavaScriptRuntimeHost: None,
+            pluginSdkIpcHost: None,
             hostEnvironment,
             coreCommandExecutor: None,
         }
@@ -481,6 +487,13 @@ impl HostManager {
         hostJavaScriptRuntimeHost: Arc<dyn HostJavaScriptRuntimeHost>,
     ) -> Self {
         self.hostJavaScriptRuntimeHost = Some(hostJavaScriptRuntimeHost);
+        self
+    }
+
+    /// Adds the Plugin SDK IPC carrier used to admit third-party clients into Operit.
+    #[allow(non_snake_case)]
+    pub fn withPluginSdkIpcHost(mut self, pluginSdkIpcHost: Arc<dyn PluginSdkIpcHost>) -> Self {
+        self.pluginSdkIpcHost = Some(pluginSdkIpcHost);
         self
     }
 }

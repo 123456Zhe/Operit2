@@ -124,6 +124,7 @@ pub struct SendMessageOptions {
     pub chatId: Option<String>,
     pub chatHistory: Vec<PromptTurn>,
     pub workspacePath: Option<String>,
+    pub workspaceFolders: Vec<String>,
     pub functionType: FunctionType,
     pub promptFunctionType: PromptFunctionType,
     pub enableThinking: bool,
@@ -161,6 +162,7 @@ impl SendMessageOptions {
             chatId: None,
             chatHistory: Vec::new(),
             workspacePath: None,
+            workspaceFolders: Vec::new(),
             functionType: FunctionType::CHAT,
             promptFunctionType: PromptFunctionType::CHAT,
             enableThinking: false,
@@ -194,6 +196,7 @@ pub struct MessageExecutionContext {
     pub isConversationActive: bool,
     pub conversationHistory: Vec<PromptTurn>,
     pub workspacePath: Option<String>,
+    pub workspaceFolders: Vec<String>,
     pub groupParticipantNamesText: Option<String>,
     pub proxySenderName: Option<String>,
     pub eventChannel: MutableSharedStreamMirror<TextStreamEventMirror>,
@@ -204,6 +207,7 @@ impl MessageExecutionContext {
         executionId: i32,
         conversationHistory: Vec<PromptTurn>,
         workspacePath: Option<String>,
+        workspaceFolders: Vec<String>,
         groupParticipantNamesText: Option<String>,
         proxySenderName: Option<String>,
         eventChannel: MutableSharedStreamMirror<TextStreamEventMirror>,
@@ -215,6 +219,7 @@ impl MessageExecutionContext {
             isConversationActive: true,
             conversationHistory,
             workspacePath,
+            workspaceFolders,
             groupParticipantNamesText,
             proxySenderName,
             eventChannel,
@@ -469,6 +474,7 @@ impl SystemPromptComposer for RuntimeSystemPromptComposer {
             base: SystemPromptOptions {
                 chat_id: request.chat_id.clone(),
                 workspace_path: request.workspace_path.clone(),
+                workspace_folders: request.workspace_folders.clone(),
                 use_english,
                 custom_system_prompt_template,
                 enable_tools: true,
@@ -674,12 +680,14 @@ impl EnhancedAIService {
         )
     }
 
+    /// Prepares provider-facing history with the complete workspace folder set.
     pub fn prepareConversationHistory(
         &mut self,
         chatHistory: Vec<PromptTurn>,
         processedInput: String,
         chatId: Option<String>,
         workspacePath: Option<String>,
+        workspaceFolders: Vec<String>,
         promptFunctionType: PromptFunctionType,
         customSystemPromptTemplate: Option<String>,
         roleCardId: Option<String>,
@@ -714,6 +722,7 @@ impl EnhancedAIService {
                 processed_input: processedInput,
                 chat_id: chatId,
                 workspace_path: workspacePath,
+                workspace_folders: workspaceFolders,
                 prompt_function_type: prompt_function_type_name(&promptFunctionType).to_string(),
                 custom_system_prompt_template: customSystemPromptTemplate,
                 role_card_id: roleCardId,
@@ -832,6 +841,7 @@ impl EnhancedAIService {
         available_tools
     }
 
+    /// Estimates the request window using the same workspace context as message sending.
     #[allow(clippy::too_many_arguments)]
     pub async fn estimateRequestWindowFromMemory(
         &mut self,
@@ -839,6 +849,7 @@ impl EnhancedAIService {
         chatHistory: Vec<PromptTurn>,
         chatId: Option<String>,
         workspacePath: Option<String>,
+        workspaceFolders: Vec<String>,
         promptFunctionType: PromptFunctionType,
         roleCardId: Option<String>,
         enableGroupOrchestrationHint: bool,
@@ -854,6 +865,7 @@ impl EnhancedAIService {
             message.clone(),
             chatId.clone(),
             workspacePath,
+            workspaceFolders,
             promptFunctionType.clone(),
             None,
             roleCardId.clone(),
@@ -1228,6 +1240,7 @@ impl EnhancedAIService {
             executionId,
             chatHistory,
             workspacePath.clone(),
+            options.workspaceFolders.clone(),
             groupParticipantNamesText.clone(),
             proxySenderName.clone(),
             eventChannel,
@@ -1253,6 +1266,7 @@ impl EnhancedAIService {
             message.clone(),
             chatId.clone(),
             workspacePath.clone(),
+            options.workspaceFolders.clone(),
             promptFunctionType.clone(),
             customSystemPromptTemplate.clone(),
             roleCardId.clone(),
@@ -2533,6 +2547,7 @@ impl EnhancedAIService {
                 chatId.clone(),
                 roleCardId.clone(),
                 context.workspacePath.clone(),
+                context.workspaceFolders.clone(),
                 toolExposureMode,
             )
             .await;

@@ -32,7 +32,6 @@ class CoreApplicationService with WidgetsBindingObserver {
       StreamController<Object>.broadcast();
 
   bool _initialized = false;
-  bool _hostSubscriberInstalled = false;
   bool _localBackgroundServiceStartAttempted = false;
   bool _linkHostStartAttempted = false;
   bool _webAccessBootstrapAttempted = false;
@@ -72,6 +71,10 @@ class CoreApplicationService with WidgetsBindingObserver {
   /// Forwards Flutter lifecycle changes through the normalized runtime event ingress.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _runtimeManager.runtimeConfigured) {
+      unawaited(_syncHostSubscriber());
+    }
     unawaited(_emitLifecycleEvent(state));
   }
 
@@ -303,22 +306,21 @@ class CoreApplicationService with WidgetsBindingObserver {
   /// Synchronizes owner-host event handling with the selected runtime role.
   Future<void> _syncHostSubscriber() async {
     final shouldInstall = _ownsHostInteractions;
-    if (shouldInstall && !_hostSubscriberInstalled) {
+    final installed = RuntimeHostInteractionSubscriber.isInstalled;
+    if (shouldInstall && !installed) {
       final subscriberStopwatch = Stopwatch()..start();
       ClientLogger.i('host subscriber install start', tag: _logTag);
       RuntimeHostInteractionSubscriber.install();
-      _hostSubscriberInstalled = true;
       ClientLogger.i(
         'host subscriber install done elapsedMs=${subscriberStopwatch.elapsedMilliseconds}',
         tag: _logTag,
       );
       return;
     }
-    if (!shouldInstall && _hostSubscriberInstalled) {
+    if (!shouldInstall && installed) {
       final subscriberStopwatch = Stopwatch()..start();
       ClientLogger.i('host subscriber uninstall start', tag: _logTag);
       await RuntimeHostInteractionSubscriber.uninstall();
-      _hostSubscriberInstalled = false;
       ClientLogger.i(
         'host subscriber uninstall done elapsedMs=${subscriberStopwatch.elapsedMilliseconds}',
         tag: _logTag,
