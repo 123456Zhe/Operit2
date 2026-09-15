@@ -222,13 +222,16 @@ Future<String> runCoreMarketInstall({
   return result;
 }
 
-/// Starts a broker transaction for Flutter's visible market browser.
+/// Starts a broker transaction for one Flutter market browser surface.
 Future<GitHubOAuthBrokerLoginStart> startCoreMarketAuthLogin({
   required GeneratedCoreProxyClients clients,
+  Uri? completionRedirectUri,
 }) async {
+  final redirectUri =
+      completionRedirectUri ?? coreMarketAuthCompletionRedirectUri;
   final broker = clients.servicesGitHubOAuthBrokerService;
   final start = await broker.startLogin(
-    completionRedirectUri: coreMarketAuthCompletionRedirectUri.toString(),
+    completionRedirectUri: redirectUri.toString(),
   );
   final authorizationUrl = Uri.tryParse(start.authorizationUrl);
   if (authorizationUrl == null ||
@@ -239,13 +242,16 @@ Future<GitHubOAuthBrokerLoginStart> startCoreMarketAuthLogin({
   return start;
 }
 
-/// Claims the GitHub OAuth broker transaction after the visible browser reaches its completion URL.
+/// Claims the GitHub OAuth broker transaction after the browser reaches its completion URL.
 Future<String> completeCoreMarketAuthLogin({
   required GeneratedCoreProxyClients clients,
   required GitHubOAuthBrokerLoginStart start,
   required Uri completionUrl,
+  Uri? completionRedirectUri,
 }) async {
-  if (!isCoreMarketAuthCompletionUri(completionUrl)) {
+  final redirectUri =
+      completionRedirectUri ?? coreMarketAuthCompletionRedirectUri;
+  if (!isMarketAuthCompletionUri(completionUrl, redirectUri: redirectUri)) {
     throw StateError('GitHub OAuth callback destination is invalid');
   }
   final broker = clients.servicesGitHubOAuthBrokerService;
@@ -258,12 +264,20 @@ Future<String> completeCoreMarketAuthLogin({
   return result.login;
 }
 
-/// Returns whether one browser navigation reached the registered OAuth completion destination.
+/// Returns whether one browser navigation reached the default OAuth completion destination.
 bool isCoreMarketAuthCompletionUri(Uri uri) {
-  return uri.scheme == coreMarketAuthCompletionRedirectUri.scheme &&
-      uri.host == coreMarketAuthCompletionRedirectUri.host &&
-      uri.port == coreMarketAuthCompletionRedirectUri.port &&
-      uri.path == coreMarketAuthCompletionRedirectUri.path;
+  return isMarketAuthCompletionUri(
+    uri,
+    redirectUri: coreMarketAuthCompletionRedirectUri,
+  );
+}
+
+/// Returns whether a browser URL reached the callback destination for one login.
+bool isMarketAuthCompletionUri(Uri uri, {required Uri redirectUri}) {
+  return uri.scheme == redirectUri.scheme &&
+      uri.host == redirectUri.host &&
+      uri.port == redirectUri.port &&
+      uri.path == redirectUri.path;
 }
 
 String formatMarketDate(String value) {

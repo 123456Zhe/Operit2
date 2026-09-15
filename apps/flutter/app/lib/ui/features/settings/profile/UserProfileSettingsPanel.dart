@@ -369,16 +369,13 @@ class _UserProfileSettingsPanelState extends State<UserProfileSettingsPanel> {
     }
   }
 
-  /// Opens the existing visible GitHub OAuth flow for this identity.
+  /// Opens the shared GitHub OAuth browser-choice flow for this identity.
   void _loginGitHub() {
     unawaited(
-      showDialog<void>(
+      showGitHubOAuthLoginDialog(
         context: context,
-        barrierDismissible: false,
-        builder: (context) => GitHubOAuthLoginDialog(
-          clients: _clients,
-          onLoginCompleted: _handleGitHubLoginCompleted,
-        ),
+        clients: _clients,
+        onLoginCompleted: _handleGitHubLoginCompleted,
       ),
     );
   }

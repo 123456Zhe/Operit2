@@ -2011,16 +2011,13 @@ class _MarketMinePaneState extends State<_MarketMinePane> {
     );
   }
 
-  /// Opens the GitHub OAuth broker login dialog for this market session.
+  /// Opens the shared GitHub OAuth browser-choice flow for this market session.
   void _showGitHubLoginDialog(BuildContext context) {
     unawaited(
-      showDialog<void>(
+      showGitHubOAuthLoginDialog(
         context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => GitHubOAuthLoginDialog(
-          clients: widget.clients,
-          onLoginCompleted: _loadAuthState,
-        ),
+        clients: widget.clients,
+        onLoginCompleted: _loadAuthState,
       ),
     );
   }
