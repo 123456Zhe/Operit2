@@ -17,6 +17,7 @@ import 'ChatLayoutMetrics.dart';
 import 'MessageContextMenu.dart';
 import 'MessageCopyPreview.dart';
 import 'ChatScrollNavigator.dart';
+import 'NewChatIntro.dart';
 import 'style/bubble/BubbleStyleChatMessage.dart';
 import 'style/bubble/BubbleSurface.dart';
 import 'style/cursor/CursorStyleChatMessage.dart';
@@ -169,7 +170,11 @@ class _ChatAreaState extends State<ChatArea>
         (showLoadingIndicator || widget.errorMessage != null ? 1 : 0);
 
     if (itemCount == 0) {
-      return const _EmptyChatArea();
+      return ValueListenableBuilder<bool>(
+        valueListenable: newChatIntroActive,
+        builder: (context, introActive, _) =>
+            _EmptyChatArea(showMark: !introActive),
+      );
     }
 
     return LayoutBuilder(
@@ -1582,11 +1587,19 @@ class _BottomGrowthSample {
 }
 
 class _EmptyChatArea extends StatelessWidget {
-  const _EmptyChatArea();
+  const _EmptyChatArea({this.showMark = true});
+
+  /// False while the new-chat intro owns the stage, so the static wordmark
+  /// and the intro animation never draw on top of each other. Swapped
+  /// without a fade: a fade-out still overlaps the incoming particles.
+  final bool showMark;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (!showMark) {
+      return const SizedBox.shrink();
+    }
     return Center(
       child: Text(
         'Operit',
