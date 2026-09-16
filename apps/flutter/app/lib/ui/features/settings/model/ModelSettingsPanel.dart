@@ -4395,7 +4395,6 @@ class _ModelSettingsEditorDialogState
   late bool _directAudio;
   late bool _directVideo;
   late List<core_proxy.ModelBuiltinTool> _builtinTools;
-  late bool _enableMaxContextMode;
   late bool _enableSummary;
   late bool _enableSummaryByMessageCount;
   late final TextEditingController _maxContextLengthController;
@@ -4413,7 +4412,6 @@ class _ModelSettingsEditorDialogState
     _directAudio = caps.directAudio;
     _directVideo = caps.directVideo;
     _builtinTools = widget.initialBuiltinTools;
-    _enableMaxContextMode = widget.initialContext.enableMaxContextMode;
     _enableSummary = widget.initialSummary.enableSummary;
     _enableSummaryByMessageCount =
         widget.initialSummary.enableSummaryByMessageCount;
@@ -4523,7 +4521,7 @@ class _ModelSettingsEditorDialogState
           builtinTools: _builtinTools,
           context: core_proxy.ModelContextSpec(
             maxContextLength: maxContextLength,
-            enableMaxContextMode: _enableMaxContextMode,
+            enableMaxContextMode: widget.initialContext.enableMaxContextMode,
           ),
           summary: core_proxy.ModelSummarySettings(
             enableSummary: _enableSummary,
@@ -4635,14 +4633,6 @@ class _ModelSettingsEditorDialogState
                 onChanged: (_) {
                   setState(() => _maxContextLengthError = null);
                 },
-              ),
-              const SizedBox(height: 8),
-              _ModelSettingsSwitch(
-                title: l10n.settingsModelMaxContextMode,
-                subtitle:
-                    '${l10n.settingsModelMaxContextLength}: ${_maxContextLengthController.text.trim()}k',
-                value: _enableMaxContextMode,
-                onChanged: (v) => setState(() => _enableMaxContextMode = v),
               ),
               const SizedBox(height: 12),
               Text(

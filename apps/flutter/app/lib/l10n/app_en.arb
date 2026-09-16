@@ -791,7 +791,6 @@
   "settingsModelContextLength": "Context length",
   "settingsModelMaxContextLength": "Max context length",
   "settingsModelMaxContextLengthInvalid": "Enter a max context length greater than 0",
-  "settingsModelMaxContextMode": "Max context mode",
   "settingsModelSummaryThreshold": "Summary token threshold",
   "settingsModelSummaryByMessageCount": "Summarize by message count",
   "settingsModelSummaryMessageCount": "Summary message threshold",

@@ -543,12 +543,8 @@ impl MessageCoordinationDelegate {
             .modelConfigManager
             .getResolvedModelConfig(&modelProviderId, &modelId)
             .map_err(|error| error.to_string())?;
-        let effectiveContextLength = if chatContextSettings.context.enableMaxContextMode {
-            chatContextSettings.context.maxContextLength
-        } else {
-            chatContextSettings.context.maxContextLength * 0.4
-        };
-        let maxTokens = (effectiveContextLength * 1024.0).clamp(0.0, i32::MAX as f32) as i32;
+        let maxTokens = (chatContextSettings.context.maxContextLength * 1024.0)
+            .clamp(0.0, i32::MAX as f32) as i32;
         let mut variantMessage = self
             .messageProcessingDelegate
             .regenerateAiMessageVariant(RegenerateAiMessageVariantRequest {
@@ -1553,12 +1549,7 @@ impl MessageCoordinationDelegate {
         let currentTokens = self
             .tokenStatisticsDelegate
             .getLastCurrentWindowSize(Some(chatId.clone()));
-        let effectiveContextLength = if chatContextSettings.context.enableMaxContextMode {
-            chatContextSettings.context.maxContextLength
-        } else {
-            chatContextSettings.context.maxContextLength * 0.4
-        };
-        let maxTokens = (effectiveContextLength * 1024.0) as i32;
+        let maxTokens = (chatContextSettings.context.maxContextLength * 1024.0) as i32;
         let shouldSummarize = AIMessageManager::shouldGenerateSummary(
             currentMessages.clone(),
             currentTokens,

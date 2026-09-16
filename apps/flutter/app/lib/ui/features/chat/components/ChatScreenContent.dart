@@ -12,6 +12,7 @@ import '../../../theme/OperitTheme.dart';
 import '../viewmodel/ChatViewModel.dart';
 import '../tts/TtsPlaybackController.dart';
 import 'ChatArea.dart';
+import 'NewChatIntro.dart';
 import 'ChatLayoutMetrics.dart';
 import 'ChatMultiSelectBar.dart';
 import 'ChatScrollNavigator.dart';
@@ -208,6 +209,18 @@ class ChatScreenContent extends StatelessWidget {
                         ),
                       ),
                     ),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: NewChatIntroOverlay(
+                          currentChatId: currentChatId,
+                          isChatEmpty:
+                              !loading &&
+                              messages.isEmpty &&
+                              errorMessage == null,
+                          isSwitching: loading || isPreparingChatSwitch,
+                        ),
+                      ),
+                    ),
                     if (!isPreparingChatSwitch && statusLaneInset > 0)
                       Positioned(
                         left: 0,
@@ -228,32 +241,41 @@ class ChatScreenContent extends StatelessWidget {
                   ],
                 ),
               ),
-              if (!isPreparingChatSwitch)
-                isMultiSelectMode
-                    ? ChatMultiSelectBar(
-                        selectedCount: selectedMessageTimestamps.length,
-                        allSelected:
-                            _selectableMessageTimestamps.isNotEmpty &&
-                            _selectableMessageTimestamps.length ==
-                                selectedMessageTimestamps.length,
-                        onClose: onExitMultiSelectMode,
-                        onToggleSelectAll:
-                            _selectableMessageTimestamps.isNotEmpty &&
-                                _selectableMessageTimestamps.length ==
-                                    selectedMessageTimestamps.length
-                            ? onClearMessageSelection
-                            : onSelectAllMessages,
-                        onCopy: selectedMessageTimestamps.isEmpty
-                            ? null
-                            : () => _copySelectedMessages(context),
-                        onShareImage: selectedMessageTimestamps.isEmpty
-                            ? null
-                            : () => _generateShareImage(context),
-                        onDelete: selectedMessageTimestamps.isEmpty
-                            ? null
-                            : () => _confirmDeleteSelected(context),
-                      )
-                    : _buildChatInputSection(inputStyle),
+              // Keep the input subtree mounted during chat switches: tearing
+              // it down deactivates tooltip states whose global pointer
+              // routes then crash on ancestor lookups ("deactivated
+              // widget's ancestor"), matching the chat area treatment.
+              IgnorePointer(
+                ignoring: isPreparingChatSwitch,
+                child: Opacity(
+                  opacity: isPreparingChatSwitch ? 0 : 1,
+                  child: isMultiSelectMode
+                      ? ChatMultiSelectBar(
+                          selectedCount: selectedMessageTimestamps.length,
+                          allSelected:
+                              _selectableMessageTimestamps.isNotEmpty &&
+                              _selectableMessageTimestamps.length ==
+                                  selectedMessageTimestamps.length,
+                          onClose: onExitMultiSelectMode,
+                          onToggleSelectAll:
+                              _selectableMessageTimestamps.isNotEmpty &&
+                                  _selectableMessageTimestamps.length ==
+                                      selectedMessageTimestamps.length
+                              ? onClearMessageSelection
+                              : onSelectAllMessages,
+                          onCopy: selectedMessageTimestamps.isEmpty
+                              ? null
+                              : () => _copySelectedMessages(context),
+                          onShareImage: selectedMessageTimestamps.isEmpty
+                              ? null
+                              : () => _generateShareImage(context),
+                          onDelete: selectedMessageTimestamps.isEmpty
+                              ? null
+                              : () => _confirmDeleteSelected(context),
+                        )
+                      : _buildChatInputSection(inputStyle),
+                ),
+              ),
             ],
           ),
         ),
