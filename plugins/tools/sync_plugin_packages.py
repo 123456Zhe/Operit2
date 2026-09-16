@@ -158,6 +158,28 @@ def _platform_command(executable: str) -> str:
     return resolved
 
 
+def _typescript_command(repo_root: Path, *, dry_run: bool) -> str:
+    """Resolves the repository-managed TypeScript compiler before PATH."""
+    executable = "tsc.cmd" if os.name == "nt" else "tsc"
+    repository_executable = (
+        repo_root / ".ci-tools" / "typescript" / "node_modules" / ".bin" / executable
+    )
+    if repository_executable.is_file():
+        return str(repository_executable)
+
+    resolved_executable = shutil.which(executable)
+    if resolved_executable is not None:
+        return resolved_executable
+
+    if dry_run:
+        return executable
+
+    raise FileNotFoundError(
+        "TypeScript compiler not found. Expected the repository-managed compiler at "
+        f"{repository_executable} or '{executable}' on PATH."
+    )
+
+
 def _generate_plugin_sdk_types(repo_root: Path, *, dry_run: bool) -> None:
     core_root = repo_root / "core"
     sdk_source_root = core_root / "crates" / "plugin" / "sdk" / "src"
@@ -308,6 +330,17 @@ def _prebuild_plans(repo_root: Path, source_dir: Path, plans: list[SyncPlanItem]
     state_file = source_dir / ".sync_state.json"
     state = _load_state(state_file)
     changed = False
+    typescript_command: str | None = None
+
+    def run_typescript(tsconfig: Path) -> None:
+        nonlocal typescript_command
+        if typescript_command is None:
+            typescript_command = _typescript_command(repo_root, dry_run=dry_run)
+        _run_checked_command(
+            [typescript_command, "-p", str(tsconfig)],
+            repo_root,
+            dry_run=dry_run,
+        )
 
     if any(plan.mode == "compile-ts" for plan in plans):
         tsconfig = source_dir / "tsconfig.json"
@@ -324,7 +357,7 @@ def _prebuild_plans(repo_root: Path, source_dir: Path, plans: list[SyncPlanItem]
         if state.get(key) == signature and compiled_outputs_exist:
             print(f"SKIP-PREBUILD: {source_dir}")
         else:
-            _run_checked_command([_platform_command("tsc"), "-p", str(tsconfig)], repo_root, dry_run=dry_run)
+            run_typescript(tsconfig)
             state[key] = signature
             changed = True
 
@@ -345,7 +378,7 @@ def _prebuild_plans(repo_root: Path, source_dir: Path, plans: list[SyncPlanItem]
         if state.get(key) == signature:
             print(f"SKIP-PREBUILD: {child_dir}")
         else:
-            _run_checked_command([_platform_command("tsc"), "-p", str(tsconfig)], repo_root, dry_run=dry_run)
+            run_typescript(tsconfig)
             state[key] = signature
             changed = True
 
