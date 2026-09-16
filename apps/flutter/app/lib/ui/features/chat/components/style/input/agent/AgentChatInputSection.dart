@@ -15,6 +15,7 @@ import '../../../../../../../core/proxy/generated/CoreProxyModels.g.dart'
 import '../../../../../../../l10n/generated/app_localizations.dart';
 import '../../../../../../theme/OperitTheme.dart';
 import '../../../../../packages/utils/PackageDisplayUtils.dart';
+import '../../../../../settings/model/ProviderLogo.dart';
 import '../../../../viewmodel/ChatViewModel.dart';
 import '../../../ChatLayoutMetrics.dart';
 import '../common/ChatAttachmentImagePreview.dart';
@@ -125,6 +126,8 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
   bool _draggingFiles = false;
   bool _inputExpanded = false;
   String _modelLabel = '';
+  String _modelProviderTypeId = '';
+  String _modelProviderName = '';
 
   /// Starts input listeners and observes viewport metric changes.
   @override
@@ -245,6 +248,7 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
     } else {
       _dismissModelSettingsPopup();
     }
+    setState(() {});
   }
 
   void _openInputMenuPopup() {
@@ -282,7 +286,7 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
           children: <Widget>[
             Positioned.fill(
               child: Listener(
-                behavior: HitTestBehavior.translucent,
+                behavior: HitTestBehavior.opaque,
                 onPointerDown: (_) => _dismissModelSettingsPopup(),
                 child: const SizedBox.expand(),
               ),
@@ -449,12 +453,24 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
     }
     setState(() {
       _modelLabel = _formatModelLabel(config.modelId);
+      _modelProviderTypeId = config.apiProviderTypeId;
+      _modelProviderName = config.providerName;
     });
   }
 
-  void _handleModelChanged(String modelId) {
+  void _handleModelChanged(
+    String modelId, {
+    String? providerTypeId,
+    String? providerName,
+  }) {
     setState(() {
       _modelLabel = _formatModelLabel(modelId);
+      if (providerTypeId != null) {
+        _modelProviderTypeId = providerTypeId;
+      }
+      if (providerName != null) {
+        _modelProviderName = providerName;
+      }
     });
   }
 
@@ -528,8 +544,12 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
   }
 
   void _dismissModelSettingsPopup() {
+    final wasOpen = _modelPopupEntry != null;
     _modelPopupEntry?.remove();
     _modelPopupEntry = null;
+    if (wasOpen && mounted) {
+      setState(() {});
+    }
   }
 
   void _dismissInputMenuPopup() {
@@ -624,6 +644,9 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
                       focusNode: widget.focusNode,
                       inputState: widget.inputState,
                       modelLabel: _modelLabel,
+                      modelProviderTypeId: _modelProviderTypeId,
+                      modelProviderName: _modelProviderName,
+                      modelSelectorOpen: _modelPopupEntry != null,
                       modelSelectorLink: _modelPopupLink,
                       modelSelectorKey: _modelPopupTargetKey,
                       settingsLink: _inputMenuPopupLink,
@@ -660,6 +683,198 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
           ),
         ),
       ),
+    );
+  }
+}
+
+const double _modelSelectorLogoSize = 14;
+const double _modelSelectorLogoGap = 4;
+const BorderRadius _modelSelectorChipRadius = BorderRadius.all(
+  Radius.circular(12),
+);
+
+class _ModelTypeMetrics {
+  const _ModelTypeMetrics({
+    required this.lineHeight,
+    required this.xCenter,
+    required this.markSize,
+  });
+
+  final double lineHeight;
+  final double xCenter;
+  final double markSize;
+
+  Alignment get markAlignment {
+    final extra = lineHeight - markSize;
+    if (extra.abs() < 0.001) {
+      return Alignment.center;
+    }
+    final childTop = xCenter - markSize / 2;
+    return Alignment(0, 2 * childTop / extra - 1);
+  }
+}
+
+ui.TextBox? _glyphBox(TextPainter painter) {
+  final boxes = painter.getBoxesForSelection(
+    const TextSelection(baseOffset: 0, extentOffset: 1),
+  );
+  return boxes.isEmpty ? null : boxes.first;
+}
+
+TextPainter _probePainter(
+  String glyph,
+  TextStyle style,
+  TextDirection direction,
+) {
+  return TextPainter(
+    text: TextSpan(text: glyph, style: style),
+    textDirection: direction,
+    maxLines: 1,
+    strutStyle: StrutStyle.fromTextStyle(
+      style,
+      forceStrutHeight: true,
+      height: 1,
+    ),
+  )..layout();
+}
+
+/// Measures the lowercase x-height band so marks can share the text ink center.
+_ModelTypeMetrics _fallbackModelTypeMetrics(double fontSize) {
+  final lineHeight = fontSize;
+  final markSize = fontSize * 0.72;
+  return _ModelTypeMetrics(
+    lineHeight: lineHeight,
+    xCenter: lineHeight * 0.45,
+    markSize: markSize.clamp(1.0, lineHeight).toDouble(),
+  );
+}
+
+_ModelTypeMetrics _modelTypeMetrics(TextStyle style, TextDirection direction) {
+  final fontSize = style.fontSize ?? _modelSelectorLogoSize;
+  try {
+    final line = _probePainter('Hg', style, direction);
+    final xProbe = _probePainter('x', style, direction);
+    final capProbe = _probePainter('H', style, direction);
+    final lineHeight = line.height;
+    final xBox = _glyphBox(xProbe);
+    final capBox = _glyphBox(capProbe);
+    line.dispose();
+    xProbe.dispose();
+    capProbe.dispose();
+    if (lineHeight <= 0 || !lineHeight.isFinite) {
+      return _fallbackModelTypeMetrics(fontSize);
+    }
+    final xCenter = xBox == null
+        ? lineHeight * 0.45
+        : (xBox.top + xBox.bottom) / 2;
+    final capHeight = capBox == null
+        ? fontSize * 0.72
+        : (capBox.bottom - capBox.top);
+    final maxMark = lineHeight < 1 ? 1.0 : lineHeight;
+    final markSize = capHeight.clamp(1.0, maxMark).toDouble();
+    return _ModelTypeMetrics(
+      lineHeight: lineHeight,
+      xCenter: xCenter.isFinite ? xCenter : lineHeight * 0.45,
+      markSize: markSize,
+    );
+  } catch (_) {
+    return _fallbackModelTypeMetrics(fontSize);
+  }
+}
+
+class _ModelSelectorIdentity extends StatelessWidget {
+  const _ModelSelectorIdentity({
+    required this.label,
+    required this.style,
+    required this.providerTypeId,
+    required this.fallbackName,
+    required this.chevronColor,
+    required this.expanded,
+  });
+
+  final String label;
+  final TextStyle style;
+  final String providerTypeId;
+  final String fallbackName;
+  final Color chevronColor;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = _modelTypeMetrics(style, Directionality.of(context));
+    Widget mark(Widget child) {
+      return SizedBox(
+        width: metrics.markSize,
+        height: metrics.lineHeight,
+        child: Align(
+          alignment: metrics.markAlignment,
+          child: SizedBox(
+            width: metrics.markSize,
+            height: metrics.markSize,
+            child: child,
+          ),
+        ),
+      );
+    }
+
+    final showLogo = providerTypeId.isNotEmpty || label.isNotEmpty;
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final reserved =
+            (showLogo ? metrics.markSize + _modelSelectorLogoGap : 0) +
+            4 +
+            metrics.markSize;
+        final maxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 220.0;
+        final textMax = (maxWidth - reserved).clamp(24.0, 220.0).toDouble();
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            if (showLogo) ...<Widget>[
+              ExcludeSemantics(
+                child: mark(
+                  ProviderLogo(
+                    providerTypeId: providerTypeId,
+                    fallbackName: fallbackName,
+                    size: metrics.markSize,
+                    showBackdrop: false,
+                  ),
+                ),
+              ),
+              const SizedBox(width: _modelSelectorLogoGap),
+            ],
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: textMax),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style,
+                strutStyle: StrutStyle.fromTextStyle(
+                  style,
+                  forceStrutHeight: true,
+                  height: 1,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            mark(
+              AnimatedRotation(
+                turns: expanded ? 0.5 : 0,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                child: Icon(
+                  Icons.keyboard_arrow_down,
+                  size: metrics.markSize,
+                  color: chevronColor,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -792,6 +1007,9 @@ class _InputBody extends StatelessWidget {
     required this.focusNode,
     required this.inputState,
     required this.modelLabel,
+    required this.modelProviderTypeId,
+    required this.modelProviderName,
+    required this.modelSelectorOpen,
     required this.modelSelectorLink,
     required this.modelSelectorKey,
     required this.settingsLink,
@@ -826,6 +1044,9 @@ class _InputBody extends StatelessWidget {
   final FocusNode focusNode;
   final core_proxy.InputProcessingState inputState;
   final String modelLabel;
+  final String modelProviderTypeId;
+  final String modelProviderName;
+  final bool modelSelectorOpen;
   final LayerLink modelSelectorLink;
   final GlobalKey modelSelectorKey;
   final LayerLink settingsLink;
@@ -861,6 +1082,18 @@ class _InputBody extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
+    final modelLabelStyle =
+        theme.textTheme.bodyMedium?.copyWith(
+          color: colorScheme.onSurface,
+          height: 1,
+          leadingDistribution: TextLeadingDistribution.even,
+        ) ??
+        TextStyle(
+          color: colorScheme.onSurface,
+          fontSize: _modelSelectorLogoSize,
+          height: 1,
+          leadingDistribution: TextLeadingDistribution.even,
+        );
     final inputContent = Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
@@ -879,9 +1112,9 @@ class _InputBody extends StatelessWidget {
             enabled: !isSpeechRecording && !isSpeechTranscribing,
             onPasteImages: onPasteImages,
             child: AnimatedSize(
-              duration: const Duration(milliseconds: 220),
-              reverseDuration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
+              duration: const Duration(milliseconds: 340),
+              reverseDuration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOutCubicEmphasized,
               alignment: Alignment.bottomCenter,
               child: Stack(
                 children: <Widget>[
@@ -947,41 +1180,46 @@ class _InputBody extends StatelessWidget {
                 child: CompositedTransformTarget(
                   key: modelSelectorKey,
                   link: modelSelectorLink,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: onModelSelector,
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 220),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: colorScheme.outline.withValues(alpha: 0.2),
+                  child: Material(
+                    color: modelSelectorOpen
+                        ? colorScheme.onSurface.withValues(alpha: 0.08)
+                        : Colors.transparent,
+                    borderRadius: _modelSelectorChipRadius,
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      borderRadius: _modelSelectorChipRadius,
+                      splashFactory: NoSplash.splashFactory,
+                      overlayColor: WidgetStateProperty.resolveWith((
+                        Set<WidgetState> states,
+                      ) {
+                        if (states.contains(WidgetState.pressed)) {
+                          return colorScheme.onSurface.withValues(alpha: 0.12);
+                        }
+                        if (states.contains(WidgetState.hovered) ||
+                            states.contains(WidgetState.focused)) {
+                          return colorScheme.onSurface.withValues(alpha: 0.08);
+                        }
+                        return Colors.transparent;
+                      }),
+                      onTap: onModelSelector,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 220),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          child: _ModelSelectorIdentity(
+                            label: modelLabel,
+                            style: modelLabelStyle,
+                            providerTypeId: modelProviderTypeId,
+                            fallbackName: modelProviderName.isNotEmpty
+                                ? modelProviderName
+                                : modelLabel,
+                            chevronColor: colorScheme.onSurfaceVariant,
+                            expanded: modelSelectorOpen,
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Flexible(
-                            child: Text(
-                              modelLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurface,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(
-                            Icons.keyboard_arrow_down,
-                            size: 18,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ],
                       ),
                     ),
                   ),
@@ -2207,7 +2445,7 @@ IconData _actionIcon({
     return Icons.add;
   }
   if (canSend) {
-    return Icons.send;
+    return Icons.arrow_upward;
   }
   return Icons.mic;
 }

@@ -30,8 +30,7 @@ const Map<String, String> providerLogoAssets = <String, String>{
   'OPENAI_GENERIC': 'assets/model_logos/OPENAI_GENERIC.svg',
   'OPENAI_LOCAL': 'assets/model_logos/OPENAI_LOCAL.svg',
   'OPENAI_RESPONSES': 'assets/model_logos/OPENAI_RESPONSES.svg',
-  'OPENAI_RESPONSES_GENERIC':
-      'assets/model_logos/OPENAI_RESPONSES_GENERIC.svg',
+  'OPENAI_RESPONSES_GENERIC': 'assets/model_logos/OPENAI_RESPONSES_GENERIC.svg',
   'OPENROUTER': 'assets/model_logos/OPENROUTER.svg',
   'PPINFRA': 'assets/model_logos/PPINFRA.svg',
   'SILICONFLOW': 'assets/model_logos/SILICONFLOW.svg',
@@ -46,7 +45,7 @@ const Set<String> _coloredLogoProviderTypeIds = <String>{
   'INFINIAI',
 };
 
-/// Renders a provider logo with a circular container and initial fallback.
+/// Renders a provider logo with an optional circular container and initial fallback.
 class ProviderLogo extends StatelessWidget {
   const ProviderLogo({
     super.key,
@@ -54,17 +53,34 @@ class ProviderLogo extends StatelessWidget {
     required this.fallbackName,
     this.size = 42,
     this.contentScale = 0.62,
+    this.showBackdrop = true,
   });
 
   final String providerTypeId;
   final String fallbackName;
   final double size;
   final double contentScale;
+  final bool showBackdrop;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final asset = providerLogoAssets[providerTypeId];
+    final glyphSize = showBackdrop ? size * contentScale : size;
+    final child = asset == null
+        ? _ProviderLogoInitial(name: fallbackName, size: glyphSize)
+        : _ProviderLogoAsset(
+            asset: asset,
+            providerTypeId: providerTypeId,
+            size: glyphSize,
+          );
+    if (!showBackdrop) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Center(child: child),
+      );
+    }
     return Container(
       width: size,
       height: size,
@@ -76,13 +92,7 @@ class ProviderLogo extends StatelessWidget {
         ),
       ),
       alignment: Alignment.center,
-      child: asset == null
-          ? _ProviderLogoInitial(name: fallbackName)
-          : _ProviderLogoAsset(
-              asset: asset,
-              providerTypeId: providerTypeId,
-              size: size * contentScale,
-            ),
+      child: child,
     );
   }
 }
@@ -111,6 +121,8 @@ class _ProviderLogoAsset extends StatelessWidget {
         asset,
         width: size,
         height: size,
+        fit: BoxFit.contain,
+        alignment: Alignment.center,
         colorFilter: monochromeTint,
       );
     }
@@ -119,6 +131,7 @@ class _ProviderLogoAsset extends StatelessWidget {
       width: size,
       height: size,
       fit: BoxFit.contain,
+      alignment: Alignment.center,
     );
     return monochromeTint == null
         ? image
@@ -127,9 +140,10 @@ class _ProviderLogoAsset extends StatelessWidget {
 }
 
 class _ProviderLogoInitial extends StatelessWidget {
-  const _ProviderLogoInitial({required this.name});
+  const _ProviderLogoInitial({required this.name, required this.size});
 
   final String name;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -138,8 +152,11 @@ class _ProviderLogoInitial extends StatelessWidget {
     final initial = trimmedName.isEmpty ? '?' : trimmedName.substring(0, 1);
     return Text(
       initial.toUpperCase(),
+      textAlign: TextAlign.center,
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
         fontWeight: FontWeight.w700,
+        fontSize: size * 0.78,
+        height: 1,
         color: colorScheme.onSurfaceVariant,
       ),
     );

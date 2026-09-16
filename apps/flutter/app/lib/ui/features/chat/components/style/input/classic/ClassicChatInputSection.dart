@@ -590,9 +590,9 @@ class _ClassicInputBody extends StatelessWidget {
       borderSide: BorderSide(color: outline, width: 1),
     );
     final inputContent = AnimatedSize(
-      duration: const Duration(milliseconds: 220),
-      reverseDuration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
+      duration: const Duration(milliseconds: 340),
+      reverseDuration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOutCubicEmphasized,
       alignment: Alignment.bottomCenter,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
