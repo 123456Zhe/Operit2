@@ -65,11 +65,14 @@ impl ModelListFetcher {
             ));
         }
 
+        let requestUrl = operationUrl(&provider.endpoint, &operation.path)?;
+        let requestHeaders = headers(provider, operation)?;
+
         let response = defaultHttpHost()
             .executeHttpRequest(HttpRequestData {
-                url: operationUrl(&provider.endpoint, &operation.path)?,
+                url: requestUrl,
                 method: operation.method.clone(),
-                headers: headers(provider, operation)?,
+                headers: requestHeaders,
                 body: Vec::new(),
                 formFields: Vec::new(),
                 fileParts: Vec::new(),
@@ -137,24 +140,46 @@ fn headers(
     operation: &ProviderOperationSpec,
 ) -> Result<Vec<(String, String)>, String> {
     let mut headers = vec![("Content-Type".to_string(), "application/json".to_string())];
-    if operation.requiresApiKey {
-        headers.push((
-            "Authorization".to_string(),
-            format!("Bearer {}", apiKey(provider)?),
-        ));
-    }
     let customHeaders = serde_json::from_str::<serde_json::Value>(&provider.customHeaders)
         .map_err(|error| error.to_string())?;
     let object = customHeaders
         .as_object()
         .ok_or_else(|| "customHeaders is not a JSON object".to_string())?;
+    let mut hasAuthorization = false;
     for (name, value) in object {
         let headerValue = value
             .as_str()
             .ok_or_else(|| format!("customHeaders value for {name} is not a string"))?;
+        if name.eq_ignore_ascii_case("Authorization") {
+            if operation.requiresApiKey && headerValue.trim().is_empty() {
+                // An empty legacy custom header must not erase the generated API key.
+                continue;
+            }
+            hasAuthorization = !headerValue.trim().is_empty();
+        }
         headers.push((name.clone(), headerValue.to_string()));
     }
+    if operation.requiresApiKey && !hasAuthorization {
+        headers.push((
+            "Authorization".to_string(),
+            bearerAuthorization(&apiKey(provider)?),
+        ));
+    }
     Ok(headers)
+}
+
+/// Keeps an already-prefixed API key usable while normalizing raw keys.
+#[allow(non_snake_case)]
+fn bearerAuthorization(apiKey: &str) -> String {
+    let apiKey = apiKey.trim();
+    let mut parts = apiKey.split_whitespace();
+    if matches!(
+        (parts.next(), parts.next()),
+        (Some(scheme), Some(_)) if scheme.eq_ignore_ascii_case("Bearer")
+    ) {
+        return apiKey.to_string();
+    }
+    format!("Bearer {apiKey}")
 }
 
 /// Selects the API key used by the provider model list request.
@@ -399,5 +424,85 @@ fn parseCurrency(value: &str) -> Result<PricingCurrency, String> {
         "CNY" => Ok(PricingCurrency::CNY),
         "USD" => Ok(PricingCurrency::USD),
         other => Err(format!("invalid pricing currency: {other}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use operit_model::ModelConfigData::{ApiProviderType, ProviderOperationResultSpec};
+
+    fn testProvider(apiKey: &str, customHeaders: &str) -> ProviderProfile {
+        let mut provider = ProviderProfile::new(
+            "test-provider".to_string(),
+            "Test Provider".to_string(),
+            ApiProviderType::MINIMAX,
+            "https://example.com/v1/chat/completions".to_string(),
+        );
+        provider.apiKey = apiKey.to_string();
+        provider.customHeaders = customHeaders.to_string();
+        provider
+    }
+
+    fn testOperation(requiresApiKey: bool) -> ProviderOperationSpec {
+        ProviderOperationSpec {
+            operationType: "list_models".to_string(),
+            handlerId: "http_json".to_string(),
+            method: "GET".to_string(),
+            path: "/v1/models".to_string(),
+            requiresApiKey,
+            result: ProviderOperationResultSpec {
+                itemsJsonPath: None,
+                itemIdJsonPath: None,
+                inputPricePerTokenJsonPath: None,
+                cachedInputPricePerTokenJsonPath: None,
+                outputPricePerTokenJsonPath: None,
+                pricePerRequestJsonPath: None,
+                currencyJsonPath: None,
+                maxContextLengthJsonPath: None,
+                directImageJsonPath: None,
+                directAudioJsonPath: None,
+                directVideoJsonPath: None,
+                toolCallJsonPath: None,
+                supportsStructuredToolsJsonPath: None,
+                amountJsonPath: None,
+                amountCurrencyJsonPath: None,
+            },
+        }
+    }
+
+    #[test]
+    fn generated_authorization_survives_empty_custom_header() {
+        let provider = testProvider("sk-test", r#"{"Authorization":""}"#);
+        let headers = headers(&provider, &testOperation(true)).expect("headers should build");
+        let authorization = headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case("authorization"))
+            .map(|(_, value)| value.as_str());
+        assert_eq!(authorization, Some("Bearer sk-test"));
+        assert_eq!(
+            headers
+                .iter()
+                .filter(|(name, _)| name.eq_ignore_ascii_case("authorization"))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn bearer_prefix_is_not_duplicated() {
+        assert_eq!(bearerAuthorization("Bearer sk-test"), "Bearer sk-test");
+        assert_eq!(bearerAuthorization("sk-test"), "Bearer sk-test");
+    }
+
+    #[test]
+    fn non_empty_custom_authorization_is_preserved() {
+        let provider = testProvider("sk-test", r#"{"authorization":"Token custom"}"#);
+        let headers = headers(&provider, &testOperation(true)).expect("headers should build");
+        let authorization = headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case("authorization"))
+            .map(|(_, value)| value.as_str());
+        assert_eq!(authorization, Some("Token custom"));
     }
 }
