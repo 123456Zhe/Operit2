@@ -414,13 +414,12 @@ pub fn run_model_command(
             }));
         }
         "context-set" => {
-            let providerId = requiredArg(args, 1, "usage: operit2 model context-set <provider-id> <model-id> <max-context-length> <enable-max-context-mode>")?;
-            let modelId = requiredArg(args, 2, "usage: operit2 model context-set <provider-id> <model-id> <max-context-length> <enable-max-context-mode>")?;
-            let maxContextLength = parse_f32_arg(args.get(3), "usage: operit2 model context-set <provider-id> <model-id> <max-context-length> <enable-max-context-mode>")?;
-            let enableMaxContextMode = parse_bool_arg(args.get(4), "usage: operit2 model context-set <provider-id> <model-id> <max-context-length> <enable-max-context-mode>")?;
+            let providerId = requiredArg(args, 1, "usage: operit2 model context-set <provider-id> <model-id> <max-context-length>")?;
+            let modelId = requiredArg(args, 2, "usage: operit2 model context-set <provider-id> <model-id> <max-context-length>")?;
+            let maxContextLength = parse_f32_arg(args.get(3), "usage: operit2 model context-set <provider-id> <model-id> <max-context-length>")?;
             let context = ModelContextSpec {
                 maxContextLength,
-                enableMaxContextMode,
+                enableMaxContextMode: false,
             };
             let model = command
                 .modelManager()
@@ -768,10 +767,6 @@ fn print_resolved_model_config(config: &ResolvedModelConfig, output: &mut CoreCo
         "Context tokens: {}",
         config.context.maxContextLength
     ));
-    output.push_stdout_line(format!(
-        "Max context mode: {}",
-        config.context.enableMaxContextMode
-    ));
     output.push_stdout_line(format!("Direct image: {}", config.capabilities.directImage));
     output.push_stdout_line(format!("Direct audio: {}", config.capabilities.directAudio));
     output.push_stdout_line(format!("Direct video: {}", config.capabilities.directVideo));
@@ -792,10 +787,6 @@ fn print_context_spec(
 ) {
     output.push_stdout_line(format!("Context for {providerId}:{modelId}"));
     output.push_stdout_line(format!("Max context length: {}", context.maxContextLength));
-    output.push_stdout_line(format!(
-        "Max context mode: {}",
-        context.enableMaxContextMode
-    ));
 }
 
 /// Prints summary settings for one provider model.
@@ -955,7 +946,7 @@ fn print_model_usage(output: &mut CoreCommandOutput) {
         "operit2 model parameters <provider-id> <model-id> <parameters-json>",
         "operit2 model builtin-tools <provider-id> <model-id> <builtin-tools-json>",
         "operit2 model context-show [provider-id] [model-id]",
-        "operit2 model context-set <provider-id> <model-id> <max-context-length> <enable-max-context-mode>",
+        "operit2 model context-set <provider-id> <model-id> <max-context-length>",
         "operit2 model summary-show [provider-id] [model-id]",
         "operit2 model summary-set <provider-id> <model-id> <enable-summary> <summary-token-threshold> <enable-summary-by-message-count> <summary-message-count-threshold>",
         "operit2 model thinking-show <provider-id> <model-id>",
