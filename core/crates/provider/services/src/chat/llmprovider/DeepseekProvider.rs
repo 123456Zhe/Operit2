@@ -708,9 +708,9 @@ mod responses_tests {
     use crate::chat::llmprovider::AIService::SendMessageRequest;
     use crate::chat::llmprovider::OpenAIResponsesProvider::OpenAIResponsesPayloadAdapter;
     use crate::runtime_support::{
-        ProviderCharacterPromptContext, ProviderFunctionModelBinding, ProviderMessageTiming,
-        ProviderPackageInfo, ProviderRuntimeContext, ProviderRuntimeSupport,
-        ProviderToolPkgAiProviderRegistration,
+        ProviderCharacterPromptContext, ProviderFunctionModelBinding,
+        ProviderMemoryAutoSaveMessage, ProviderMessageTiming, ProviderPackageInfo,
+        ProviderRuntimeContext, ProviderRuntimeSupport, ProviderToolPkgAiProviderRegistration,
     };
     use operit_model::FunctionType::FunctionType;
     use operit_model::MemorySearchConfig::MemorySearchConfig;
@@ -747,6 +747,35 @@ mod responses_tests {
         /// Returns no memory configuration in the isolated test runtime.
         fn memorySearchConfig(&self, _ownerKey: &str) -> Result<MemorySearchConfig, String> {
             Err("test runtime does not expose memory configuration".to_string())
+        }
+
+        /// Returns no memory owner in the isolated test runtime.
+        fn memoryOwnerKeyForCharacterCard(&self, _roleCardId: &str) -> Result<String, String> {
+            Err("test runtime does not expose memory owners".to_string())
+        }
+
+        /// Returns no memory owners in the isolated test runtime.
+        fn memoryAutoSaveOwnerKeys(&self) -> Result<Vec<String>, String> {
+            Ok(Vec::new())
+        }
+
+        /// Returns no chat messages in the isolated test runtime.
+        fn memoryAutoSaveMessagesBefore(
+            &self,
+            _chatId: &str,
+            _maxTimestampInclusive: i64,
+            _limit: usize,
+        ) -> Result<Vec<ProviderMemoryAutoSaveMessage>, String> {
+            Ok(Vec::new())
+        }
+
+        /// Returns no selected messages in the isolated test runtime.
+        fn memoryAutoSaveMessagesByTimestamps(
+            &self,
+            _chatId: &str,
+            _timestamps: &[i64],
+        ) -> Result<Vec<ProviderMemoryAutoSaveMessage>, String> {
+            Ok(Vec::new())
         }
 
         /// Returns no character prompt in the isolated test runtime.

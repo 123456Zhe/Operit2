@@ -39,6 +39,14 @@ pub struct ProviderPackageInfo {
     pub description: String,
 }
 
+/// Carries one hydrated chat message to provider-owned background work.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProviderMemoryAutoSaveMessage {
+    pub timestamp: i64,
+    pub sender: String,
+    pub content: String,
+}
+
 /// Describes character prompt data resolved by the runtime.
 #[derive(Clone, Debug, PartialEq)]
 #[allow(non_snake_case)]
@@ -67,6 +75,27 @@ pub trait ProviderRuntimeSupport: Send + Sync {
 
     /// Loads memory search settings for an owner key.
     fn memorySearchConfig(&self, ownerKey: &str) -> Result<MemorySearchConfig, String>;
+
+    /// Resolves the memory owner selected by one character card.
+    fn memoryOwnerKeyForCharacterCard(&self, roleCardId: &str) -> Result<String, String>;
+
+    /// Returns every memory owner currently available to automatic extraction.
+    fn memoryAutoSaveOwnerKeys(&self) -> Result<Vec<String>, String>;
+
+    /// Loads hydrated messages before one trigger timestamp in descending order.
+    fn memoryAutoSaveMessagesBefore(
+        &self,
+        chatId: &str,
+        maxTimestampInclusive: i64,
+        limit: usize,
+    ) -> Result<Vec<ProviderMemoryAutoSaveMessage>, String>;
+
+    /// Loads hydrated messages addressed by selected timestamps.
+    fn memoryAutoSaveMessagesByTimestamps(
+        &self,
+        chatId: &str,
+        timestamps: &[i64],
+    ) -> Result<Vec<ProviderMemoryAutoSaveMessage>, String>;
 
     /// Resolves character prompt data for a selected role card.
     fn characterPromptContext(

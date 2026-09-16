@@ -46,6 +46,7 @@ class WorkspaceTab {
     this.terminalSessionId,
     this.terminalType,
     this.terminalWorkingDir,
+    this.identityToken = '',
   });
 
   final WorkspaceTabKind kind;
@@ -64,6 +65,7 @@ class WorkspaceTab {
   final String? terminalSessionId;
   final String? terminalType;
   final String? terminalWorkingDir;
+  final String identityToken;
 }
 
 WorkspaceFilePreviewKind workspacePreviewKindForPath(String path) {

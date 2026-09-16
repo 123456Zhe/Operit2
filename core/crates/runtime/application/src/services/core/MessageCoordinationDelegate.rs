@@ -28,6 +28,7 @@ use operit_model::MessagePart::MessagePart;
 use operit_model::MessagePartCodec::MessagePartCodec;
 use operit_model::PromptFunctionType::PromptFunctionType;
 use operit_providers::chat::config::FunctionalPrompts::FunctionalPrompts;
+use operit_providers::chat::library::MemoryLibrary::MemoryLibrary;
 use operit_providers::chat::llmprovider::AIService::collect_stream_chunks;
 use operit_providers::chat::EnhancedAIService::{EnhancedAIService, SendMessageOptions};
 use operit_util::stream::Stream::Stream;
@@ -924,12 +925,75 @@ impl MessageCoordinationDelegate {
     }
 
     /// Triggers a manual memory update for a chat.
-    pub fn handleManualMemoryUpdate(&mut self, _chatId: Option<String>) {
+    pub async fn handleManualMemoryUpdate(
+        &mut self,
+        chatId: Option<String>,
+        enhancedAiService: &mut EnhancedAIService,
+    ) -> Result<(), String> {
         if self.isUpdatingMemory {
-            return;
+            return Err("memory update is already running".to_string());
         }
         self.isUpdatingMemory = true;
+        let result = self
+            .handleManualMemoryUpdateInternal(chatId, enhancedAiService)
+            .await;
         self.isUpdatingMemory = false;
+        result
+    }
+
+    /// Builds a manual memory extraction request from one hydrated chat history.
+    async fn handleManualMemoryUpdateInternal(
+        &self,
+        chatId: Option<String>,
+        enhancedAiService: &mut EnhancedAIService,
+    ) -> Result<(), String> {
+        let chatId = chatId
+            .or_else(|| self.chatHistoryDelegate.currentChatIdFlow.value())
+            .ok_or_else(|| "manual memory update requires a chat".to_string())?;
+        let currentChat = self
+            .chatHistoryDelegate
+            .chatHistoriesFlow
+            .value()
+            .into_iter()
+            .find(|chat| chat.id == chatId);
+        let roleCardId = self
+            .resolveRoleCardIdForSend(currentChat.as_ref())
+            .map_err(|error| error.to_string())?;
+        let history = self
+            .chatHistoryDelegate
+            .getRuntimeChatHistory(chatId)
+            .into_iter()
+            .filter_map(|message| {
+                let content = message.displayText();
+                if content.trim().is_empty() {
+                    None
+                } else if message.sender == "user" {
+                    Some(("user".to_string(), content))
+                } else if message.sender == "ai" {
+                    Some(("assistant".to_string(), content))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        let content = history
+            .iter()
+            .rev()
+            .find(|(role, content)| role == "assistant" && !content.trim().is_empty())
+            .map(|(_, content)| content.clone())
+            .ok_or_else(|| "manual memory update requires an assistant reply".to_string())?;
+        let memoryService = enhancedAiService
+            .multi_service_manager
+            .getServiceForFunction(FunctionType::MEMORY)
+            .map_err(|error| error.to_string())?;
+        MemoryLibrary::saveMemoryNow(
+            history,
+            content,
+            memoryService,
+            Some(roleCardId),
+            enhancedAiService.provider_runtime_context.clone(),
+        )
+        .await
     }
 
     #[allow(non_snake_case)]

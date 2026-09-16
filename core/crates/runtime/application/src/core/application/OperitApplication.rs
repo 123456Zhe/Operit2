@@ -20,6 +20,7 @@ use operit_host_api::{HostRuntimeEventRegistration, HostRuntimeTaskSchedulerHost
 #[cfg(feature = "javascript")]
 use operit_js_bridge::javascript::JsExecutionProvider::QuickJsExecutionProvider;
 use operit_model::Memory::{Memory, MemoryLink};
+use operit_providers::chat::library::MemoryAutoSaveScheduler::MemoryAutoSaveScheduler;
 use operit_providers::chat::llmprovider::ModelConfigConnectionTester::ModelConnectionTestReport;
 use operit_providers::runtime_support::ProviderRuntimeContext;
 use operit_store::repository::UserMarkdownRepository::UserMarkdownRepository;
@@ -304,6 +305,7 @@ impl OperitApplication {
             ),
         );
         self.initialized = true;
+        MemoryAutoSaveScheduler::schedule(self.providerRuntimeContext.clone());
         self.dispatchPluginLoading();
         AppLogger::i(
             "OperitApplication",

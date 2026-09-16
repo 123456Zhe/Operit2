@@ -147,21 +147,21 @@ class _WorkspaceStatusSummary extends StatelessWidget {
             Row(
               children: <Widget>[
                 Container(
-                  width: 30,
-                  height: 30,
+                  width: 46,
+                  height: 46,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: colorScheme.surfaceContainerHighest.withValues(
                       alpha: 0.52,
                     ),
-                    borderRadius: BorderRadius.circular(7),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: colorScheme.outlineVariant.withValues(alpha: 0.28),
                     ),
                   ),
                   child: Icon(
                     Icons.work_outline,
-                    size: 17,
+                    size: 25,
                     color: colorScheme.primary,
                   ),
                 ),
@@ -316,7 +316,6 @@ class _WorkspaceCharacterAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final avatarUri = usage.avatarUri?.trim();
     return Tooltip(
       message: '${usage.name} · ${usage.conversationCount} 次',
       waitDuration: const Duration(milliseconds: 450),
@@ -332,18 +331,12 @@ class _WorkspaceCharacterAvatar extends StatelessWidget {
             width: 1.4,
           ),
         ),
-        child: avatarUri != null && avatarUri.isNotEmpty
-            ? ClipOval(
-                child: CharacterAvatarImage(
-                  avatarUri: avatarUri,
-                  fit: BoxFit.cover,
-                ),
-              )
-            : Icon(
-                Icons.person_outline,
-                size: 13,
-                color: colorScheme.onPrimaryContainer,
-              ),
+        child: ClipOval(
+          child: CharacterAvatarImage(
+            avatarUri: usage.avatarUri,
+            fit: BoxFit.cover,
+          ),
+        ),
       ),
     );
   }

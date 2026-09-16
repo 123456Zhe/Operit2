@@ -63,6 +63,7 @@ pub const MCP_SERVER_STATUS_PATH: &str = Layout::MCP_SERVER_STATUS_PATH;
 const MEMORY_USER_MARKDOWN_FILE_NAME: &str = "USER.md";
 const MEMORY_SQLITE_FILE_NAME: &str = "Memory.sqlite";
 const MEMORY_LINK_SQLITE_FILE_NAME: &str = "MemoryLink.sqlite";
+const MEMORY_AUTO_SAVE_CANDIDATE_SQLITE_FILE_NAME: &str = "MemoryAutoSaveCandidate.sqlite";
 const MEMORY_SEARCH_SETTINGS_FILE_PATH: &str = "settings/memory_search_settings.preferences.json";
 
 #[allow(non_snake_case)]
@@ -291,6 +292,12 @@ pub fn memorySqlitePath(ownerKey: &str) -> Result<PathBuf, String> {
 #[allow(non_snake_case)]
 pub fn memoryLinkSqlitePath(ownerKey: &str) -> Result<PathBuf, String> {
     Ok(memoryStoreRootPath(ownerKey)?.join(MEMORY_LINK_SQLITE_FILE_NAME))
+}
+
+/// Returns the candidate queue database path for one memory owner.
+#[allow(non_snake_case)]
+pub fn memoryAutoSaveCandidateSqlitePath(ownerKey: &str) -> Result<PathBuf, String> {
+    Ok(memoryStoreRootPath(ownerKey)?.join(MEMORY_AUTO_SAVE_CANDIDATE_SQLITE_FILE_NAME))
 }
 
 #[allow(non_snake_case)]

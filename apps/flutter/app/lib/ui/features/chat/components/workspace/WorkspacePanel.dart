@@ -82,6 +82,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
   ];
   int _selectedIndex = 0;
   int _filesListingRevision = 0;
+  int _workspaceTabIdentitySequence = 0;
   List<WorkspaceTerminalSessionInfo> _terminalSessionEntries =
       const <WorkspaceTerminalSessionInfo>[];
   final ValueNotifier<int> _terminalSessionCount = ValueNotifier<int>(0);
@@ -1151,14 +1152,19 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
   void _openMountedFolder(WorkspaceMountedFolder folder) {
     final relativePath = folder.relativePath.trim();
     final title = folder.name.trim();
-    _openSingletonTab(
-      WorkspaceTab(
-        kind: WorkspaceTabKind.files,
-        title: title,
-        icon: Icons.folder_outlined,
-        filePath: relativePath,
-      ),
-    );
+    setState(() {
+      _workspaceTabIdentitySequence += 1;
+      _tabs.add(
+        WorkspaceTab(
+          kind: WorkspaceTabKind.files,
+          title: title,
+          icon: Icons.folder_outlined,
+          filePath: relativePath,
+          identityToken: 'mounted-folder-$_workspaceTabIdentitySequence',
+        ),
+      );
+      _selectedIndex = _tabs.length - 1;
+    });
   }
 
   /// Opens the workspace folder picker for binding or mounting.
@@ -1257,6 +1263,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
       tab.workspaceHtmlPath ?? '',
       tab.webVisitRequest?.requestId ?? '',
       tab.terminalSessionId ?? '',
+      tab.identityToken,
       tab.title,
     ].join('|');
   }

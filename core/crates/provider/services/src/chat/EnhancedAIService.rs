@@ -19,13 +19,14 @@ use crate::chat::enhance::ConversationService::{
 };
 use crate::chat::enhance::MultiServiceManager::{MultiServiceManager, SharedAIServiceHandle};
 use crate::chat::hooks::PromptHookRegistry::{PromptHookContext, PromptHookRegistry};
-use crate::chat::library::MemoryLibrary::{promptTurnsToMemoryPairs, MemoryLibrary};
+use crate::chat::library::MemoryLibrary::MemoryLibrary;
 use crate::chat::llmprovider::AIService::{
     response_stream_from_chunks, AiServiceError, SendMessageRequest, SharedAiResponseStream,
     TokenCounts,
 };
 use crate::runtime_support::{ProviderRuntimeContext, ProviderRuntimeSupport};
 use operit_host_api::HostManager::defaultHostRuntimeTaskSchedulerHost;
+use operit_host_api::TimeUtils::currentTimeMillis;
 use operit_link::CoreValue;
 use operit_model::CharacterCard::CharacterCardMemoryBindingMode;
 use operit_model::FunctionType::FunctionType;
@@ -1760,13 +1761,23 @@ impl EnhancedAIService {
         if enableMemoryAutoUpdate && !isSubTask {
             let memoryContent = execContext.roundManager.getDisplayContent();
             if !memoryContent.trim().is_empty() {
-                MemoryLibrary::saveMemoryAsync(
-                    promptTurnsToMemoryPairs(&requestHistory),
-                    memoryContent,
-                    runtime.aiService.clone(),
-                    memoryAutoUpdateCharacterCardId.clone(),
-                    self.provider_runtime_context.clone(),
-                );
+                let roleCardId = memoryAutoUpdateCharacterCardId.clone().ok_or_else(|| {
+                    AiServiceError::RequestFailed(
+                        "memory auto update requires a role card".to_string(),
+                    )
+                })?;
+                let ownerKey = self
+                    .provider_runtime_context
+                    .support()
+                    .memoryOwnerKeyForCharacterCard(&roleCardId)
+                    .map_err(AiServiceError::RequestFailed)?;
+                let chatId = chatId.ok_or_else(|| {
+                    AiServiceError::RequestFailed(
+                        "memory auto update requires a persisted chat".to_string(),
+                    )
+                })?;
+                MemoryLibrary::enqueueAutoSaveCandidate(ownerKey, chatId, currentTimeMillis())
+                    .map_err(AiServiceError::RequestFailed)?;
             }
         }
         AppLogger::d(

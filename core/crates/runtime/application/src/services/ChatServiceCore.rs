@@ -37,7 +37,9 @@ use operit_model::MessagePartCodec::MessagePartCodec;
 use operit_model::PendingQueueMessageItem::PendingQueueMessageItem;
 use operit_model::PromptFunctionType::PromptFunctionType;
 use operit_providers::chat::EnhancedAIService::EnhancedAIService;
+use operit_providers::runtime_support::ProviderRuntimeSupport;
 use operit_store::repository::ChatHistoryManager::ChatImportResult;
+use operit_store::repository::MemoryAutoSaveCandidateRepository::MemoryAutoSaveCandidateRepository;
 use operit_store::repository::UsageStatisticsStore::UsageStatisticsStore;
 use operit_store::PreferencesDataStore::{combine4, mutableStateFlow, MutableStateFlow, StateFlow};
 use operit_store::RuntimeStorageHost::defaultRuntimeStorageHost;
@@ -924,6 +926,62 @@ impl ChatServiceCore {
         deleted
     }
 
+    /// Runs immediate memory extraction for one persisted chat history.
+    #[operit_route_macros::operit_core_route(binding = chatId)]
+    pub async fn updateMemory(&mut self, chatId: String) -> Result<(), String> {
+        let mut enhancedAiService = self
+            .newEnhancedAiServiceForChat(&chatId)
+            .ok_or_else(|| "memory update requires an enhanced AI service".to_string())?;
+        let chatHistoryDelegate = self.chatHistoryDelegate.clone_for_core();
+        let messageProcessingDelegate = self.messageProcessingDelegate.clone_for_core();
+        let delegate = self
+            .messageCoordinationDelegate
+            .as_mut()
+            .ok_or_else(|| "memory update requires a message coordinator".to_string())?;
+        delegate.chatHistoryDelegate = chatHistoryDelegate;
+        delegate.messageProcessingDelegate = messageProcessingDelegate;
+        delegate
+            .handleManualMemoryUpdate(Some(chatId), &mut enhancedAiService)
+            .await
+    }
+
+    /// Queues explicitly selected user messages for owner-scoped memory extraction.
+    #[operit_route_macros::operit_core_route(binding = chatId)]
+    pub async fn enqueueSelectedMessagesForMemory(
+        &mut self,
+        chatId: String,
+        messageTimestamps: Vec<i64>,
+    ) -> Result<(), String> {
+        let chat = self
+            .chatHistoryDelegate
+            .chatHistoriesFlow
+            .value()
+            .into_iter()
+            .find(|chat| chat.id == chatId)
+            .ok_or_else(|| format!("memory queue chat not found: {chatId}"))?;
+        let roleCardName = chat
+            .characterCardName
+            .as_deref()
+            .ok_or_else(|| format!("memory queue chat has no role card: {chatId}"))?;
+        let roleCard = self
+            .chatHistoryDelegate
+            .characterCardManager
+            .findCharacterCardByName(roleCardName)
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| format!("memory queue role card not found: {roleCardName}"))?;
+        let providerRuntimeContext = self
+            .enhancedAiService
+            .as_ref()
+            .ok_or_else(|| "memory queue requires an enhanced AI service".to_string())?
+            .provider_runtime_context
+            .clone();
+        let ownerKey = providerRuntimeContext
+            .support()
+            .memoryOwnerKeyForCharacterCard(&roleCard.id)?;
+        MemoryAutoSaveCandidateRepository::new(&ownerKey)
+            .enqueueSelectedUserMessages(chatId, messageTimestamps)
+    }
+
     /// Deletes one message from an explicit chat by message timestamp.
     #[allow(non_snake_case)]
     #[operit_route_macros::operit_core_route(binding = chatId)]
@@ -1223,8 +1281,7 @@ impl ChatServiceCore {
         PathMapper::workspacePath(&name)?;
         let workspacePath =
             WorkspaceUtils::createAndGetDefaultWorkspace(name.clone(), Some("blank".to_string()))?;
-        let folderName =
-            operit_model::Workspace::Workspace::folderNameFromPath(&workspacePath)?;
+        let folderName = operit_model::Workspace::Workspace::folderNameFromPath(&workspacePath)?;
         let workspace = self
             .chatHistoryDelegate
             .chatHistoryManager

@@ -7,12 +7,13 @@ use serde_json::Value;
 use crate::chat::config::FunctionalPrompts::FunctionalPrompts;
 use crate::chat::enhance::MultiServiceManager::SharedAIServiceHandle;
 use crate::chat::llmprovider::AIService::SendMessageRequest;
-use crate::runtime_support::ProviderRuntimeContext;
+use crate::runtime_support::{ProviderRuntimeContext, ProviderRuntimeSupport};
 use operit_host_api::HostManager::defaultHostRuntimeTaskSchedulerHost;
 use operit_host_api::TimeUtils::currentTimeMillis;
 use operit_model::FunctionType::FunctionType;
 use operit_model::Memory::{Memory, MemoryTag};
 use operit_model::PromptTurn::{toPromptTurns, PromptTurn, PromptTurnKind};
+use operit_store::repository::MemoryAutoSaveCandidateRepository::MemoryAutoSaveCandidateRepository;
 use operit_store::repository::MemoryRepository::MemoryRepository;
 use operit_store::repository::UsageStatisticsStore::{UsageRequestSource, UsageStatisticsStore};
 use operit_store::repository::UserMarkdownRepository::UserMarkdownRepository;
@@ -21,7 +22,6 @@ use operit_util::stream::Stream::Stream;
 use operit_util::AppLogger::AppLogger;
 use operit_util::ChatMarkupRegex::{tag_ranges, ChatMarkupRegex};
 use operit_util::ChatUtils::ChatUtils;
-use operit_util::OperitPaths::characterMemoryOwnerKey;
 
 const TAG: &str = "MemoryLibrary";
 
@@ -88,6 +88,16 @@ impl ParsedAnalysis {
 }
 
 impl MemoryLibrary {
+    /// Enqueues one finalized reply for owner-scoped background extraction.
+    #[allow(non_snake_case)]
+    pub fn enqueueAutoSaveCandidate(
+        ownerKey: String,
+        chatId: String,
+        triggerMessageTimestamp: i64,
+    ) -> Result<(), String> {
+        MemoryAutoSaveCandidateRepository::new(&ownerKey).enqueue(chatId, triggerMessageTimestamp)
+    }
+
     /// Starts memory persistence with an explicit provider runtime context.
     #[allow(non_snake_case)]
     pub fn saveMemoryAsync(
@@ -138,6 +148,28 @@ impl MemoryLibrary {
         .await
     }
 
+    /// Persists memory immediately in an explicitly addressed owner namespace.
+    #[allow(non_snake_case)]
+    pub async fn saveMemoryNowForOwner(
+        conversationHistory: Vec<(String, String)>,
+        content: String,
+        aiService: SharedAIServiceHandle,
+        ownerKey: String,
+        runtimeContext: ProviderRuntimeContext,
+    ) -> Result<(), String> {
+        let mutex = memoryMutex();
+        let _guard = mutex.lock().await;
+        Self::saveMemoryForOwner(
+            conversationHistory,
+            content,
+            aiService,
+            ownerKey,
+            runtimeContext,
+        )
+        .await
+    }
+
+    /// Resolves the character card owner and persists its extracted memory.
     #[allow(non_snake_case)]
     async fn saveMemory(
         conversationHistory: Vec<(String, String)>,
@@ -152,7 +184,28 @@ impl MemoryLibrary {
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
             .ok_or_else(|| "characterCardId is required for memory auto update".to_string())?;
-        let ownerKey = characterMemoryOwnerKey(&characterCardId)?;
+        let ownerKey = runtimeContext
+            .support()
+            .memoryOwnerKeyForCharacterCard(&characterCardId)?;
+        Self::saveMemoryForOwner(
+            conversationHistory,
+            content,
+            aiService,
+            ownerKey,
+            runtimeContext,
+        )
+        .await
+    }
+
+    /// Performs the analysis and writes graph memory plus USER.md for one owner.
+    #[allow(non_snake_case)]
+    async fn saveMemoryForOwner(
+        conversationHistory: Vec<(String, String)>,
+        content: String,
+        aiService: SharedAIServiceHandle,
+        ownerKey: String,
+        runtimeContext: ProviderRuntimeContext,
+    ) -> Result<(), String> {
         let memoryRepository = MemoryRepository::new(ownerKey.clone());
         let prunedContent =
             ChatUtils::strip_gemini_thought_signature_meta(&pruneToolResultContent(&content));
@@ -204,6 +257,8 @@ impl MemoryLibrary {
             && analysis.extractedEntities.is_empty()
             && analysis.updatedEntities.is_empty()
             && analysis.mergedEntities.is_empty()
+            && analysis.links.is_empty()
+            && analysis.userPreferences.is_empty()
         {
             return Ok(());
         }
