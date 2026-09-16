@@ -7,7 +7,7 @@ pub(super) struct TuiCommandSpec {
     pub(super) description_key: TuiTextKey,
 }
 
-const COMMAND_SPECS: [TuiCommandSpec; 42] = [
+const COMMAND_SPECS: [TuiCommandSpec; 41] = [
     TuiCommandSpec {
         name: "help",
         usage: "/help",
@@ -27,11 +27,6 @@ const COMMAND_SPECS: [TuiCommandSpec; 42] = [
         name: "resume",
         usage: "/resume",
         description_key: TuiTextKey::CommandResumeDescription,
-    },
-    TuiCommandSpec {
-        name: "max",
-        usage: "/max",
-        description_key: TuiTextKey::CommandMaxDescription,
     },
     TuiCommandSpec {
         name: "language",

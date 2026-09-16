@@ -15,9 +15,9 @@ use operit_host_linux_native::{
     LinuxHostRuntimeEventSchedulerHost as NativeHostRuntimeEventSchedulerHost,
     LinuxHostRuntimeTaskSchedulerHost as NativeHostRuntimeTaskSchedulerHost,
     LinuxHttpHost as NativeHttpHost, LinuxManagedRuntimeHost as NativeManagedRuntimeHost,
+    LinuxPluginSdkIpcHost as NativePluginSdkIpcHost,
     LinuxRuntimeStorageHost as NativeRuntimeStorageHost,
     LinuxSystemOperationHost as NativeSystemOperationHost, LinuxTerminalHost as NativeTerminalHost,
-    LinuxPluginSdkIpcHost as NativePluginSdkIpcHost,
     LinuxWebVisitHost as NativeWebVisitHost,
 };
 #[cfg(target_os = "macos")]
@@ -28,9 +28,9 @@ use operit_host_macos_native::{
     MacosHostRuntimeEventSchedulerHost as NativeHostRuntimeEventSchedulerHost,
     MacosHostRuntimeTaskSchedulerHost as NativeHostRuntimeTaskSchedulerHost,
     MacosHttpHost as NativeHttpHost, MacosManagedRuntimeHost as NativeManagedRuntimeHost,
+    MacosPluginSdkIpcHost as NativePluginSdkIpcHost,
     MacosRuntimeStorageHost as NativeRuntimeStorageHost,
     MacosSystemOperationHost as NativeSystemOperationHost, MacosTerminalHost as NativeTerminalHost,
-    MacosPluginSdkIpcHost as NativePluginSdkIpcHost,
     MacosWebVisitHost as NativeWebVisitHost,
 };
 use operit_host_native_common::NativeHostJavaScriptRuntimeHost;
@@ -44,10 +44,10 @@ use operit_host_windows_native::{
     WindowsHostRuntimeEventSchedulerHost as NativeHostRuntimeEventSchedulerHost,
     WindowsHostRuntimeTaskSchedulerHost as NativeHostRuntimeTaskSchedulerHost,
     WindowsHttpHost as NativeHttpHost, WindowsManagedRuntimeHost as NativeManagedRuntimeHost,
+    WindowsPluginSdkIpcHost as NativePluginSdkIpcHost,
     WindowsRuntimeStorageHost as NativeRuntimeStorageHost,
     WindowsSystemOperationHost as NativeSystemOperationHost,
     WindowsTerminalHost as NativeTerminalHost, WindowsWebVisitHost as NativeWebVisitHost,
-    WindowsPluginSdkIpcHost as NativePluginSdkIpcHost,
 };
 use operit_proxy_local::LocalCoreProxy;
 use operit_runtime::core::application::OperitApplication::OperitApplication;

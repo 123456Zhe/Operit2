@@ -22,7 +22,12 @@ pub struct Workspace {
 
 impl Workspace {
     /// Creates a workspace with one mounted folder.
-    pub fn fromSingleFolder(name: String, folderName: String, path: String, timestamp: i64) -> Self {
+    pub fn fromSingleFolder(
+        name: String,
+        folderName: String,
+        path: String,
+        timestamp: i64,
+    ) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             name,
@@ -58,11 +63,7 @@ impl Workspace {
     /// Derives a single-segment folder name from a VFS path.
     pub fn folderNameFromPath(path: &str) -> Result<String, String> {
         let trimmed = path.trim().trim_end_matches('/');
-        let name = trimmed
-            .rsplit('/')
-            .next()
-            .map(str::trim)
-            .unwrap_or("");
+        let name = trimmed.rsplit('/').next().map(str::trim).unwrap_or("");
         if name.is_empty() || name == "." || name == ".." {
             return Err(format!("cannot derive folder name from path: {path}"));
         }

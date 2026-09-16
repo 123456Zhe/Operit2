@@ -15,27 +15,32 @@ class PackageTabContent extends StatelessWidget {
   const PackageTabContent({
     super.key,
     required this.packages,
+    required this.morePackages,
     required this.enabledPackageNames,
     required this.isLoading,
     required this.isSearchActive,
     required this.onQuickPluginCreatorClick,
     required this.onPackageTap,
+    required this.onLoadMorePackage,
     required this.onPackageEnabledChanged,
   });
 
   final List<core_proxy.ToolPackage> packages;
+  final List<core_proxy.BundledExternalPackageCandidate> morePackages;
   final Set<String> enabledPackageNames;
   final bool isLoading;
   final bool isSearchActive;
   final VoidCallback onQuickPluginCreatorClick;
   final ValueChanged<core_proxy.ToolPackage> onPackageTap;
+  final ValueChanged<core_proxy.BundledExternalPackageCandidate>
+  onLoadMorePackage;
   final void Function(core_proxy.ToolPackage package, bool enabled)
   onPackageEnabledChanged;
 
   /// Builds the package tab with a lazily rendered expandable list.
   @override
   Widget build(BuildContext context) {
-    if (packages.isEmpty && isLoading) {
+    if (packages.isEmpty && morePackages.isEmpty && isLoading) {
       return const M3LoadingPane();
     }
     final grouped = <String, List<core_proxy.ToolPackage>>{};
@@ -68,7 +73,7 @@ class PackageTabContent extends StatelessWidget {
               ),
             if (!isSearchActive)
               const SliverToBoxAdapter(child: SizedBox(height: 12)),
-            if (packages.isEmpty)
+            if (packages.isEmpty && morePackages.isEmpty)
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
                 sliver: SliverToBoxAdapter(
@@ -80,9 +85,16 @@ class PackageTabContent extends StatelessWidget {
                   ),
                 ),
               ),
-            if (packages.isNotEmpty)
+            if (packages.isEmpty)
+              const SliverPadding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
+                sliver: SliverToBoxAdapter(
+                  child: _PackageSectionEmpty(message: '当前没有可显示的包。'),
+                ),
+              )
+            else
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
                 sliver: PackageSliverList(
                   itemCount: orderedPackages.length,
                   itemBuilder: (context, index) {
@@ -106,11 +118,124 @@ class PackageTabContent extends StatelessWidget {
                   },
                 ),
               ),
+            if (morePackages.isNotEmpty) ...<Widget>[
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                sliver: const SliverToBoxAdapter(
+                  child: _PackageSectionHeader(
+                    title: '更多包',
+                    subtitle: 'App 自带的官方额外包，加载后进入当前包。',
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                sliver: PackageSliverList(
+                  itemCount: morePackages.length,
+                  itemBuilder: (context, index) {
+                    final package = morePackages[index];
+                    return PackageListItem(
+                      key: ValueKey<String>(
+                        'bundled-package:${package.packageName}',
+                      ),
+                      icon: Icons.inventory_2_outlined,
+                      title: bundledExternalPackageDisplayName(package),
+                      subtitle: localizedText(package.description),
+                      metadata: <String>[
+                        package.packageName,
+                        package.category,
+                        if (package.version.trim().isNotEmpty)
+                          'v${package.version}',
+                        '${package.toolCount} 工具',
+                        if (package.subpackageCount > 0)
+                          '${package.subpackageCount} 子包',
+                        '官方额外',
+                      ],
+                      enabled: false,
+                      onEnabledChanged: (_) {},
+                      showEnabledSwitch: false,
+                      trailingActions: <Widget>[
+                        FilledButton.tonalIcon(
+                          onPressed: () => onLoadMorePackage(package),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('加载'),
+                          style: FilledButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ] else
+              const SliverToBoxAdapter(child: SizedBox(height: 120)),
           ],
         ),
-        if (packages.isNotEmpty && isLoading)
+        if ((packages.isNotEmpty || morePackages.isNotEmpty) && isLoading)
           const Positioned.fill(child: M3LoadingOverlay()),
       ],
+    );
+  }
+}
+
+class _PackageSectionHeader extends StatelessWidget {
+  /// Creates a package section heading.
+  const _PackageSectionHeader({required this.title, this.subtitle});
+
+  final String title;
+  final String? subtitle;
+
+  /// Builds a section heading for a package group.
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final subtitle = this.subtitle;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          if (subtitle != null) ...<Widget>[
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PackageSectionEmpty extends StatelessWidget {
+  /// Creates a package section empty state.
+  const _PackageSectionEmpty({required this.message});
+
+  final String message;
+
+  /// Builds the empty state shown for a package section.
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
+      child: Text(
+        message,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
     );
   }
 }

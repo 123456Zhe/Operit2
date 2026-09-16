@@ -1786,7 +1786,7 @@ fn print_model_usage() {
     println!("operit2 cli model parameters <provider-id> <model-id> <parameters-json>");
     println!("operit2 cli model builtin-tools <provider-id> <model-id> <builtin-tools-json>");
     println!("operit2 cli model context-show [model-id]");
-    println!("operit2 cli model context-set <provider-id> <model-id> <max-context-length> <enable-max-context-mode>");
+    println!("operit2 cli model context-set <provider-id> <model-id> <max-context-length>");
     println!("operit2 cli model summary-show [model-id]");
     println!("operit2 cli model summary-set <provider-id> <model-id> <enable-summary> <summary-token-threshold> <enable-summary-by-message-count> <summary-message-count-threshold>");
     println!("operit2 cli model function-list");
@@ -2034,7 +2034,10 @@ fn print_chat_history_header(chat: &operit_model::ChatHistory::ChatHistory) {
     println!("Context window: {}", chat.currentWindowSize);
     println!("Group: {}", chat.group.clone().unwrap_or_default());
     println!("Display order: {}", chat.displayOrder);
-    println!("Workspace: {}", chat.workspacePrimaryPath.clone().unwrap_or_default());
+    println!(
+        "Workspace: {}",
+        chat.workspacePrimaryPath.clone().unwrap_or_default()
+    );
     println!(
         "Parent chat: {}",
         chat.parentChatId.clone().unwrap_or_default()

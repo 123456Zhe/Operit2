@@ -241,9 +241,7 @@ impl FunctionalConfigManager {
         }
         let mut binding = self.functionModelBindingFlow()?.first()?;
         let chat = binding.get(&FunctionType::CHAT).cloned().ok_or_else(|| {
-            FunctionalConfigError::ModelConfigManager(
-                "missing model binding: CHAT".to_string(),
-            )
+            FunctionalConfigError::ModelConfigManager("missing model binding: CHAT".to_string())
         })?;
         self.modelConfigManager
             .getModelProfile(&chat.providerId, &chat.modelId)
@@ -263,9 +261,7 @@ impl FunctionalConfigManager {
     pub fn setAllFunctionsFollowChat(&self) -> Result<(), FunctionalConfigError> {
         let mut binding = self.functionModelBindingFlow()?.first()?;
         let chat = binding.get(&FunctionType::CHAT).cloned().ok_or_else(|| {
-            FunctionalConfigError::ModelConfigManager(
-                "missing model binding: CHAT".to_string(),
-            )
+            FunctionalConfigError::ModelConfigManager("missing model binding: CHAT".to_string())
         })?;
         self.modelConfigManager
             .getModelProfile(&chat.providerId, &chat.modelId)
@@ -369,10 +365,9 @@ impl FunctionalConfigManager {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use super::{FunctionModelBinding, FunctionalConfigManager, FunctionType};
+    use super::{FunctionModelBinding, FunctionType, FunctionalConfigManager};
     use std::collections::HashMap;
 
     fn binding(provider: &str, model: &str, follows_chat: bool) -> FunctionModelBinding {
@@ -386,8 +381,14 @@ mod tests {
     #[test]
     fn normalize_syncs_followers_to_chat() {
         let mut map = HashMap::new();
-        map.insert(FunctionType::CHAT, binding("chat-provider", "chat-model", true));
-        map.insert(FunctionType::SUMMARY, binding("old-provider", "old-model", true));
+        map.insert(
+            FunctionType::CHAT,
+            binding("chat-provider", "chat-model", true),
+        );
+        map.insert(
+            FunctionType::SUMMARY,
+            binding("old-provider", "old-model", true),
+        );
         map.insert(
             FunctionType::TRANSLATION,
             binding("explicit-provider", "explicit-model", false),
@@ -409,7 +410,10 @@ mod tests {
     #[test]
     fn normalize_strips_followers_without_chat() {
         let mut map = HashMap::new();
-        map.insert(FunctionType::SUMMARY, binding("old-provider", "old-model", true));
+        map.insert(
+            FunctionType::SUMMARY,
+            binding("old-provider", "old-model", true),
+        );
 
         FunctionalConfigManager::normalizeBinding(&mut map);
 
@@ -419,10 +423,17 @@ mod tests {
     #[test]
     fn resolve_returns_chat_binding_for_followers() {
         let mut map = HashMap::new();
-        map.insert(FunctionType::CHAT, binding("chat-provider", "chat-model", false));
-        map.insert(FunctionType::SUMMARY, binding("chat-provider", "chat-model", true));
+        map.insert(
+            FunctionType::CHAT,
+            binding("chat-provider", "chat-model", false),
+        );
+        map.insert(
+            FunctionType::SUMMARY,
+            binding("chat-provider", "chat-model", true),
+        );
 
-        let resolved = FunctionalConfigManager::resolveBinding(&map, &FunctionType::SUMMARY).expect("resolved summary");
+        let resolved = FunctionalConfigManager::resolveBinding(&map, &FunctionType::SUMMARY)
+            .expect("resolved summary");
 
         assert_eq!(resolved.providerId, "chat-provider");
         assert_eq!(resolved.modelId, "chat-model");
@@ -432,13 +443,17 @@ mod tests {
     #[test]
     fn resolve_keeps_explicit_bindings() {
         let mut map = HashMap::new();
-        map.insert(FunctionType::CHAT, binding("chat-provider", "chat-model", false));
+        map.insert(
+            FunctionType::CHAT,
+            binding("chat-provider", "chat-model", false),
+        );
         map.insert(
             FunctionType::SUMMARY,
             binding("summary-provider", "summary-model", false),
         );
 
-        let resolved = FunctionalConfigManager::resolveBinding(&map, &FunctionType::SUMMARY).expect("resolved summary");
+        let resolved = FunctionalConfigManager::resolveBinding(&map, &FunctionType::SUMMARY)
+            .expect("resolved summary");
 
         assert_eq!(resolved.providerId, "summary-provider");
         assert_eq!(resolved.modelId, "summary-model");

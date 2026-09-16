@@ -3026,12 +3026,6 @@ abstract class AppLocalizations {
   /// **'Enter a max context length greater than 0'**
   String get settingsModelMaxContextLengthInvalid;
 
-  /// No description provided for @settingsModelMaxContextMode.
-  ///
-  /// In en, this message translates to:
-  /// **'Max context mode'**
-  String get settingsModelMaxContextMode;
-
   /// No description provided for @settingsModelSummaryThreshold.
   ///
   /// In en, this message translates to:

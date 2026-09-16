@@ -4521,7 +4521,6 @@ class _ModelSettingsEditorDialogState
           builtinTools: _builtinTools,
           context: core_proxy.ModelContextSpec(
             maxContextLength: maxContextLength,
-            enableMaxContextMode: widget.initialContext.enableMaxContextMode,
           ),
           summary: core_proxy.ModelSummarySettings(
             enableSummary: _enableSummary,

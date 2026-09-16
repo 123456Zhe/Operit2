@@ -7,6 +7,7 @@ import '../../../core/bridge/ProxyCoreRuntimeBridge.dart';
 import '../../../core/proxy/generated/CoreProxyClients.g.dart';
 import '../../../core/proxy/generated/CoreProxyModels.g.dart' as core_proxy;
 import '../../common/OperitLogoMark.dart';
+import '../../features/chat/components/NewChatIntro.dart';
 import '../navigation/AppNavigationModels.dart';
 import '../screens/ScreenRouteRegistry.dart';
 import 'NavigationDrawerAppearance.dart';
@@ -33,14 +34,24 @@ class CollapsedDrawerContent extends StatelessWidget {
   static const double _topBarHeight = 64;
 
   Future<void> _createConversation() async {
-    await GeneratedCoreProxyClients(bridge).chatRuntimeHolderMain.createNewChat(
-      characterCardName: null,
-      group: null,
-      inheritGroupFromCurrent: true,
-      setAsCurrentChat: true,
-      characterGroupId: null,
-    );
-    onConversationActivated();
+    // Arm before creating so the intro overlay sees the flag when the new
+    // chat id arrives.
+    newChatIntroArmed.value = true;
+    try {
+      await GeneratedCoreProxyClients(
+        bridge,
+      ).chatRuntimeHolderMain.createNewChat(
+        characterCardName: null,
+        group: null,
+        inheritGroupFromCurrent: true,
+        setAsCurrentChat: true,
+        characterGroupId: null,
+      );
+      onConversationActivated();
+    } catch (_) {
+      newChatIntroArmed.value = false;
+      rethrow;
+    }
   }
 
   void _openPackageManager() {

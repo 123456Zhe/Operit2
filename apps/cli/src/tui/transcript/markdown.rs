@@ -12,8 +12,7 @@ use super::fold::{
     count_search_nodes, count_tool_nodes, details_should_auto_expand, details_summary_and_body,
     fold_group_kind, fold_group_title, group_markdown_nodes, group_should_auto_expand,
     match_tool_merge, think_is_in_progress, think_should_auto_expand, xml_inner_body, xml_tag_name,
-    FoldRenderContext,
-    FoldedLines, GroupedItem, ToolMergeNode,
+    FoldRenderContext, FoldedLines, GroupedItem, ToolMergeNode,
 };
 use super::i18n::{TuiLanguage, TuiText};
 use super::theme;
@@ -237,7 +236,9 @@ fn render_fold_group(
         .unwrap_or(auto_expand);
     let mut output = FoldedLines::default();
     let header_start = output.lines.len();
-    output.lines.push(fold_header_line(expanded, title_line(&title)));
+    output
+        .lines
+        .push(fold_header_line(expanded, title_line(&title)));
     if let Some(context) = fold {
         output.push_hit_range(
             header_start..output.lines.len(),
@@ -316,13 +317,7 @@ fn render_merged_range(
                 output.lines.push(Line::from(""));
             }
             let before = output.lines.len();
-            output.extend(render_foldable_node(
-                node,
-                index,
-                content_width,
-                text,
-                fold,
-            ));
+            output.extend(render_foldable_node(node, index, content_width, text, fold));
             if output.lines.len() > before {
                 *previous_kind = Some(kind);
             }
@@ -468,7 +463,9 @@ fn render_details_panel(
         .unwrap_or(auto_expand);
     let mut output = FoldedLines::default();
     let header_start = output.lines.len();
-    output.lines.push(fold_header_line(expanded, title_line(&title)));
+    output
+        .lines
+        .push(fold_header_line(expanded, title_line(&title)));
     if let Some(context) = fold {
         output.push_hit_range(
             header_start..output.lines.len(),
@@ -499,7 +496,9 @@ fn render_named_fold_panel(
         .unwrap_or(auto_expand);
     let mut output = FoldedLines::default();
     let header_start = output.lines.len();
-    output.lines.push(fold_header_line(expanded, title_line(title)));
+    output
+        .lines
+        .push(fold_header_line(expanded, title_line(title)));
     if let Some(context) = fold {
         output.push_hit_range(
             header_start..output.lines.len(),

@@ -1584,9 +1584,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsModelMaxContextLengthInvalid => '请输入大于 0 的最大上下文长度';
 
   @override
-  String get settingsModelMaxContextMode => '最大上下文模式';
-
-  @override
   String get settingsModelSummaryThreshold => '总结 Token 阈值';
 
   @override

@@ -112,9 +112,8 @@ impl WorkspaceService {
                     lastModified: String::new(),
                 })
                 .collect::<Vec<_>>();
-            workspaceEntries.sort_by(|left, right| {
-                left.name.to_lowercase().cmp(&right.name.to_lowercase())
-            });
+            workspaceEntries
+                .sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
             return Ok(workspaceEntries);
         }
         let directoryPath = resolveWorkspaceRelativePath(&workspace, &relativePath)?;
@@ -414,7 +413,10 @@ impl WorkspaceService {
 }
 
 /// Resolves a workspace-relative path against one of the mounted folders.
-fn resolveWorkspaceRelativePath(workspace: &Workspace, relativePath: &str) -> Result<String, String> {
+fn resolveWorkspaceRelativePath(
+    workspace: &Workspace,
+    relativePath: &str,
+) -> Result<String, String> {
     let relativePath = PathMapper::normalizeRelativePath(relativePath)?;
     if relativePath.is_empty() {
         return Err("workspace-relative path must include a folder name".to_string());
@@ -423,9 +425,9 @@ fn resolveWorkspaceRelativePath(workspace: &Workspace, relativePath: &str) -> Re
         Some((folderName, rest)) => (folderName, rest),
         None => (relativePath.as_str(), ""),
     };
-    let folder = workspace.folderByName(folderName).ok_or_else(|| {
-        format!("workspace folder not found: {folderName}")
-    })?;
+    let folder = workspace
+        .folderByName(folderName)
+        .ok_or_else(|| format!("workspace folder not found: {folderName}"))?;
     PathMapper::joinVfsPath(&folder.path, rest)
 }
 

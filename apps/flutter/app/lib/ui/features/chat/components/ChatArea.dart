@@ -133,6 +133,7 @@ class _ChatAreaState extends State<ChatArea>
   Timer? _viewportResizeTimer;
   bool _userScrollSessionActive = false;
   bool _userScrollsTowardHistory = false;
+  final Set<int> _activeUserScrollPointers = <int>{};
   bool _messageAnchorCollectionScheduled = false;
   double _viewportHeight = 0;
   double _scrollViewportDimension = 0;
@@ -195,79 +196,88 @@ class _ChatAreaState extends State<ChatArea>
                 onNotification: _handleScrollMetricsNotification,
                 child: NotificationListener<ScrollNotification>(
                   onNotification: _handleScrollNotification,
-                  child: ListView.builder(
-                    controller: widget.scrollController,
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      16,
-                      16,
-                      16 + widget.bottomContentInset,
-                    ),
-                    itemCount: itemCount,
-                    itemBuilder: (context, index) {
-                      late final Widget child;
-                      var observesLiveBottomGrowth = false;
-                      if (widget.hasOlderDisplayHistory && index == 0) {
-                        child = _DisplayWindowAction(
-                          text: 'Load more history',
-                          isLoading: widget.isLoadingDisplayWindow,
-                          onTap: () {
-                            widget.onAutoScrollToBottomChanged(false);
-                            if (!widget.isLoadingDisplayWindow) {
-                              widget.onLoadOlderDisplayWindow();
-                            }
-                          },
-                        );
-                      } else if (index >= messageStartIndex &&
-                          index < messageEndIndex) {
-                        final message =
-                            widget.messages[index - messageStartIndex];
-                        final messageIndex = index - messageStartIndex;
-                        child = _messageRowFor(messageIndex, message);
-                        if (messageIndex == widget.messages.length - 1 &&
-                            _isStreamingMessage(messageIndex)) {
-                          observesLiveBottomGrowth = true;
+                  child: Listener(
+                    onPointerDown: _handleUserPointerDown,
+                    onPointerUp: _handleUserPointerEnd,
+                    onPointerCancel: _handleUserPointerEnd,
+                    child: ListView.builder(
+                      controller: widget.scrollController,
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        16,
+                        16,
+                        16 + widget.bottomContentInset,
+                      ),
+                      itemCount: itemCount,
+                      itemBuilder: (context, index) {
+                        late final Widget child;
+                        var observesLiveBottomGrowth = false;
+                        if (widget.hasOlderDisplayHistory && index == 0) {
+                          child = _DisplayWindowAction(
+                            text: 'Load more history',
+                            isLoading: widget.isLoadingDisplayWindow,
+                            onTap: () {
+                              widget.onAutoScrollToBottomChanged(false);
+                              if (!widget.isLoadingDisplayWindow) {
+                                widget.onLoadOlderDisplayWindow();
+                              }
+                            },
+                          );
+                        } else if (index >= messageStartIndex &&
+                            index < messageEndIndex) {
+                          final message =
+                              widget.messages[index - messageStartIndex];
+                          final messageIndex = index - messageStartIndex;
+                          child = _messageRowFor(messageIndex, message);
+                          if (messageIndex == widget.messages.length - 1 &&
+                              _isStreamingMessage(messageIndex)) {
+                            observesLiveBottomGrowth = true;
+                          }
+                        } else if (widget.hasNewerDisplayHistory &&
+                            index == messageEndIndex) {
+                          child = _DisplayWindowAction(
+                            text: 'Load newer history',
+                            isLoading: widget.isLoadingDisplayWindow,
+                            onTap: () {
+                              if (!widget.isLoadingDisplayWindow) {
+                                widget.onLoadNewerDisplayWindow();
+                              }
+                            },
+                          );
+                        } else if (widget.errorMessage != null) {
+                          child = _StatusMessage(
+                            text: widget.errorMessage!,
+                            isError: true,
+                          );
+                        } else {
+                          child = const Padding(
+                            padding: EdgeInsets.only(
+                              left: 16,
+                              top: 2,
+                              bottom: 2,
+                            ),
+                            child: StreamingCursor(),
+                          );
                         }
-                      } else if (widget.hasNewerDisplayHistory &&
-                          index == messageEndIndex) {
-                        child = _DisplayWindowAction(
-                          text: 'Load newer history',
-                          isLoading: widget.isLoadingDisplayWindow,
-                          onTap: () {
-                            if (!widget.isLoadingDisplayWindow) {
-                              widget.onLoadNewerDisplayWindow();
-                            }
-                          },
-                        );
-                      } else if (widget.errorMessage != null) {
-                        child = _StatusMessage(
-                          text: widget.errorMessage!,
-                          isError: true,
-                        );
-                      } else {
-                        child = const Padding(
-                          padding: EdgeInsets.only(left: 16, top: 2, bottom: 2),
-                          child: StreamingCursor(),
-                        );
-                      }
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          bottom: index == itemCount - 1 ? 0 : 8,
-                        ),
-                        child: SizeChangedLayoutNotifier(
-                          key: _rowKeyForIndex(
-                            index,
-                            messageStartIndex,
-                            messageEndIndex,
+                        return Padding(
+                          padding: EdgeInsets.only(
+                            bottom: index == itemCount - 1 ? 0 : 8,
                           ),
-                          child: _LiveBottomStreamSizeObserver(
-                            observesGrowth: observesLiveBottomGrowth,
-                            onSizeGrown: _scheduleBottomFollow,
-                            child: _ChatAreaContentColumn(child: child),
+                          child: SizeChangedLayoutNotifier(
+                            key: _rowKeyForIndex(
+                              index,
+                              messageStartIndex,
+                              messageEndIndex,
+                            ),
+                            child: _LiveBottomStreamSizeObserver(
+                              observesGrowth: observesLiveBottomGrowth,
+                              onSizeGrown: _scheduleBottomFollow,
+                              child: _ChatAreaContentColumn(child: child),
+                            ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -382,12 +392,11 @@ class _ChatAreaState extends State<ChatArea>
       if (notification.direction != ScrollDirection.idle) {
         _userScrollSessionActive = true;
         _userScrollsTowardHistory =
-            notification.direction == ScrollDirection.forward;
+            notification.direction == ScrollDirection.reverse;
         if (!_showNavigatorChipNotifier.value) {
           _showNavigatorChipNotifier.value = true;
         }
-        if (_userScrollsTowardHistory &&
-            widget.autoScrollToBottomListenable.value) {
+        if (widget.autoScrollToBottomListenable.value) {
           _stopBottomFollow();
           widget.onAutoScrollToBottomChanged(false);
         }
@@ -433,6 +442,37 @@ class _ChatAreaState extends State<ChatArea>
     });
   }
 
+  /// Freezes automatic bottom following while a touch drag can own the gesture.
+  void _handleUserPointerDown(PointerDownEvent event) {
+    _activeUserScrollPointers.add(event.pointer);
+    if (_bottomFollowTicker.isActive) {
+      _bottomFollowLastFrameMicroseconds =
+          _bottomFollowClock.elapsedMicroseconds;
+    }
+  }
+
+  /// Resumes follow scheduling only after the touch gesture is fully ended.
+  void _handleUserPointerEnd(PointerEvent event) {
+    _activeUserScrollPointers.remove(event.pointer);
+    if (_activeUserScrollPointers.isNotEmpty) {
+      if (_bottomFollowTicker.isActive) {
+        _bottomFollowLastFrameMicroseconds =
+            _bottomFollowClock.elapsedMicroseconds;
+      }
+      return;
+    }
+    if (_bottomFollowTicker.isActive) {
+      _bottomFollowLastFrameMicroseconds =
+          _bottomFollowClock.elapsedMicroseconds;
+      return;
+    }
+    if (!widget.autoScrollToBottomListenable.value) {
+      return;
+    }
+    _scheduleBottomFollow(0);
+    _scheduleBottomJump();
+  }
+
   /// Schedules one post-layout collection of message navigation anchors.
   void _scheduleMessageAnchorCollection() {
     if (_messageAnchorCollectionScheduled) {
@@ -476,6 +516,7 @@ class _ChatAreaState extends State<ChatArea>
     if (_bottomJumpScheduled ||
         _hasLiveBottomStream() ||
         _isCompletingBottomFollow() ||
+        _activeUserScrollPointers.isNotEmpty ||
         !widget.autoScrollToBottomListenable.value ||
         widget.hasNewerDisplayHistory ||
         widget.isLoadingDisplayWindow ||
@@ -488,6 +529,7 @@ class _ChatAreaState extends State<ChatArea>
       if (!mounted ||
           _hasLiveBottomStream() ||
           _isCompletingBottomFollow() ||
+          _activeUserScrollPointers.isNotEmpty ||
           !widget.autoScrollToBottomListenable.value ||
           widget.hasNewerDisplayHistory ||
           widget.isLoadingDisplayWindow ||
@@ -539,6 +581,11 @@ class _ChatAreaState extends State<ChatArea>
         widget.isLoadingDisplayWindow ||
         !widget.scrollController.hasClients) {
       _stopBottomFollow();
+      return;
+    }
+    if (_activeUserScrollPointers.isNotEmpty) {
+      _bottomFollowLastFrameMicroseconds = nowMicroseconds;
+      _pruneBottomGrowthSamples(nowMicroseconds);
       return;
     }
     final previousMicroseconds = _bottomFollowLastFrameMicroseconds!;

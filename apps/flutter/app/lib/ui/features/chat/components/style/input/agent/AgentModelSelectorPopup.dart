@@ -41,7 +41,6 @@ class _AgentModelSelectorPopupState extends State<AgentModelSelectorPopup> {
   String? _expandedProviderId;
   String? _expandedFamilyKey;
   int? _thinkingStop;
-  bool? _enableMaxContextMode;
 
   GeneratedCoreProxyClients get _clients => widget.viewModel.clients;
 
@@ -141,24 +140,6 @@ class _AgentModelSelectorPopupState extends State<AgentModelSelectorPopup> {
     }
   }
 
-  /// Toggles Max Context mode for the active chat model.
-  Future<void> _toggleMaxContext(_AgentModelSelectorData data) async {
-    final config = data.currentConfig;
-    final enableMaxContextMode =
-        !(_enableMaxContextMode ?? config.context.enableMaxContextMode);
-    setState(() {
-      _enableMaxContextMode = enableMaxContextMode;
-    });
-    await _clients.preferencesModelConfigManager.updateContextForModel(
-      providerId: config.providerId,
-      modelId: config.modelId,
-      context: core_proxy.ModelContextSpec(
-        maxContextLength: config.context.maxContextLength,
-        enableMaxContextMode: enableMaxContextMode,
-      ),
-    );
-  }
-
   /// Navigates to the model settings screen.
   void _openModelSettings() {
     widget.onDismiss();
@@ -223,12 +204,6 @@ class _AgentModelSelectorPopupState extends State<AgentModelSelectorPopup> {
                       minStop: data.thinkingSettings.requiredValue ? 1 : 0,
                       onChanged: (stop) => _setThinkingStop(data, levels, stop),
                     ),
-                    _MaxContextSettingItem(
-                      enabled:
-                          _enableMaxContextMode ??
-                          data.currentConfig.context.enableMaxContextMode,
-                      onToggle: () => _toggleMaxContext(data),
-                    ),
                     _ModelSelectorItem(
                       popupContainerColor: popupContainerColor,
                       providers: data.providers,
@@ -290,7 +265,6 @@ class _AgentModelMenuSectionState extends State<AgentModelMenuSection> {
   bool _modelSectionExpanded = false;
   bool _modelDropdownExpanded = false;
   bool? _enableThinkingMode;
-  bool? _enableMaxContextMode;
 
   GeneratedCoreProxyClients get _clients => widget.viewModel.clients;
 
@@ -354,24 +328,6 @@ class _AgentModelMenuSectionState extends State<AgentModelMenuSection> {
           modelId: data.currentBinding.modelId,
           thinkingOptionId: optionId,
         );
-  }
-
-  /// Toggles Max Context mode from the embedded menu.
-  Future<void> _toggleMaxContext(_AgentModelSelectorData data) async {
-    final config = data.currentConfig;
-    final enableMaxContextMode =
-        !(_enableMaxContextMode ?? config.context.enableMaxContextMode);
-    setState(() {
-      _enableMaxContextMode = enableMaxContextMode;
-    });
-    await _clients.preferencesModelConfigManager.updateContextForModel(
-      providerId: config.providerId,
-      modelId: config.modelId,
-      context: core_proxy.ModelContextSpec(
-        maxContextLength: config.context.maxContextLength,
-        enableMaxContextMode: enableMaxContextMode,
-      ),
-    );
   }
 
   /// Navigates to the model settings screen from the embedded menu.
@@ -491,13 +447,6 @@ class _AgentModelMenuSectionState extends State<AgentModelMenuSection> {
                           onThinkingModeInfoClick: () {},
                           onThinkingQualityInfoClick: () {},
                           showInfoButton: false,
-                        ),
-                        const SizedBox(height: 2),
-                        _MaxContextSettingItem(
-                          enabled:
-                              _enableMaxContextMode ??
-                              data.currentConfig.context.enableMaxContextMode,
-                          onToggle: () => _toggleMaxContext(data),
                         ),
                       ],
                     ),
@@ -1065,27 +1014,6 @@ class _ThinkingQualitySettingRow extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _MaxContextSettingItem extends StatelessWidget {
-  const _MaxContextSettingItem({required this.enabled, required this.onToggle});
-
-  final bool enabled;
-  final VoidCallback onToggle;
-
-  /// Builds the Max Context switch row.
-  @override
-  Widget build(BuildContext context) {
-    return _SwitchSettingRow(
-      icon: Icons.whatshot,
-      title: 'Max模式',
-      checked: enabled,
-      highlightWhenChecked: true,
-      onToggle: onToggle,
-      onInfoClick: () {},
-      showInfoButton: false,
     );
   }
 }

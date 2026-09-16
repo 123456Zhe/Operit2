@@ -10,6 +10,7 @@ import '../../../core/proxy/generated/CoreProxyClients.g.dart';
 import '../../../core/proxy/generated/CoreProxyModels.g.dart' as core_proxy;
 import '../../../l10n/generated/app_localizations.dart';
 import '../../common/CharacterAvatar.dart';
+import '../../features/chat/components/NewChatIntro.dart';
 import '../../features/chat/viewmodel/ChatSelectionTransition.dart';
 import '../navigation/AppNavigationModels.dart';
 import '../screens/ScreenRouteRegistry.dart';
@@ -177,6 +178,9 @@ class _DrawerContentState extends State<DrawerContent> {
     setState(() {
       _errorMessage = null;
     });
+    // Arm before creating so the intro overlay sees the flag when the new
+    // chat id arrives; disarmed again if creation fails.
+    newChatIntroArmed.value = true;
     try {
       await _chatCoreProxy.createNewChat(
         characterCardName: null,
@@ -187,6 +191,7 @@ class _DrawerContentState extends State<DrawerContent> {
       );
       widget.onConversationActivated();
     } catch (error, stackTrace) {
+      newChatIntroArmed.value = false;
       debugPrint('Failed to create chat: $error\n$stackTrace');
       if (!mounted) {
         return;
@@ -215,6 +220,7 @@ class _DrawerContentState extends State<DrawerContent> {
     setState(() {
       _errorMessage = null;
     });
+    newChatIntroArmed.value = true;
     try {
       final binding = await _activePromptBindingForCreate();
       await GeneratedCoreProxyClients(
@@ -228,6 +234,7 @@ class _DrawerContentState extends State<DrawerContent> {
       );
       widget.onConversationActivated();
     } catch (error, stackTrace) {
+      newChatIntroArmed.value = false;
       debugPrint('Failed to create group: $error\n$stackTrace');
       if (!mounted) {
         return;

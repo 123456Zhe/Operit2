@@ -250,7 +250,6 @@ fn readContext(
     match maxContextLength {
         Some(maxContextLength) => Ok(Some(ModelContextSpec {
             maxContextLength: maxContextLength / 1000.0,
-            enableMaxContextMode: false,
         })),
         None => Ok(None),
     }

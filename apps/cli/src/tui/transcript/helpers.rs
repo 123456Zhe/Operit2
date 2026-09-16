@@ -84,12 +84,10 @@ pub(super) fn render_message_lines_folded(
         if !output.lines.is_empty() {
             output.lines.push(Line::from(""));
         }
-        output
-            .lines
-            .extend(render_loading_ai_placeholder_lines(
-                content_width,
-                thinking_line,
-            ));
+        output.lines.extend(render_loading_ai_placeholder_lines(
+            content_width,
+            thinking_line,
+        ));
     }
     output
         .lines
@@ -182,7 +180,8 @@ pub(super) fn render_transcript_message_lines_with_cache(
         fold_state,
         thinking_line: Some(thinking_line),
     };
-    let mut folded = render_markdown_lines_folded(&markup, message_content_width, text, Some(&fold));
+    let mut folded =
+        render_markdown_lines_folded(&markup, message_content_width, text, Some(&fold));
     folded = wrap_folded_lines(folded, message_content_width);
     for line in &mut folded.lines {
         *line = style_message_line(

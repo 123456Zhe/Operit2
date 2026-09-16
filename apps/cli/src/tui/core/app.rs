@@ -1378,9 +1378,6 @@ impl OperitTui {
             "resume" => {
                 self.resume_previous_chat().await?;
             }
-            "max" => {
-                self.toggle_max_context_mode().await?;
-            }
             "language" => {
                 self.handle_language_command(&parts[1..])?;
             }
@@ -2010,38 +2007,6 @@ impl OperitTui {
             &choice.provider_name,
             &choice.model_id,
         ));
-        self.refresh_context_usage_label().await;
-        Ok(())
-    }
-
-    async fn toggle_max_context_mode(&mut self) -> Result<(), String> {
-        let model_ref = self.editable_chat_model_ref().await?;
-        let current = self
-            .core
-            .preferences_model_config_manager()
-            .getResolvedModelConfig(&model_ref.provider_id, &model_ref.model_id)
-            .await
-            .map_err(|error| error.to_string())?;
-        let mut context = current.context;
-        context.enableMaxContextMode = !context.enableMaxContextMode;
-        let updated = self
-            .core
-            .preferences_model_config_manager()
-            .updateContextForModel(&model_ref.provider_id, &model_ref.model_id, context.clone())
-            .await
-            .map_err(|error| error.to_string())?;
-        let updated_context = updated
-            .contextOverride
-            .ok_or_else(|| format!("model context not saved: {}", model_ref.model_id))?;
-        let effective_context_length = if updated_context.enableMaxContextMode {
-            updated_context.maxContextLength
-        } else {
-            updated_context.maxContextLength * 0.4
-        };
-        self.status_message = self.text().context_model_status(
-            &model_ref.model_id,
-            &format_context_length(effective_context_length),
-        );
         self.refresh_context_usage_label().await;
         Ok(())
     }
@@ -2693,11 +2658,7 @@ impl OperitTui {
             .getResolvedModelConfig(&model_ref.provider_id, &model_ref.model_id)
             .await
             .map_err(|error| error.to_string())?;
-        let effective_context_length = if config.context.enableMaxContextMode {
-            config.context.maxContextLength
-        } else {
-            config.context.maxContextLength * 0.4
-        };
+        let effective_context_length = config.context.maxContextLength;
         let max_tokens = (effective_context_length * 1024.0) as i64;
         let current_window_size = self.current_window_size_cache;
         if max_tokens <= 0 {

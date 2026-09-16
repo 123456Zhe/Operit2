@@ -13,9 +13,16 @@ import 'package:flutter/material.dart';
 /// feature-local notifier instead of constructor plumbing.
 final ValueNotifier<bool> newChatIntroActive = ValueNotifier<bool>(false);
 
+/// Armed right before a brand-new conversation is created and consumed by
+/// the overlay when that conversation becomes current. Switching to any
+/// existing conversation leaves this false, so the intro never plays for it.
+final ValueNotifier<bool> newChatIntroArmed = ValueNotifier<bool>(false);
+
 /// The new-chat intro: particles assemble into the wordmark, dissolve,
 /// then a typewriter greeting with shimmer takes over. Plays once when a
-/// freshly created (still empty) conversation becomes current.
+/// freshly created (still empty) conversation becomes current — creation
+/// call sites arm [newChatIntroArmed], and switching to an existing
+/// conversation never plays it.
 class NewChatIntroOverlay extends StatefulWidget {
   const NewChatIntroOverlay({
     super.key,
@@ -35,12 +42,14 @@ class NewChatIntroOverlay extends StatefulWidget {
 
 class _NewChatIntroOverlayState extends State<NewChatIntroOverlay>
     with TickerProviderStateMixin {
-  static const Duration _introDuration = Duration(milliseconds: 3400);
+  static const Duration _introDuration = Duration(milliseconds: 4600);
   static const Duration _ambientPeriod = Duration(milliseconds: 1100);
   static const int _assembleMs = 1500;
-  static const int _holdMs = 500;
-  static const int _dissolveMs = 420;
-  static const int _typeStartMs = 1700;
+  static const int _holdMs = 700;
+  static const int _dissolveMs = 700;
+  // Typing starts a clean beat after the dissolve ends, so the particle
+  // wordmark and the greeting never share the stage.
+  static const int _typeStartMs = 3100;
   static const int _typeStepMs = 110;
   static const String _greeting = '有什么可以帮你？';
   static const String _subtitle = '新对话已就绪，随时开始';
@@ -134,7 +143,12 @@ class _NewChatIntroOverlayState extends State<NewChatIntroOverlay>
   void didUpdateWidget(covariant NewChatIntroOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentChatId != widget.currentChatId) {
-      _awaitingSettle = true;
+      // The intro only plays for a conversation that was just created — the
+      // creation call sites arm [newChatIntroArmed] before the new chat id
+      // arrives here. Plain switches between existing conversations (even
+      // empty ones) must not claim the stage or play.
+      _awaitingSettle = newChatIntroArmed.value;
+      newChatIntroArmed.value = false;
       _schedule(_hideImmediate);
       // Claim the stage with the chat switch, before the new chat's empty
       // area becomes visible. The write must be deferred like every other
@@ -143,7 +157,9 @@ class _NewChatIntroOverlayState extends State<NewChatIntroOverlay>
       // synchronously asserts with "markNeedsBuild during build". The
       // switch keeps the chat area hidden, so a post-frame claim still
       // lands before anything is on screen.
-      _schedule(() => newChatIntroActive.value = true);
+      if (_awaitingSettle) {
+        _schedule(() => newChatIntroActive.value = true);
+      }
     }
     if (_awaitingSettle && !widget.isSwitching) {
       _awaitingSettle = false;
@@ -250,21 +266,6 @@ class _NewChatIntroOverlayState extends State<NewChatIntroOverlay>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary,
-                        shape: BoxShape.circle,
-                        boxShadow: <BoxShadow>[
-                          BoxShadow(
-                            color: colorScheme.primary.withValues(alpha: 0.8),
-                            blurRadius: 12,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[

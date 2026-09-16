@@ -8,7 +8,7 @@ class PackageManagerSnapshot {
     required this.enabledPackageNames,
     required this.pluginContainers,
     required this.enabledPluginContainerNames,
-    required this.bundledExternalPackageCandidates,
+    required this.bundledExternalCandidates,
   });
 
   factory PackageManagerSnapshot.empty() {
@@ -17,8 +17,7 @@ class PackageManagerSnapshot {
       enabledPackageNames: <String>{},
       pluginContainers: <core_proxy.ToolPkgContainerRuntime>[],
       enabledPluginContainerNames: <String>{},
-      bundledExternalPackageCandidates:
-          <core_proxy.BundledExternalPackageCandidate>[],
+      bundledExternalCandidates: <core_proxy.BundledExternalPackageCandidate>[],
     );
   }
 
@@ -27,12 +26,12 @@ class PackageManagerSnapshot {
   final List<core_proxy.ToolPkgContainerRuntime> pluginContainers;
   final Set<String> enabledPluginContainerNames;
   final List<core_proxy.BundledExternalPackageCandidate>
-  bundledExternalPackageCandidates;
+  bundledExternalCandidates;
 
   bool get isEmpty =>
       availablePackages.isEmpty &&
       pluginContainers.isEmpty &&
-      bundledExternalPackageCandidates.isEmpty;
+      bundledExternalCandidates.isEmpty;
 
   PackageManagerSnapshot copyWith({
     Set<String>? enabledPackageNames,
@@ -44,7 +43,7 @@ class PackageManagerSnapshot {
       pluginContainers: pluginContainers,
       enabledPluginContainerNames:
           enabledPluginContainerNames ?? this.enabledPluginContainerNames,
-      bundledExternalPackageCandidates: bundledExternalPackageCandidates,
+      bundledExternalCandidates: bundledExternalCandidates,
     );
   }
 }

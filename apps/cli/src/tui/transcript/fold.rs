@@ -94,13 +94,23 @@ pub(super) struct ToolMergeMatch {
 
 impl TranscriptFoldState {
     /// Records an explicit user expand or collapse for one fold widget.
-    pub(super) fn set_user_expanded(&mut self, message_timestamp: i64, stable_key: &str, expanded: bool) {
+    pub(super) fn set_user_expanded(
+        &mut self,
+        message_timestamp: i64,
+        stable_key: &str,
+        expanded: bool,
+    ) {
         self.user_expanded
             .insert((message_timestamp, stable_key.to_string()), expanded);
     }
 
     /// Returns whether a fold widget is expanded after applying user overrides.
-    pub(super) fn is_expanded(&self, message_timestamp: i64, stable_key: &str, auto_expand: bool) -> bool {
+    pub(super) fn is_expanded(
+        &self,
+        message_timestamp: i64,
+        stable_key: &str,
+        auto_expand: bool,
+    ) -> bool {
         match self
             .user_expanded
             .get(&(message_timestamp, stable_key.to_string()))
@@ -372,7 +382,11 @@ pub(super) fn match_tool_merge(
 }
 
 /// Classifies a grouped XML range into the main-app group title kind.
-pub(super) fn fold_group_kind(stable_key: &str, tool_count: usize, search_count: usize) -> FoldGroupKind {
+pub(super) fn fold_group_kind(
+    stable_key: &str,
+    tool_count: usize,
+    search_count: usize,
+) -> FoldGroupKind {
     if stable_key.starts_with("tools-only-") {
         FoldGroupKind::ToolsOnly
     } else if stable_key.starts_with("search-only-") {
@@ -400,7 +414,11 @@ pub(super) fn fold_group_title(kind: FoldGroupKind, tool_count: usize, text: Tui
 }
 
 /// Counts tool-call XML nodes inside an inclusive node range.
-pub(super) fn count_tool_nodes(nodes: &[MarkdownNodeStable], start: usize, end_inclusive: usize) -> usize {
+pub(super) fn count_tool_nodes(
+    nodes: &[MarkdownNodeStable],
+    start: usize,
+    end_inclusive: usize,
+) -> usize {
     nodes[start..=end_inclusive]
         .iter()
         .filter(|node| xml_tag_name(node).as_deref() == Some("tool"))
@@ -632,7 +650,10 @@ fn opening_tag_has_flag(content: &str, flag: &str) -> bool {
     let mut tokens = rest.split_whitespace();
     tokens.next();
     for token in tokens {
-        let name = token.split('=').next().expect("split always yields a name token");
+        let name = token
+            .split('=')
+            .next()
+            .expect("split always yields a name token");
         if name.eq_ignore_ascii_case(flag) {
             return true;
         }
@@ -673,7 +694,9 @@ mod tests {
         );
         let nodes = markup.nativeMarkdownSplitByBlock();
         let grouped = group_markdown_nodes(&nodes);
-        assert!(grouped.iter().all(|item| matches!(item, GroupedItem::Single(_))));
+        assert!(grouped
+            .iter()
+            .all(|item| matches!(item, GroupedItem::Single(_))));
         let merge = match_tool_merge(&nodes, 0, nodes.len() - 1).expect("pair must merge");
         assert_eq!(merge.pairs.len(), 1);
         assert_eq!(merge.pairs[0].0.tool_name, "read_file");

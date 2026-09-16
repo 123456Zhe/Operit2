@@ -152,7 +152,7 @@ fn parseModelRows(rows: &str) -> Result<Vec<ModelCatalogEntry>, String> {
 #[allow(non_snake_case)]
 fn parseModelRow(line: &str) -> Result<ModelCatalogEntry, String> {
     let parts: Vec<&str> = line.split('|').collect();
-    if parts.len() != 16 {
+    if parts.len() != 15 {
         return Err(format!("invalid model catalog row: {line}"));
     }
     let billingMode = BillingMode::fromString(parts[2])?;
@@ -176,17 +176,16 @@ fn parseModelRow(line: &str) -> Result<ModelCatalogEntry, String> {
         }),
         context: Some(ModelContextSpec {
             maxContextLength: parseF32(parts[8], "max context length", line)?,
-            enableMaxContextMode: parseBool(parts[9], "enable max context mode", line)?,
         }),
         capabilities: Some(ModelCapabilities {
-            directImage: parseBool(parts[10], "direct image", line)?,
-            directAudio: parseBool(parts[11], "direct audio", line)?,
-            directVideo: parseBool(parts[12], "direct video", line)?,
-            toolCall: parseBool(parts[14], "tool call", line)?,
+            directImage: parseBool(parts[9], "direct image", line)?,
+            directAudio: parseBool(parts[10], "direct audio", line)?,
+            directVideo: parseBool(parts[11], "direct video", line)?,
+            toolCall: parseBool(parts[13], "tool call", line)?,
         }),
-        builtinTools: parseCatalogBuiltinTools(parts[0], parts[13], line)?,
+        builtinTools: parseCatalogBuiltinTools(parts[0], parts[12], line)?,
         request: Some(ModelRequestSpec {
-            supportsStructuredTools: parseBool(parts[15], "structured tools", line)?,
+            supportsStructuredTools: parseBool(parts[14], "structured tools", line)?,
         }),
     })
 }

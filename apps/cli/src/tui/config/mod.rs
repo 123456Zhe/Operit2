@@ -1089,9 +1089,6 @@ impl ConfigUi {
                         Some(model_editor::MainFocus::MaxContextLength) => {
                             editor.editing_field = !editor.editing_field
                         }
-                        Some(model_editor::MainFocus::MaxContextMode) => {
-                            editor.enable_max_context_mode = !editor.enable_max_context_mode
-                        }
                         Some(model_editor::MainFocus::EnableSummary) => {
                             editor.enable_summary = !editor.enable_summary;
                             editor.clamp_focus();

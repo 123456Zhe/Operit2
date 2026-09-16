@@ -1644,9 +1644,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter a max context length greater than 0';
 
   @override
-  String get settingsModelMaxContextMode => 'Max context mode';
-
-  @override
   String get settingsModelSummaryThreshold => 'Summary token threshold';
 
   @override

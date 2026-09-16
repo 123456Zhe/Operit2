@@ -231,8 +231,6 @@ struct Operit1ModelConfig {
     customHeaders: String,
     #[serde(default = "defaultMaxContextLength")]
     maxContextLength: f32,
-    #[serde(default)]
-    enableMaxContextMode: bool,
     #[serde(default = "defaultSummaryTokenThreshold")]
     summaryTokenThreshold: f32,
     #[serde(default = "defaultEnableSummary")]
@@ -404,7 +402,6 @@ fn buildModelProfile(
     let mut model = ModelProfile::new(modelId.to_string());
     model.contextOverride = Some(ModelContextSpec {
         maxContextLength: config.maxContextLength,
-        enableMaxContextMode: config.enableMaxContextMode,
     });
     model.capabilitiesOverride = Some(ModelCapabilities {
         directImage: config.enableDirectImageProcessing,

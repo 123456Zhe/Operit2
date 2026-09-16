@@ -198,7 +198,6 @@ pub struct ModelConfigDefaults;
 
 impl ModelConfigDefaults {
     pub const DEFAULT_MAX_CONTEXT_LENGTH: f32 = 200.0;
-    pub const DEFAULT_ENABLE_MAX_CONTEXT_MODE: bool = false;
     pub const DEFAULT_SUMMARY_TOKEN_THRESHOLD: f32 = 0.70;
     pub const DEFAULT_ENABLE_SUMMARY: bool = true;
     pub const DEFAULT_ENABLE_SUMMARY_BY_MESSAGE_COUNT: bool = true;
@@ -329,14 +328,12 @@ impl ModelBuiltinTool {
 #[allow(non_snake_case)]
 pub struct ModelContextSpec {
     pub maxContextLength: f32,
-    pub enableMaxContextMode: bool,
 }
 
 impl Default for ModelContextSpec {
     fn default() -> Self {
         Self {
             maxContextLength: ModelConfigDefaults::DEFAULT_MAX_CONTEXT_LENGTH,
-            enableMaxContextMode: ModelConfigDefaults::DEFAULT_ENABLE_MAX_CONTEXT_MODE,
         }
     }
 }

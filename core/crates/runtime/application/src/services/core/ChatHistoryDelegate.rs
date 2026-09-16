@@ -13,9 +13,9 @@ use operit_model::ChatHistoryListItem::ChatHistoryListItem;
 use operit_model::ChatMessage::ChatMessage;
 use operit_model::ChatMessageLocatorPreview::ChatMessageLocatorPreview;
 use operit_store::repository::ChatHistoryManager::ChatHistoryManager;
-use operit_tools::files::PathMapper::PathMapper;
 use operit_store::PreferencesDataStore::{mutableStateFlow, MutableStateFlow, StateFlow};
 use operit_store::SyncOperationStore::SyncClock;
+use operit_tools::files::PathMapper::PathMapper;
 use operit_util::AppLogger::AppLogger;
 use operit_util::ChainLogger::{self, MESSAGE_STORE_CHAIN};
 use std::collections::HashMap;
@@ -1474,15 +1474,13 @@ impl ChatHistoryDelegate {
         } else {
             None
         };
-        let inheritedChat = inheritGroupFromChatId
-            .as_ref()
-            .and_then(|chatId| {
-                self.chatHistoriesFlow
-                    .value()
-                    .iter()
-                    .find(|chat| chat.id == chatId.as_ref())
-                    .cloned()
-            });
+        let inheritedChat = inheritGroupFromChatId.as_ref().and_then(|chatId| {
+            self.chatHistoriesFlow
+                .value()
+                .iter()
+                .find(|chat| chat.id == chatId.as_ref())
+                .cloned()
+        });
         let effectiveGroup = match group {
             Some(value) => Some(value),
             None => inheritedChat.as_ref().and_then(|chat| chat.group.clone()),
@@ -1510,7 +1508,9 @@ impl ChatHistoryDelegate {
             None
         };
         let effectiveWorkspaceId = if inheritGroupFromCurrent {
-            inheritedChat.as_ref().and_then(|chat| chat.workspaceId.clone())
+            inheritedChat
+                .as_ref()
+                .and_then(|chat| chat.workspaceId.clone())
         } else {
             None
         };

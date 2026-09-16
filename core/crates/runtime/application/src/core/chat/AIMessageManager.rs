@@ -793,11 +793,7 @@ impl AIMessageManager {
                 .to_ascii_lowercase()
                 .starts_with("audio/")
         {
-            return Self::buildDirectMediaAttachmentTag(
-                attachment,
-                fileSystemHost,
-                "audio",
-            );
+            return Self::buildDirectMediaAttachmentTag(attachment, fileSystemHost, "audio");
         }
         if enableDirectVideoProcessing
             && attachment
@@ -805,11 +801,7 @@ impl AIMessageManager {
                 .to_ascii_lowercase()
                 .starts_with("video/")
         {
-            return Self::buildDirectMediaAttachmentTag(
-                attachment,
-                fileSystemHost,
-                "video",
-            );
+            return Self::buildDirectMediaAttachmentTag(attachment, fileSystemHost, "video");
         }
 
         let attributes = Self::buildAttachmentAttributes(attachment);

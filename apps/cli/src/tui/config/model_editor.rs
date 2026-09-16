@@ -20,7 +20,6 @@ pub(crate) enum MainFocus {
     DirectAudio,
     DirectVideo,
     MaxContextLength,
-    MaxContextMode,
     EnableSummary,
     SummaryDetails,
     StructuredTools,
@@ -59,7 +58,6 @@ pub(crate) struct EditorState {
 
     // Context
     pub(crate) max_context_length: String,
-    pub(crate) enable_max_context_mode: bool,
 
     // Summary
     pub(crate) enable_summary: bool,
@@ -106,7 +104,6 @@ impl EditorState {
             direct_audio: config.capabilities.directAudio,
             direct_video: config.capabilities.directVideo,
             max_context_length: format!("{:.0}", config.context.maxContextLength),
-            enable_max_context_mode: config.context.enableMaxContextMode,
             enable_summary: config.summary.enableSummary,
             summary_token_threshold: format!("{:.0}", config.summary.summaryTokenThreshold),
             enable_summary_by_message_count: config.summary.enableSummaryByMessageCount,
@@ -134,7 +131,6 @@ impl EditorState {
             MainFocus::DirectAudio,
             MainFocus::DirectVideo,
             MainFocus::MaxContextLength,
-            MainFocus::MaxContextMode,
             MainFocus::EnableSummary,
         ];
         if self.enable_summary {
@@ -186,7 +182,6 @@ impl EditorState {
             },
             context: ModelContextSpec {
                 maxContextLength: ctx_len,
-                enableMaxContextMode: self.enable_max_context_mode,
             },
             request: ModelRequestSpec {
                 supportsStructuredTools: self.supports_structured_tools,
@@ -298,13 +293,6 @@ impl EditorState {
             MainFocus::MaxContextLength,
             text.config_editor_max_context_length(),
             &self.max_context_length,
-        );
-        self.push_toggle_item(
-            &mut items,
-            MainFocus::MaxContextMode,
-            text.config_editor_max_context_mode(),
-            self.enable_max_context_mode,
-            text,
         );
 
         // --- Summary ---

@@ -414,13 +414,21 @@ pub fn run_model_command(
             }));
         }
         "context-set" => {
-            let providerId = requiredArg(args, 1, "usage: operit2 model context-set <provider-id> <model-id> <max-context-length>")?;
-            let modelId = requiredArg(args, 2, "usage: operit2 model context-set <provider-id> <model-id> <max-context-length>")?;
-            let maxContextLength = parse_f32_arg(args.get(3), "usage: operit2 model context-set <provider-id> <model-id> <max-context-length>")?;
-            let context = ModelContextSpec {
-                maxContextLength,
-                enableMaxContextMode: false,
-            };
+            let providerId = requiredArg(
+                args,
+                1,
+                "usage: operit2 model context-set <provider-id> <model-id> <max-context-length>",
+            )?;
+            let modelId = requiredArg(
+                args,
+                2,
+                "usage: operit2 model context-set <provider-id> <model-id> <max-context-length>",
+            )?;
+            let maxContextLength = parse_f32_arg(
+                args.get(3),
+                "usage: operit2 model context-set <provider-id> <model-id> <max-context-length>",
+            )?;
+            let context = ModelContextSpec { maxContextLength };
             let model = command
                 .modelManager()
                 .updateContextForModel(providerId, modelId, context.clone())

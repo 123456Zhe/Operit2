@@ -97,9 +97,7 @@ impl MediaLinkParser {
     pub fn extract_media_links(message: &str) -> Vec<MediaLink> {
         Self::extract_media_link_tags(message)
             .into_iter()
-            .filter(|tag| {
-                matches!(tag.link_type.as_str(), "audio" | "video" | "file")
-            })
+            .filter(|tag| matches!(tag.link_type.as_str(), "audio" | "video" | "file"))
             .filter_map(|tag| {
                 let media_data = MediaPoolManager::get_media(&tag.id)?;
                 Some(MediaLink {
@@ -279,7 +277,11 @@ fn parse_link_tag(tag_text: &str) -> Option<(String, String, Option<String>)> {
             _ => {}
         }
     }
-    Some((link_type?, id?, file_name.filter(|value| !value.trim().is_empty())))
+    Some((
+        link_type?,
+        id?,
+        file_name.filter(|value| !value.trim().is_empty()),
+    ))
 }
 
 /// Decodes XML entities used inside media-link attributes.
