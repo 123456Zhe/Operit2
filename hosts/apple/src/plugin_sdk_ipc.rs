@@ -1,78 +1,72 @@
 use std::collections::HashMap;
-use std::net::{TcpListener, TcpStream};
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 use operit_host_api::{
     HostError, HostResult, PluginSdkIpcEndpoint, PluginSdkIpcHost, PluginSdkIpcSessionCallbacks,
-    PluginSdkIpcSessionId, PLUGIN_SDK_IPC_ENDPOINT_NAME,
+    PluginSdkIpcSessionId,
 };
 
-use crate::stream::{
+use operit_host_native_plugin_sdk_ipc::stream::{
     closePluginSdkIpcStream, sendPluginSdkIpcStream, spawnPluginSdkIpcReadLoop,
     PluginSdkIpcStreamSession,
 };
 
-/// TCP loopback port used by the standard Plugin SDK IPC endpoint.
-pub const PLUGIN_SDK_IPC_TCP_PORT: u16 = 18732;
-
-/// TCP loopback Plugin SDK IPC carrier used by board hosts.
-pub struct TcpPluginSdkIpcHost {
-    inner: Arc<Mutex<TcpInner>>,
+/// Unix-domain-socket Plugin SDK IPC carrier used as a byte stream helper.
+pub struct UnixPluginSdkIpcHost {
+    inner: Arc<Mutex<UnixInner>>,
     nextSession: Arc<AtomicU64>,
 }
 
-struct TcpInner {
+struct UnixInner {
     listenerStop: Option<Arc<AtomicBool>>,
     listenerThread: Option<JoinHandle<()>>,
+    socketPath: Option<PathBuf>,
     sessions: HashMap<String, Arc<PluginSdkIpcStreamSession>>,
 }
 
-impl TcpPluginSdkIpcHost {
-    /// Creates a TCP loopback Plugin SDK IPC carrier.
+impl UnixPluginSdkIpcHost {
+    /// Creates a Unix-domain-socket Plugin SDK IPC carrier.
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(TcpInner {
+            inner: Arc::new(Mutex::new(UnixInner {
                 listenerStop: None,
                 listenerThread: None,
+                socketPath: None,
                 sessions: HashMap::new(),
             })),
             nextSession: Arc::new(AtomicU64::new(1)),
         }
     }
 
-    /// Returns the loopback address for one Plugin SDK endpoint.
+    /// Maps the logical endpoint name to the Unix socket path.
     #[allow(non_snake_case)]
-    fn bindAddress(endpoint: &PluginSdkIpcEndpoint) -> HostResult<String> {
-        if endpoint.name != PLUGIN_SDK_IPC_ENDPOINT_NAME {
-            return Err(HostError::new(format!(
-                "Plugin SDK TCP IPC endpoint is not the standard endpoint: {}",
-                endpoint.name
-            )));
-        }
-        Ok(format!("127.0.0.1:{PLUGIN_SDK_IPC_TCP_PORT}"))
+    fn socketPathForEndpoint(endpoint: &PluginSdkIpcEndpoint) -> PathBuf {
+        std::env::temp_dir().join(format!("{}.sock", endpoint.name.replace('.', "_")))
     }
 
     /// Allocates the next session identifier.
     fn nextSessionId(&self) -> PluginSdkIpcSessionId {
         PluginSdkIpcSessionId::new(format!(
-            "plugin-sdk-tcp-{}",
+            "plugin-sdk-unix-{}",
             self.nextSession.fetch_add(1, Ordering::Relaxed)
         ))
     }
 
     /// Locks carrier state.
-    fn lock(&self) -> HostResult<std::sync::MutexGuard<'_, TcpInner>> {
+    fn lock(&self) -> HostResult<std::sync::MutexGuard<'_, UnixInner>> {
         self.inner
             .lock()
-            .map_err(|error| HostError::new(format!("Plugin SDK TCP IPC lock poisoned: {error}")))
+            .map_err(|error| HostError::new(format!("Plugin SDK Unix IPC lock poisoned: {error}")))
     }
 
-    /// Attaches one connected TCP stream as a session.
+    /// Attaches one connected Unix stream as a session.
     fn attachStream(
         &self,
-        stream: TcpStream,
+        stream: UnixStream,
         callbacks: PluginSdkIpcSessionCallbacks,
         listenerOwned: bool,
     ) -> HostResult<PluginSdkIpcSessionId> {
@@ -88,9 +82,10 @@ impl TcpPluginSdkIpcHost {
             Box::new(writer),
             listenerOwned,
         ));
-        self.lock()?
-            .sessions
-            .insert(sessionId.0.clone(), session);
+        {
+            let mut inner = self.lock()?;
+            inner.sessions.insert(sessionId.0.clone(), session.clone());
+        }
         let sessions = self.inner.clone();
         let closedId = sessionId.clone();
         spawnPluginSdkIpcReadLoop(sessionId.clone(), reader, callbacks.clone(), move || {
@@ -103,23 +98,33 @@ impl TcpPluginSdkIpcHost {
     }
 }
 
-impl Default for TcpPluginSdkIpcHost {
-    /// Creates a TCP loopback Plugin SDK IPC carrier.
+impl Default for UnixPluginSdkIpcHost {
+    /// Creates a Unix-domain-socket Plugin SDK IPC carrier.
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl PluginSdkIpcHost for TcpPluginSdkIpcHost {
-    /// Binds the Plugin SDK TCP loopback listener.
+impl PluginSdkIpcHost for UnixPluginSdkIpcHost {
+    /// Rejects activation because process launch belongs to a platform host crate.
+    fn activate(&self, _endpoint: PluginSdkIpcEndpoint) -> HostResult<()> {
+        Err(HostError::new(
+            "Plugin SDK process activation is implemented by the platform host crate",
+        ))
+    }
+
+    /// Binds a Unix-domain socket and accepts Plugin SDK clients.
     fn startListener(
         &self,
         endpoint: PluginSdkIpcEndpoint,
         callbacks: PluginSdkIpcSessionCallbacks,
     ) -> HostResult<()> {
-        let address = Self::bindAddress(&endpoint)?;
+        let socketPath = Self::socketPathForEndpoint(&endpoint);
+        if socketPath.exists() {
+            std::fs::remove_file(&socketPath).map_err(|error| HostError::new(error.to_string()))?;
+        }
         let listener =
-            TcpListener::bind(&address).map_err(|error| HostError::new(error.to_string()))?;
+            UnixListener::bind(&socketPath).map_err(|error| HostError::new(error.to_string()))?;
         listener
             .set_nonblocking(true)
             .map_err(|error| HostError::new(error.to_string()))?;
@@ -127,22 +132,21 @@ impl PluginSdkIpcHost for TcpPluginSdkIpcHost {
         {
             let mut inner = self.lock()?;
             if inner.listenerThread.is_some() {
-                return Err(HostError::new(
-                    "Plugin SDK IPC listener is already started",
-                ));
+                return Err(HostError::new("Plugin SDK IPC listener is already started"));
             }
             inner.listenerStop = Some(stop.clone());
+            inner.socketPath = Some(socketPath.clone());
         }
         let host = self.inner.clone();
         let nextSession = self.nextSession.clone();
         let thread = std::thread::Builder::new()
-            .name("operit-plugin-sdk-ipc-tcp-listen".to_string())
+            .name("operit-plugin-sdk-ipc-listen".to_string())
             .spawn(move || {
                 while !stop.load(Ordering::SeqCst) {
                     match listener.accept() {
                         Ok((stream, _)) => {
                             let sessionId = PluginSdkIpcSessionId::new(format!(
-                                "plugin-sdk-tcp-{}",
+                                "plugin-sdk-unix-{}",
                                 nextSession.fetch_add(1, Ordering::Relaxed)
                             ));
                             let Ok(reader) = stream.try_clone() else {
@@ -188,33 +192,29 @@ impl PluginSdkIpcHost for TcpPluginSdkIpcHost {
         Ok(())
     }
 
-    /// Connects to the Operit TCP Plugin SDK listener.
+    /// Connects to the Operit Unix-domain Plugin SDK listener.
     fn connect(
         &self,
         endpoint: PluginSdkIpcEndpoint,
         callbacks: PluginSdkIpcSessionCallbacks,
     ) -> HostResult<PluginSdkIpcSessionId> {
-        let stream = TcpStream::connect(Self::bindAddress(&endpoint)?)
+        let stream = UnixStream::connect(Self::socketPathForEndpoint(&endpoint))
             .map_err(|error| HostError::new(error.to_string()))?;
         self.attachStream(stream, callbacks, false)
     }
 
-    /// Sends one framed payload on a TCP session.
+    /// Sends one framed payload on a Unix-domain session.
     fn send(&self, sessionId: &PluginSdkIpcSessionId, bytes: Vec<u8>) -> HostResult<()> {
         let session = {
             let inner = self.lock()?;
-            inner
-                .sessions
-                .get(&sessionId.0)
-                .cloned()
-                .ok_or_else(|| {
-                    HostError::new(format!("Plugin SDK IPC session is closed: {}", sessionId.0))
-                })?
+            inner.sessions.get(&sessionId.0).cloned().ok_or_else(|| {
+                HostError::new(format!("Plugin SDK IPC session is closed: {}", sessionId.0))
+            })?
         };
         sendPluginSdkIpcStream(&session, bytes)
     }
 
-    /// Closes one TCP Plugin SDK session.
+    /// Closes one Unix-domain Plugin SDK session.
     fn closeSession(&self, sessionId: &PluginSdkIpcSessionId) -> HostResult<()> {
         let session = {
             let mut inner = self.lock()?;
@@ -226,9 +226,9 @@ impl PluginSdkIpcHost for TcpPluginSdkIpcHost {
         Ok(())
     }
 
-    /// Stops the TCP listener and closes listener-owned sessions.
+    /// Stops the Unix-domain listener and closes listener-owned sessions.
     fn stopListener(&self) -> HostResult<()> {
-        let (stop, thread, owned);
+        let (stop, thread, socketPath, owned);
         {
             let mut inner = self.lock()?;
             stop = inner
@@ -236,6 +236,7 @@ impl PluginSdkIpcHost for TcpPluginSdkIpcHost {
                 .take()
                 .ok_or_else(|| HostError::new("Plugin SDK IPC listener is not started"))?;
             thread = inner.listenerThread.take();
+            socketPath = inner.socketPath.take();
             owned = inner
                 .sessions
                 .iter()
@@ -251,6 +252,9 @@ impl PluginSdkIpcHost for TcpPluginSdkIpcHost {
         stop.store(true, Ordering::SeqCst);
         if let Some(thread) = thread {
             let _ = thread.join();
+        }
+        if let Some(socketPath) = socketPath {
+            let _ = std::fs::remove_file(socketPath);
         }
         Ok(())
     }

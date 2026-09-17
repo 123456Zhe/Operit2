@@ -193,7 +193,8 @@ pub fn buildComposeDslContextBridgeDefinition() -> String {
                 return node;
             }
 
-            function resolvePackageName(value) {
+            /// Resolves an optional package argument inside its owning runtime.
+            function resolvePackageName(value, runtime) {
                 var name = String(value || runtime.packageName || '').trim();
                 return name;
             }
@@ -604,6 +605,18 @@ pub fn buildComposeDslContextBridgeDefinition() -> String {
                         }
                         return undefined;
                     },
+                    setEnv: function(key, value) {
+                        unwrapNativeResult(invokeNative('setEnv', [
+                            String(key || ''),
+                            value === undefined || value === null ? '' : String(value)
+                        ]));
+                        return Promise.resolve();
+                    },
+                    setEnvs: function(values) {
+                        var payload = values && typeof values === 'object' ? values : {};
+                        unwrapNativeResult(invokeNative('setEnvs', [JSON.stringify(payload)]));
+                        return Promise.resolve();
+                    },
                     callTool: function(toolName, params) {
                         if (typeof toolCall === 'function') {
                             return toolCall(String(toolName || ''), params || {});
@@ -611,10 +624,23 @@ pub fn buildComposeDslContextBridgeDefinition() -> String {
                         throw createUserFacingError('Tool call bridge is unavailable');
                     },
                     navigate: function(route, args) {
-                        return { route: String(route || ''), args: args || {} };
+                        var routeId = String(route || '').trim();
+                        if (!routeId) {
+                            throw createUserFacingError('route is required');
+                        }
+                        var payload = args && typeof args === 'object' ? args : {};
+                        invokeNative('navigateToRoute', [
+                            routeId,
+                            JSON.stringify(payload)
+                        ]);
+                        return {
+                            __operitNavigate: true,
+                            route: routeId,
+                            args: payload
+                        };
                     },
                     showToast: function(message) {
-                        console.log(String(message || ''));
+                        return toolCall('toast', { message: String(message || '') });
                     },
                     reportError: function(error) {
                         console.error(error);
@@ -666,7 +692,7 @@ pub fn buildComposeDslContextBridgeDefinition() -> String {
                         return runtime.uiModuleId;
                     },
                     isPackageImported: function(packageName) {
-                        var target = resolvePackageName(packageName);
+                        var target = resolvePackageName(packageName, runtime);
                         if (!target) {
                             return Promise.resolve(false);
                         }
@@ -677,7 +703,7 @@ pub fn buildComposeDslContextBridgeDefinition() -> String {
                         return toolCall('is_package_imported', { package_name: target });
                     },
                     importPackage: function(packageName) {
-                        var target = resolvePackageName(packageName);
+                        var target = resolvePackageName(packageName, runtime);
                         if (!target) {
                             return Promise.resolve('');
                         }
@@ -688,7 +714,7 @@ pub fn buildComposeDslContextBridgeDefinition() -> String {
                         return toolCall('import_package', { package_name: target });
                     },
                     removePackage: function(packageName) {
-                        var target = resolvePackageName(packageName);
+                        var target = resolvePackageName(packageName, runtime);
                         if (!target) {
                             return Promise.resolve('');
                         }
@@ -699,7 +725,7 @@ pub fn buildComposeDslContextBridgeDefinition() -> String {
                         return toolCall('remove_package', { package_name: target });
                     },
                     usePackage: function(packageName) {
-                        var target = resolvePackageName(packageName);
+                        var target = resolvePackageName(packageName, runtime);
                         if (!target) {
                             return Promise.resolve('');
                         }

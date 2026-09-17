@@ -1545,6 +1545,20 @@ impl RuntimePackageManager {
         ToolPkgPackageService::new(self).getToolPkgDesktopWidgets(useEnglish)
     }
 
+    /// Renders a registered desktop widget and settles its initial load action for any host.
+    #[allow(non_snake_case)]
+    pub async fn renderToolPkgDesktopWidget(
+        &self,
+        containerPackageName: &str,
+        widgetId: &str,
+        instanceId: &str,
+        useEnglish: bool,
+    ) -> Result<String, String> {
+        super::ToolPkgDesktopWidgetService::render(
+            self, containerPackageName, widgetId, instanceId, useEnglish,
+        ).await
+    }
+
     #[allow(non_snake_case)]
     /// Returns navigation entries exposed by enabled ToolPkg containers.
     pub fn getToolPkgNavigationEntries(&self, useEnglish: bool) -> Vec<ToolPkgNavigationEntry> {

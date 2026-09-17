@@ -87,8 +87,11 @@ dependencies:
     path: ../thirdparty/liquid_glass_widgets
   desktop_drop: ^0.7.1
   desktop_multi_window: ^0.3.0
+  desktop_widgets:
+    path: ../thirdparty/desktop_widgets
 
 dev_dependencies:
+  ffi: ^2.2.0
   flutter_test:
     sdk: flutter
   integration_test:

@@ -1,6 +1,7 @@
 #include "my_application.h"
 
 #include <flutter_linux/flutter_linux.h>
+#include <desktop_multi_window/desktop_multi_window_plugin.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
@@ -15,6 +16,27 @@ struct _MyApplication {
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+/// Registers this installed executable for session-bus Plugin SDK activation.
+static void register_plugin_sdk_activation() {
+  g_autoptr(GError) error = nullptr;
+  g_autofree gchar* executable = g_file_read_link("/proc/self/exe", &error);
+  if (executable == nullptr) {
+    g_error("Cannot resolve Operit activation executable: %s", error->message);
+  }
+  g_autofree gchar* directory = g_build_filename(
+      g_get_user_data_dir(), "dbus-1", "services", nullptr);
+  if (g_mkdir_with_parents(directory, 0700) != 0) {
+    g_error("Cannot create Operit D-Bus activation directory");
+  }
+  g_autofree gchar* quoted = g_shell_quote(executable);
+  g_autofree gchar* content = g_strdup_printf(
+      "[D-BUS Service]\nName=org.operit.PluginSdk\nExec=%s --plugin-sdk\n", quoted);
+  g_autofree gchar* path = g_build_filename(directory, "org.operit.PluginSdk.service", nullptr);
+  if (!g_file_set_contents(path, content, -1, &error)) {
+    g_error("Cannot register Operit D-Bus activation: %s", error->message);
+  }
+}
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
@@ -76,6 +98,12 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+  desktop_multi_window_plugin_set_window_created_callback(
+      [](FlPluginRegistry* registry) {
+        fl_register_plugins(registry);
+        register_operit_crash_channel(FL_VIEW(registry));
+        register_operit_runtime_channel(FL_VIEW(registry));
+      });
   register_operit_crash_channel(view);
   register_operit_runtime_channel(view);
 
@@ -105,6 +133,7 @@ static gboolean my_application_local_command_line(GApplication* application,
 
 // Implements GApplication::startup.
 static void my_application_startup(GApplication* application) {
+  register_plugin_sdk_activation();
   // MyApplication* self = MY_APPLICATION(object);
 
   // Perform any actions required at application startup.

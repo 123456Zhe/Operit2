@@ -1527,6 +1527,22 @@ impl JsEngineState {
                 }),
             ),
             (
+                "__operitNativeSetEnv",
+                Arc::new(|arguments| {
+                    let [key, value] =
+                        exactHostJavaScriptArguments("__operitNativeSetEnv", arguments)?;
+                    Ok(nativeSetEnvStrings(key, value))
+                }),
+            ),
+            (
+                "__operitNativeSetEnvs",
+                Arc::new(|arguments| {
+                    let [valuesJson] =
+                        exactHostJavaScriptArguments("__operitNativeSetEnvs", arguments)?;
+                    Ok(nativeSetEnvsStrings(valuesJson))
+                }),
+            ),
+            (
                 "__operitNativeGetPluginConfigDir",
                 Arc::new(|arguments| {
                     let [pluginId] = exactHostJavaScriptArguments(
@@ -2536,6 +2552,47 @@ fn nativeGetEnvForCallStrings(key: String) -> String {
         .and_then(|host| host.read_environment_variable(&key))
         .map(|value| value.unwrap_or_default())
         .unwrap_or_else(|error| buildJsExecutionErrorPayload(&error))
+}
+
+/// Writes one environment value for later Compose screens and tool calls.
+fn nativeSetEnvStrings(key: String, value: String) -> String {
+    let name = key.trim().to_string();
+    if name.is_empty() {
+        return String::new();
+    }
+    CURRENT_ENV_OVERRIDES.with(|overrides| {
+        overrides.borrow_mut().insert(name.clone(), value.clone());
+    });
+    match currentExecutionHost().and_then(|host| host.write_environment_variable(&name, &value)) {
+        Ok(()) => String::new(),
+        Err(error) => buildJsExecutionErrorPayload(&error),
+    }
+}
+
+/// Writes a JSON object of environment values for later Compose screens.
+fn nativeSetEnvsStrings(valuesJson: String) -> String {
+    let parsed = match serde_json::from_str::<Value>(&valuesJson) {
+        Ok(value) => value,
+        Err(error) => return buildJsExecutionErrorPayload(&error.to_string()),
+    };
+    let object = match parsed.as_object() {
+        Some(object) => object,
+        None => {
+            return buildJsExecutionErrorPayload("setEnvs requires a JSON object");
+        }
+    };
+    for (key, value) in object {
+        let serialized = match value {
+            Value::String(text) => text.clone(),
+            Value::Null => String::new(),
+            other => other.to_string(),
+        };
+        let result = nativeSetEnvStrings(key.clone(), serialized);
+        if !result.trim().is_empty() {
+            return result;
+        }
+    }
+    String::new()
 }
 
 #[allow(non_snake_case)]

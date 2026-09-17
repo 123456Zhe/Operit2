@@ -360,6 +360,12 @@ pub fn buildRuntimeBootstrapScript() -> String {
             getEnvForCall: function(callId, key) {{
                 return __operitNativeGetEnvForCall(String(callId || ''), String(key || ''));
             }},
+            setEnv: function(key, value) {{
+                return __operitNativeSetEnv(String(key || ''), value == null ? '' : String(value));
+            }},
+            setEnvs: function(valuesJson) {{
+                return __operitNativeSetEnvs(String(valuesJson || '{{}}'));
+            }},
             getPluginConfigDir: function(pluginId) {{
                 return __operitNativeGetPluginConfigDir(String(pluginId || ''));
             }},

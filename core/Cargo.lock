@@ -1854,7 +1854,6 @@ name = "operit-host-native-plugin-sdk-ipc"
 version = "0.1.0"
 dependencies = [
  "operit-host-api",
- "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2001,6 +2000,7 @@ dependencies = [
 name = "operit-plugin-sdk-codegen"
 version = "2.0.0-preview.7"
 dependencies = [
+ "operit-proxy-scan",
  "operit-rslink-codegen",
  "quote",
  "syn",
