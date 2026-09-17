@@ -1267,6 +1267,7 @@ impl JsEngineState {
         }
     }
 
+    /// Registers a package while keeping its host services bound for module evaluation.
     #[allow(non_snake_case)]
     fn execute_toolpkg_main_registration_function_on_current_thread(
         &mut self,
@@ -1285,6 +1286,9 @@ impl JsEngineState {
             .map_err(JsExecutionError::runtime)?;
         CURRENT_TOOLPKG_TEXT_RESOURCES.with(|resources| {
             *resources.borrow_mut() = textResources;
+        });
+        CURRENT_EXECUTION_HOST.with(|host| {
+            *host.borrow_mut() = self.executionHost.clone();
         });
         let registrationResult = (|| {
             let mut registrationParams = params.clone();
@@ -1341,6 +1345,9 @@ impl JsEngineState {
         })();
         CURRENT_TOOLPKG_TEXT_RESOURCES.with(|resources| {
             *resources.borrow_mut() = None;
+        });
+        CURRENT_EXECUTION_HOST.with(|host| {
+            *host.borrow_mut() = None;
         });
         // Registration temporarily installs a restricted bridge. Restore the runtime bridge
         // before any hook can evaluate a package main module again.
@@ -1524,6 +1531,29 @@ impl JsEngineState {
                     let [_callId, key] =
                         exactHostJavaScriptArguments("__operitNativeGetEnvForCall", arguments)?;
                     Ok(nativeGetEnvForCallStrings(key))
+                }),
+            ),
+            (
+                "__operitNativeLog",
+                Arc::new(|arguments| {
+                    let [level, call_id, message] =
+                        exactHostJavaScriptArguments("__operitNativeLog", arguments)?;
+                    let message = if call_id.is_empty() {
+                        message
+                    } else {
+                        format!("[{call_id}] {message}")
+                    };
+                    match level.as_str() {
+                        "info" => AppLogger::i("ToolPkg", &message),
+                        "warn" => AppLogger::w("ToolPkg", &message),
+                        "error" => AppLogger::e("ToolPkg", &message),
+                        _ => {
+                            return Err(HostError::new(format!(
+                                "Unknown plugin log level: {level}"
+                            )))
+                        }
+                    };
+                    Ok(String::new())
                 }),
             ),
             (

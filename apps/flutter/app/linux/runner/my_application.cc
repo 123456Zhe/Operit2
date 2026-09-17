@@ -17,6 +17,36 @@ struct _MyApplication {
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
+/// Publishes the app preference through the GTK appearance consumed by WebKit.
+static void handle_webview_theme(FlMethodChannel*, FlMethodCall* call, gpointer) {
+  if (strcmp(fl_method_call_get_name(call), "setPreferredColorScheme") != 0) {
+    fl_method_call_respond_not_implemented(call, nullptr);
+    return;
+  }
+  FlValue* arguments = fl_method_call_get_args(call);
+  if (fl_value_get_type(arguments) != FL_VALUE_TYPE_STRING) {
+    fl_method_call_respond_error(call, "invalid_color_scheme", "Expected dark or light", nullptr, nullptr);
+    return;
+  }
+  const gchar* scheme = fl_value_get_string(arguments);
+  if (strcmp(scheme, "dark") != 0 && strcmp(scheme, "light") != 0) {
+    fl_method_call_respond_error(call, "invalid_color_scheme", "Expected dark or light", nullptr, nullptr);
+    return;
+  }
+  g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme",
+               strcmp(scheme, "dark") == 0, nullptr);
+  fl_method_call_respond_success(call, nullptr, nullptr);
+}
+
+/// Registers the common WebView appearance channel for a Flutter engine.
+static void register_webview_theme(FlView* view) {
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  g_autoptr(FlMethodChannel) channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      "operit/webview_theme", FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(channel, handle_webview_theme, nullptr, nullptr);
+}
+
 /// Registers this installed executable for session-bus Plugin SDK activation.
 static void register_plugin_sdk_activation() {
   g_autoptr(GError) error = nullptr;
@@ -103,9 +133,11 @@ static void my_application_activate(GApplication* application) {
         fl_register_plugins(registry);
         register_operit_crash_channel(FL_VIEW(registry));
         register_operit_runtime_channel(FL_VIEW(registry));
+        register_webview_theme(FL_VIEW(registry));
       });
   register_operit_crash_channel(view);
   register_operit_runtime_channel(view);
+  register_webview_theme(view);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

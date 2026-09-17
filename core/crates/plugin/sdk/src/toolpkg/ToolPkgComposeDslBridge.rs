@@ -281,6 +281,7 @@ pub fn buildComposeDslContextBridgeDefinition() -> String {
                             ? options.__operit_call_runtime
                             : null,
                     actionStore: {},
+                    navigationCommands: [],
                     actionCounter: 0,
                     stateChangeListeners: [],
                     stateChangeScheduled: false,
@@ -599,11 +600,9 @@ pub fn buildComposeDslContextBridgeDefinition() -> String {
                             height: Math.min((request && request.maxHeight) || 100000, fontSize * 1.4)
                         };
                     },
+                    /// Reads environment values through the active execution context.
                     getEnv: function(key) {
-                        if (typeof getEnv === 'function') {
-                            return unwrapNativeResult(getEnv(String(key || '')));
-                        }
-                        return undefined;
+                        return unwrapNativeResult(runtime.callRuntime.getEnv(String(key || '')));
                     },
                     setEnv: function(key, value) {
                         unwrapNativeResult(invokeNative('setEnv', [
@@ -623,21 +622,18 @@ pub fn buildComposeDslContextBridgeDefinition() -> String {
                         }
                         throw createUserFacingError('Tool call bridge is unavailable');
                     },
+                    /// Queues navigation independently of the action handler's return value.
                     navigate: function(route, args) {
                         var routeId = String(route || '').trim();
                         if (!routeId) {
                             throw createUserFacingError('route is required');
                         }
                         var payload = args && typeof args === 'object' ? args : {};
-                        invokeNative('navigateToRoute', [
-                            routeId,
-                            JSON.stringify(payload)
-                        ]);
-                        return {
-                            __operitNavigate: true,
+                        runtime.navigationCommands.push({
                             route: routeId,
-                            args: payload
-                        };
+                            args: normalizeSerializableValue(payload, runtime, [])
+                        });
+                        return Promise.resolve();
                     },
                     showToast: function(message) {
                         return toolCall('toast', { message: String(message || '') });
@@ -784,6 +780,10 @@ pub fn buildComposeDslContextBridgeDefinition() -> String {
                 };
 
                 runtime.ctx = ctx;
+                /// Transfers each navigation request to exactly one render response.
+                runtime.takeNavigationCommands = function() {
+                    return runtime.navigationCommands.splice(0);
+                };
                 Object.defineProperty(runtime, 'state', {
                     get: function() { return cloneObject(runtime.stateStore); }
                 });

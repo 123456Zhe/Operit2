@@ -237,7 +237,7 @@ void main() {
     expect(section.left, greaterThan(10));
   });
 
-  testWidgets('navigates when a compose action returns a route command', (
+  testWidgets('clickable site card navigates without an action return value', (
     tester,
   ) async {
     final navigated = <String>[];
@@ -250,22 +250,42 @@ void main() {
       reset: (_, __, ___) {},
     );
     addTearDown(AppRouterGateway.clear);
+    var clicked = false;
     final bridge = _ToolPkgDslTestBridge(
+      onAction: (args) {
+        expect(args['actionId'], 'open');
+        clicked = true;
+      },
       renderResult: (_) => jsonEncode({
         'success': true,
         'tree': _node(
-          'Button',
+          'Card',
           props: {
-            'text': 'Open site',
-            'onClick': {'__actionId': 'open'},
+            'fillMaxWidth': true,
+            'modifier': {
+              '__modifierOps': [
+                {'name': 'fillMaxWidth', 'args': []},
+                {
+                  'name': 'clickable',
+                  'args': [
+                    {'__actionId': 'open'},
+                  ],
+                },
+              ],
+            },
           },
+          children: [
+            _node('Text', props: {'text': 'Open site'}),
+          ],
         ),
-        'actionResult': {
-          '__operitNavigate': true,
-          'route':
-              'toolpkg:com.operit.sidebar_model_sites:ui:model_sites_viewer',
-          'args': {'id': 'doubao'},
-        },
+        'navigationCommands': [
+          if (clicked)
+            {
+              'route':
+                  'toolpkg:com.operit.sidebar_model_sites:ui:model_sites_viewer',
+              'args': {'id': 'doubao'},
+            },
+        ],
       }),
     );
     await tester.pumpWidget(_screen(bridge));
@@ -1438,6 +1458,8 @@ class _ToolPkgDslTestBridge extends OperitRuntimeBridge {
     final result = actionId == 'toggle'
         ? _toggleRenderResult(_checked)
         : _renderResult(_count);
+    final intermediateResult = jsonDecode(result) as Map<String, Object?>;
+    intermediateResult['navigationCommands'] = <Object?>[];
     if (holdActionCompletion) {
       actionCompletion = Completer<void>();
     }
@@ -1450,7 +1472,7 @@ class _ToolPkgDslTestBridge extends OperitRuntimeBridge {
       valueBytes: encodeCoreLink(
         jsonEncode(<String, Object?>{
           'phase': 'intermediate',
-          'result': result,
+          'result': jsonEncode(intermediateResult),
         }),
       ),
     );

@@ -9,12 +9,14 @@ class _ParsedComposeDslActionEvent {
     required this.renderResult,
     required this.actionResult,
     required this.errorText,
+    this.navigationCommands = const [],
   });
 
   final String? phase;
   final _ComposeDslRenderResult? renderResult;
   final Object? actionResult;
   final String? errorText;
+  final List<({String routeId, Map<String, Object?> args})> navigationCommands;
 
   /// Parses one serialized DSL value.
   static _ParsedComposeDslActionEvent parse(String event) {
@@ -31,6 +33,7 @@ class _ParsedComposeDslActionEvent {
         renderResult: result,
         actionResult: _ComposeDslRenderResult.actionResultOf(raw),
         errorText: null,
+        navigationCommands: _ComposeDslRenderResult.navigationCommandsOf(raw),
       );
     }
     if (phase == 'error') {
@@ -51,6 +54,14 @@ class _ParsedComposeDslActionEvent {
 }
 
 class _ComposeDslRenderResult {
+  /// Reads navigation side effects independently of the action return value.
+  static List<({String routeId, Map<String, Object?> args})>
+  navigationCommandsOf(String? raw) {
+    final commands = _rootObject(raw)?['navigationCommands'];
+    if (commands == null) return const [];
+    return (commands as List).map(_composeNavigateCommand).toList();
+  }
+
   /// Creates the compose dsl render result instance.
   const _ComposeDslRenderResult({
     required this.tree,
@@ -158,17 +169,14 @@ Map<String, String>? _composeSetEnvCommand(Object? raw) {
   return {key: value};
 }
 
-/// Reads a Compose `navigate` command returned by a plugin action.
-({String routeId, Map<String, Object?> args})? _composeNavigateCommand(
+/// Decodes one queued Compose navigation request.
+({String routeId, Map<String, Object?> args}) _composeNavigateCommand(
   Object? raw,
 ) {
   if (raw is! Map) {
-    return null;
+    throw const FormatException('compose navigation command must be an object');
   }
   final map = _stringMap(raw);
-  if (!_bool(map['__operitNavigate'])) {
-    return null;
-  }
   final routeId = _string(map['route']).trim();
   if (routeId.isEmpty) {
     throw StateError('compose navigate requires a route');

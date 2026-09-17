@@ -173,10 +173,8 @@ class DesktopWidgetsPlugin : public flutter::Plugin {
   owner_ = std::move(owner);
   }
 
-  /// Detaches callbacks before Flutter destroys this engine's messenger.
-  ~DesktopWidgetsPlugin() override {
-    owner_->channel->SetMethodCallHandler(nullptr);
-  }
+  /// Releases ownership while engine teardown clears its detached messenger.
+  ~DesktopWidgetsPlugin() override = default;
 
  private:
   std::shared_ptr<WidgetWindow> owner_;

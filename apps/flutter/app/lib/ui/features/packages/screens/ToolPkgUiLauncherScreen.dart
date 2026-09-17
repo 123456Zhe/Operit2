@@ -204,6 +204,7 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
         _renderResult = result;
         _loading = false;
       });
+      _navigateCommands(_ComposeDslRenderResult.navigationCommandsOf(raw));
     } catch (error, stackTrace) {
       if (!_isCurrentRouteLoad(routeLoadGeneration)) {
         return;
@@ -293,6 +294,8 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
       routeInstanceId: routeInstanceId,
     );
     Object? latestActionResult;
+    final navigationCommands =
+        <({String routeId, Map<String, Object?> args})>[];
     try {
       await for (final event
           in _packageManager.dispatchToolPkgComposeDslActionEvents(
@@ -314,6 +317,7 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
         final phase = parsedEvent.phase;
         if (phase == 'intermediate' || phase == 'final') {
           latestActionResult = parsedEvent.actionResult;
+          navigationCommands.addAll(parsedEvent.navigationCommands);
           final result = parsedEvent.renderResult;
           if (result == null) {
             continue;
@@ -341,7 +345,7 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
           break;
         }
       }
-      _maybeNavigateFromActionResult(latestActionResult);
+      _navigateCommands(navigationCommands);
       return latestActionResult;
     } catch (error, stackTrace) {
       if (!mounted) {
@@ -431,17 +435,17 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
     return tag.isEmpty ? 'en' : tag;
   }
 
-  /// Navigates when a Compose action returns an explicit route command.
-  void _maybeNavigateFromActionResult(Object? actionResult) {
-    final command = _composeNavigateCommand(actionResult);
-    if (command == null) {
-      return;
+  /// Applies navigation side effects after their render or action completes.
+  void _navigateCommands(
+    List<({String routeId, Map<String, Object?> args})> commands,
+  ) {
+    for (final command in commands) {
+      AppRouterGateway.navigate(
+        routeId: command.routeId,
+        args: command.args,
+        source: RouteEntrySource.script,
+      );
     }
-    AppRouterGateway.navigate(
-      routeId: command.routeId,
-      args: command.args,
-      source: RouteEntrySource.script,
-    );
   }
 
   void _printComposeError(String phase, Object error, StackTrace stackTrace) {

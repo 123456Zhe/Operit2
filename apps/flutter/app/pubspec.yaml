@@ -91,6 +91,9 @@ dependencies:
     path: ../thirdparty/desktop_widgets
 
 dev_dependencies:
+  webview_all_linux: ^1.4.0
+  webview_all_web: ^1.2.1
+  webview_flutter_platform_interface: ^2.15.1
   ffi: ^2.2.0
   flutter_test:
     sdk: flutter
@@ -105,6 +108,12 @@ dev_dependencies:
   flutter_lints: ^6.0.0
 
 dependency_overrides:
+  webview_flutter_wkwebview:
+    path: ../thirdparty/webview_flutter_wkwebview
+  webview_platform_interface:
+    path: ../thirdparty/webview_platform_interface
+  webview_all_ohos:
+    path: ../thirdparty/webview_all_ohos
   file_selector_android:
     path: ../thirdparty/file_selector_android
   file_selector_platform_interface:

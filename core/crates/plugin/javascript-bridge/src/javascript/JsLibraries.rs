@@ -244,7 +244,7 @@ pub fn buildRuntimeBootstrapScript() -> String {
         var console = {{
             log: function() {{ NativeInterface.logInfoForCall('', Array.prototype.slice.call(arguments).join(' ')); }},
             info: function() {{ NativeInterface.logInfoForCall('', Array.prototype.slice.call(arguments).join(' ')); }},
-            warn: function() {{ NativeInterface.logInfoForCall('', Array.prototype.slice.call(arguments).join(' ')); }},
+            warn: function() {{ NativeInterface.logWarningForCall('', Array.prototype.slice.call(arguments).join(' ')); }},
             error: function() {{ NativeInterface.logErrorForCall('', Array.prototype.slice.call(arguments).join(' ')); }}
         }};
         var NativeInterface = {{
@@ -293,8 +293,18 @@ pub fn buildRuntimeBootstrapScript() -> String {
                     }}
                 }}
             }},
-            logInfoForCall: function() {{}},
-            logErrorForCall: function() {{}},
+            /// Forwards plugin informational output to the shared application logger.
+            logInfoForCall: function(callId, message) {{
+                __operitNativeLog('info', String(callId || ''), String(message));
+            }},
+            /// Preserves warning severity for plugin console output.
+            logWarningForCall: function(callId, message) {{
+                __operitNativeLog('warn', String(callId || ''), String(message));
+            }},
+            /// Forwards plugin failures without suppressing their messages.
+            logErrorForCall: function(callId, message) {{
+                __operitNativeLog('error', String(callId || ''), String(message));
+            }},
             reportErrorForCall: function() {{}},
             sendCallIntermediateResult: function(callId, result) {{
                 __operitSendIntermediateResult(

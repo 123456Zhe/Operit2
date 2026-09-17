@@ -1136,7 +1136,7 @@ packages:
     source: path
     version: "1.2.1"
   webview_all_linux:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: webview_all_linux
       sha256: dd31aa2d0aa709019a36697c694a2e0df6dd1c8c14ced12bf06539e175710f98
@@ -1144,15 +1144,14 @@ packages:
     source: hosted
     version: "1.4.0"
   webview_all_ohos:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: webview_all_ohos
-      sha256: ae825205c4fa752123145c3eb191e220ef0455ab3107ac10c62e1246679bd444
-      url: "https://pub.dev"
-    source: hosted
+      path: "../thirdparty/webview_all_ohos"
+      relative: true
+    source: path
     version: "1.4.0"
   webview_all_web:
-    dependency: "direct overridden"
+    dependency: "direct dev"
     description:
       path: "../thirdparty/webview_all_web"
       relative: true
@@ -1173,27 +1172,25 @@ packages:
     source: path
     version: "4.12.0"
   webview_flutter_platform_interface:
-    dependency: "direct overridden"
+    dependency: "direct dev"
     description:
       path: "../thirdparty/webview_flutter_platform_interface"
       relative: true
     source: path
     version: "2.15.1"
   webview_flutter_wkwebview:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: webview_flutter_wkwebview
-      sha256: "82648217f537573e1ca9ae9952d3eacedca6ab5aee69dc84445fc763766dcea2"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../thirdparty/webview_flutter_wkwebview"
+      relative: true
+    source: path
     version: "3.25.1"
   webview_platform_interface:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: webview_platform_interface
-      sha256: "0f550d73eba8ebf9223aeca5f3eaac12848a2dcaa07ad619e4ff7d0b539740b7"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../thirdparty/webview_platform_interface"
+      relative: true
+    source: path
     version: "1.4.0"
   xdg_directories:
     dependency: transitive
