@@ -193,12 +193,12 @@ final class PluginSdkIpcConnection {
       if (_buffer.length < length + 4) return;
       final payload = Uint8List.fromList(_buffer.sublist(4, length + 4));
       _buffer.removeRange(0, length + 4);
-      _onMessage(msgpack.deserialize(payload) as Map);
+      _onMessage(msgpack.deserialize(payload) as Map<dynamic, dynamic>);
     }
   }
 
   /// Routes one decoded envelope to its pending operation.
-  void _onMessage(Map message) {
+  void _onMessage(Map<dynamic, dynamic> message) {
     final type = message['type'];
     final body = _map(message['body']);
     switch (type) {
