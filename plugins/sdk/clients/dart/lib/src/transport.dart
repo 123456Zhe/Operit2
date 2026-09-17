@@ -1,6 +1,6 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
-import 'host.dart';
 
 import 'package:msgpack_dart/msgpack_dart.dart' as msgpack;
 
@@ -41,14 +41,14 @@ final class PluginSdkError implements Exception {
   String toString() => '$code: $message';
 }
 
-/// Owns a MessagePack session over the built-in platform host.
+/// Owns the framed MessagePack socket used by the external Plugin SDK.
 final class PluginSdkIpcConnection {
-  PluginSdkIpcConnection._(this._host) {
-    _host.messages.listen(_onBytes, onDone: _onClosed, onError: _onHostError);
+  PluginSdkIpcConnection._(this._socket) {
+    _socket.listen(_onBytes, onDone: _onClosed, onError: _onSocketError);
   }
 
-  final PluginSdkHost _host;
-  bool _closed = false;
+  final Socket _socket;
+  final List<int> _buffer = <int>[];
   final Map<String, Completer<Map<String, Object?>>> _calls =
       <String, Completer<Map<String, Object?>>>{};
   final Map<String, StreamController<PluginSdkEvent>> _watches =
@@ -59,19 +59,19 @@ final class PluginSdkIpcConnection {
   final Map<String, Completer<void>> _pushCloses = <String, Completer<void>>{};
   int _nextRequest = 1;
 
-  /// Activates Operit and opens the platform carrier supplied with the SDK.
-  static Future<PluginSdkIpcConnection> connect({
-    String nativeLibraryPath = 'liboperit_plugin_sdk.so',
+  /// Connects to the standard TCP loopback Plugin SDK endpoint.
+  static Future<PluginSdkIpcConnection> connectTcp({
+    String host = '127.0.0.1',
+    int port = 18732,
   }) async {
-    return PluginSdkIpcConnection._(
-      await PluginSdkHost.connect(nativeLibraryPath),
-    );
+    final socket = await Socket.connect(host, port);
+    return PluginSdkIpcConnection._(socket);
   }
 
-  /// Closes the native session and fails outstanding protocol operations.
-  void close() {
-    _host.close();
-    _onClosed();
+  /// Connects to the standard Unix Plugin SDK endpoint used by Unix hosts.
+  static Future<PluginSdkIpcConnection> connectUnix(String path) async {
+    final socket = await Socket.connect(InternetAddress(path, type: InternetAddressType.unix), 0);
+    return PluginSdkIpcConnection._(socket);
   }
 
   /// Allocates one session-local request id.
@@ -80,11 +80,11 @@ final class PluginSdkIpcConnection {
   /// Sends one canonical Link envelope.
   void _send(Map<String, Object?> message) {
     final payload = msgpack.serialize(message);
-    if (_closed) {
-      _fail(const PluginSdkError('IPC_CLOSED', 'Plugin SDK connection closed'));
-      return;
-    }
-    _host.send(payload);
+    final frame = Uint8List(4 + payload.length);
+    final view = ByteData.sublistView(frame);
+    view.setUint32(0, payload.length, Endian.big);
+    frame.setRange(4, frame.length, payload);
+    _socket.add(frame);
   }
 
   /// Reads one Core call response.
@@ -109,11 +109,7 @@ final class PluginSdkIpcConnection {
   }
 
   /// Opens one Core watch stream.
-  Stream<PluginSdkEvent> watch(
-    int targetObjectId,
-    String propertyName,
-    Object? args,
-  ) {
+  Stream<PluginSdkEvent> watch(int targetObjectId, String propertyName, Object? args) {
     final requestId = nextRequestId();
     final controller = StreamController<PluginSdkEvent>();
     _watches[requestId] = controller;
@@ -146,11 +142,7 @@ final class PluginSdkIpcConnection {
   }
 
   /// Opens one Core push stream.
-  Future<PluginSdkPushSink> push(
-    int targetObjectId,
-    String methodName,
-    Object? args,
-  ) async {
+  Future<PluginSdkPushSink> push(int targetObjectId, String methodName, Object? args) async {
     final pushId = nextRequestId();
     final open = Completer<void>();
     _pushOpens[pushId] = open;
@@ -174,11 +166,7 @@ final class PluginSdkIpcConnection {
     _pushItems[key] = completer;
     _send(<String, Object?>{
       'type': 'PushItem',
-      'body': <String, Object?>{
-        'pushId': pushId,
-        'sequence': sequence,
-        'args': value,
-      },
+      'body': <String, Object?>{'pushId': pushId, 'sequence': sequence, 'args': value},
     });
     return completer.future;
   }
@@ -194,32 +182,23 @@ final class PluginSdkIpcConnection {
     return completer.future;
   }
 
-  /// Decodes one envelope already framed and validated by the platform host.
+  /// Processes all complete length-prefixed frames currently buffered.
   void _onBytes(Uint8List bytes) {
-    try {
-      _onMessage(
-        _decodeValue(msgpack.deserialize(bytes)) as Map<String, Object?>,
-      );
-    } catch (error) {
-      _onHostError(error, StackTrace.current);
+    _buffer.addAll(bytes);
+    while (_buffer.length >= 4) {
+      final length = (_buffer[0] << 24) |
+          (_buffer[1] << 16) |
+          (_buffer[2] << 8) |
+          _buffer[3];
+      if (_buffer.length < length + 4) return;
+      final payload = Uint8List.fromList(_buffer.sublist(4, length + 4));
+      _buffer.removeRange(0, length + 4);
+      _onMessage(msgpack.deserialize(payload) as Map<dynamic, dynamic>);
     }
-  }
-
-  /// Restores string-keyed Link maps recursively for generated typed model decoders.
-  Object? _decodeValue(Object? value) {
-    if (value is Map) {
-      return value.map<String, Object?>(
-        (key, item) => MapEntry(key as String, _decodeValue(item)),
-      );
-    }
-    if (value is List) {
-      return value.map(_decodeValue).toList(growable: false);
-    }
-    return value;
   }
 
   /// Routes one decoded envelope to its pending operation.
-  void _onMessage(Map<Object?, Object?> message) {
+  void _onMessage(Map<dynamic, dynamic> message) {
     final type = message['type'];
     final body = _map(message['body']);
     switch (type) {
@@ -241,15 +220,13 @@ final class PluginSdkIpcConnection {
         final controller = _watches[body['subscriptionId']];
         if (controller == null) return;
         final event = _map(body['event']);
-        controller.add(
-          PluginSdkEvent(
-            requestId: _requestIdOrNull(event['requestId']),
-            targetObjectId: event['targetObjectId'] as int,
-            propertyName: event['propertyName'] as String,
-            kind: event['kind'].toString(),
-            value: event['value'],
-          ),
-        );
+        controller.add(PluginSdkEvent(
+          requestId: _requestIdOrNull(event['requestId']),
+          targetObjectId: event['targetObjectId'] as int,
+          propertyName: event['propertyName'] as String,
+          kind: event['kind'].toString(),
+          value: event['value'],
+        ));
       case 'WatchClose':
         final id = body['subscriptionId'];
         _watchOpens.remove(id)?.completeError(_error(body['error']));
@@ -272,49 +249,23 @@ final class PluginSdkIpcConnection {
     }
   }
 
-  /// Handles host closure by failing pending operations.
+  /// Handles socket closure by failing pending operations.
   void _onClosed() {
-    _closed = true;
-    _fail(
-      const PluginSdkError('IPC_CLOSED', 'Plugin SDK IPC connection closed'),
-    );
-  }
-
-  /// Fails and removes every pending operation when its carrier is unavailable.
-  void _fail(Object error) {
+    final error = const PluginSdkError('IPC_CLOSED', 'Plugin SDK IPC connection closed');
     for (final completer in _calls.values) {
       completer.completeError(error);
     }
     for (final completer in _watchOpens.values) {
       completer.completeError(error);
     }
-    for (final table in [_pushOpens, _pushItems, _pushCloses]) {
-      for (final completer in table.values) {
-        completer.completeError(error);
-      }
-      table.clear();
-    }
-    final watches = _watches.values.toList(growable: false);
-    _watches.clear();
-    for (final controller in watches) {
-      controller.addError(error);
-      controller.close();
-    }
-    _calls.clear();
-    _watchOpens.clear();
   }
 
-  /// Reports the actual platform activation or carrier failure.
-  void _onHostError(Object error, StackTrace stack) {
-    _closed = true;
-    _fail(error);
-    _host.close();
-  }
+  /// Handles one socket error as a connection failure.
+  void _onSocketError(Object error, StackTrace stack) => _onClosed();
 
   /// Reads a protocol map without coercing unknown payloads.
   Map<String, Object?> _map(Object? value) {
-    if (value is! Map)
-      throw const PluginSdkError('INVALID_FRAME', 'IPC body is not a map');
+    if (value is! Map) throw const PluginSdkError('INVALID_FRAME', 'IPC body is not a map');
     return value.map((key, item) => MapEntry(key.toString(), item));
   }
 
@@ -325,8 +276,7 @@ final class PluginSdkIpcConnection {
   }
 
   /// Extracts an optional request id.
-  String? _requestIdOrNull(Object? value) =>
-      value == null ? null : _requestId(value);
+  String? _requestIdOrNull(Object? value) => value == null ? null : _requestId(value);
 
   /// Decodes one Result payload.
   Object? _resultValue(Object? result) {
@@ -360,8 +310,7 @@ final class _PushSink implements PluginSdkPushSink {
 
   /// Sends one value into the Core push stream.
   @override
-  Future<void> add(Object? value) =>
-      _connection._push(_pushId, _sequence++, value);
+  Future<void> add(Object? value) => _connection._push(_pushId, _sequence++, value);
 
   /// Closes the Core push stream.
   @override
