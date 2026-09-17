@@ -22,6 +22,7 @@ import 'package:operit2/ui/features/chat/components/workspace/html_preview/Works
 
 import 'RuntimeBrowserAutomationController.dart';
 import 'RuntimeBrowserSessionRegistry.dart';
+import 'ScreenStudioChatBridge.dart';
 
 class RuntimeBrowserOwnerUiDelegate {
   const RuntimeBrowserOwnerUiDelegate({
@@ -82,6 +83,7 @@ class RuntimeBrowserOwner extends ChangeNotifier {
   final Map<String, RuntimeBrowserAutomationController> _automation =
       <String, RuntimeBrowserAutomationController>{};
   final Map<String, String> _defaultUserAgents = <String, String>{};
+  final Map<String, String> _studioTokens = <String, String>{};
   final Set<String> _workspaceSurfaceSessionIds = <String>{};
   final RuntimeBrowserSessionRegistry _sessionRegistry =
       RuntimeBrowserSessionRegistry.instance;
@@ -372,6 +374,7 @@ class RuntimeBrowserOwner extends ChangeNotifier {
 
   void _closeTabAt(int index) {
     final removed = _tabs.removeAt(index);
+    _studioTokens.remove(removed.id);
     _automation.remove(removed.id);
     _defaultUserAgents.remove(removed.id);
     _sessionRegistry.unregister(removed.id);
@@ -681,6 +684,34 @@ class RuntimeBrowserOwner extends ChangeNotifier {
   }
 
   /// Configures browser behavior shared by every owner WebView session.
+  Future<void> _handleStudioMessage(
+      WorkspaceBrowserTabState tab, String raw) async {
+    final token = _studioTokens[tab.id];
+    if (token == null ||
+        tab.isDisposed ||
+        currentTab != tab ||
+        !isWorkspaceSurfaceSession(tab.id) ||
+        !ScreenStudioChatBridge.isStudioUrl(tab.url)) return;
+    Object? id;
+    Map<String, Object?> reply;
+    try {
+      if (raw.length > 256 * 1024) throw StateError('任务过大');
+      id = (jsonDecode(raw) as Map<String, dynamic>)['id'];
+      if (id is! String || id.length > 80) return;
+      reply = {
+        'id': id,
+        'result': await ScreenStudioChatBridge.receive(raw, token)
+      };
+    } catch (error) {
+      reply = {'id': id, 'error': error.toString()};
+    }
+    if (!tab.isDisposed && _studioTokens[tab.id] == token) {
+      await tab.controller
+          .runJavaScript('window.__operitStudioReply?.(${jsonEncode(reply)});');
+    }
+  }
+
+  /// Configures browser behavior shared by every owner WebView session.
   void _configureTab(WorkspaceBrowserTabState tab) {
     tab.controller
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -709,6 +740,12 @@ class RuntimeBrowserOwner extends ChangeNotifier {
           'OperitBrowserPopup',
           onMessageReceived: (message) {
             unawaited(_handlePopupMessage(tab.id, message.message));
+          },
+        )
+        ..addJavaScriptChannel(
+          'OperitScreenStudio',
+          onMessageReceived: (message) {
+            unawaited(_handleStudioMessage(tab, message.message));
           },
         )
         ..addJavaScriptChannel(
@@ -745,6 +782,7 @@ class RuntimeBrowserOwner extends ChangeNotifier {
           return NavigationDecision.navigate;
         },
         onPageStarted: (url) {
+          _studioTokens.remove(tab.id);
           if (tab.isDisposed) {
             return;
           }
@@ -802,6 +840,12 @@ class RuntimeBrowserOwner extends ChangeNotifier {
               logicalUrl,
               WorkspaceUserscriptRunAt.documentEnd,
             );
+            if (ScreenStudioChatBridge.isStudioUrl(logicalUrl)) {
+              final token = ScreenStudioChatBridge.newToken();
+              _studioTokens[tab.id] = token;
+              await tab.controller
+                  .runJavaScript(ScreenStudioChatBridge.script(token));
+            }
           }
           if (tab.isDisposed) {
             return;

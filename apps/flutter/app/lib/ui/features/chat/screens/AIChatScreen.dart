@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:file_selector/file_selector.dart';
 
 import '../../../../core/logging/ClientLogger.dart';
+import '../../../../core/host/browser/ScreenStudioChatBridge.dart';
 import '../../../../core/proxy/generated/CoreProxyModels.g.dart' as core_proxy;
 import '../../../../data/preferences/UserPreferencesManager.dart';
 import '../../../../l10n/generated/app_localizations.dart';
@@ -270,8 +271,10 @@ class _AIChatSurfaceState extends State<_AIChatSurface> {
     _mainLayoutController = MainLayoutScope.of(context);
     _isCurrentMainScreen = MainScreenActivityScope.isCurrentScreenOf(context);
     if (_isCurrentMainScreen) {
+      ScreenStudioChatBridge.attach(this, _sendStudioTask);
       _scheduleTopBarActionsUpdate();
     } else {
+      ScreenStudioChatBridge.detach(this);
       _topBarController?.clearActions(owner: _topBarActionsOwner);
       _topBarController?.clearTitleContent(owner: _topBarTitleOwner);
       _mainLayoutController?.clearAttachment(owner: _mainLayoutOwner);
@@ -281,6 +284,7 @@ class _AIChatSurfaceState extends State<_AIChatSurface> {
   /// Releases chat state and subscriptions.
   @override
   void dispose() {
+    ScreenStudioChatBridge.detach(this);
     _saveCurrentInputDraft();
     ChatSelectionTransition.requests.removeListener(_onChatSelectionTransition);
     PendingChatDraftHandler.revision.removeListener(_consumePendingChatDraft);
@@ -300,6 +304,18 @@ class _AIChatSurfaceState extends State<_AIChatSurface> {
     _topBarController?.clearTitleContent(owner: _topBarTitleOwner);
     _mainLayoutController?.clearAttachment(owner: _mainLayoutOwner);
     super.dispose();
+  }
+
+  Future<void> _sendStudioTask(String text) async {
+    final chatId = _currentChatId;
+    if (!mounted || !_isCurrentMainScreen || chatId == null) {
+      throw StateError('请先选择当前对话');
+    }
+    if (_loading || _inputProcessingState.isProcessing) {
+      throw StateError('当前对话正在处理任务，请完成后再发送');
+    }
+    await _viewModel.sendUserMessage(text,
+        chatIdOverride: chatId, includeAttachments: false);
   }
 
   /// Loads the global long-paste conversion settings used by this chat surface.
@@ -1201,43 +1217,39 @@ class _AIChatSurfaceState extends State<_AIChatSurface> {
     if (chatId == null || chatId.isEmpty) {
       return;
     }
-    _messagesSubscription = _viewModel
-        .watchMessages(chatId)
-        .listen(
-          (messages) {
-            if (generation == _chatFlowBindingGeneration &&
-                _requestedChatFlowChatId == chatId) {
-              _applyMessages(messages);
-            }
-          },
-          onError: (Object error, StackTrace stackTrace) {
-            _handleBoundChatFlowError(
-              error: error,
-              stackTrace: stackTrace,
-              chatId: chatId,
-              generation: generation,
-            );
-          },
+    _messagesSubscription = _viewModel.watchMessages(chatId).listen(
+      (messages) {
+        if (generation == _chatFlowBindingGeneration &&
+            _requestedChatFlowChatId == chatId) {
+          _applyMessages(messages);
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        _handleBoundChatFlowError(
+          error: error,
+          stackTrace: stackTrace,
+          chatId: chatId,
+          generation: generation,
         );
-    _chatStateSubscription = _viewModel
-        .watchChatState(chatId)
-        .listen(
-          (state) {
-            if (generation == _chatFlowBindingGeneration &&
-                _requestedChatFlowChatId == chatId &&
-                state.currentChatId == chatId) {
-              _applyChatState(state);
-            }
-          },
-          onError: (Object error, StackTrace stackTrace) {
-            _handleBoundChatFlowError(
-              error: error,
-              stackTrace: stackTrace,
-              chatId: chatId,
-              generation: generation,
-            );
-          },
+      },
+    );
+    _chatStateSubscription = _viewModel.watchChatState(chatId).listen(
+      (state) {
+        if (generation == _chatFlowBindingGeneration &&
+            _requestedChatFlowChatId == chatId &&
+            state.currentChatId == chatId) {
+          _applyChatState(state);
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        _handleBoundChatFlowError(
+          error: error,
+          stackTrace: stackTrace,
+          chatId: chatId,
+          generation: generation,
         );
+      },
+    );
   }
 
   /// Applies a message-window change without changing chat execution state.
