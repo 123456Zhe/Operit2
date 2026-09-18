@@ -97,6 +97,7 @@ target/
 
 # ESP32 / ESP-IDF build outputs
 apps/esp32/.embuild/
+**/.embuild/
 apps/esp32/sdkconfig
 apps/esp32/sdkconfig.old
 apps/esp32/bootloader.bin
