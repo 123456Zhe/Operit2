@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import '../link/CoreLinkCodec.dart';
 import 'CoreByteTransport.dart';
+import 'FfiCoreAddress.dart';
 
 typedef _AttachNative = Bool Function(Pointer<Void>, Pointer<Void>, Int64);
 typedef _Attach = bool Function(Pointer<Void>, Pointer<Void>, int);
@@ -71,28 +72,28 @@ class _FfiConnection implements Finalizable {
     if (descriptor['version'] != 1 || NativeApi.majorVersion != 2) {
       throw StateError('Unsupported Core FFI or Dart native API version');
     }
-    _session = Pointer<Void>.fromAddress(descriptor['session'] as int);
+    _session = Pointer<Void>.fromAddress(_address(descriptor, 'session'));
     _submit = Pointer<NativeFunction<_SubmitNative>>.fromAddress(
-      descriptor['submit'] as int,
+      _address(descriptor, 'submit'),
     ).asFunction<_Submit>();
     _allocate = Pointer<NativeFunction<_AllocateNative>>.fromAddress(
-      descriptor['allocate'] as int,
+      _address(descriptor, 'allocate'),
     ).asFunction<_Allocate>();
     _free = Pointer<NativeFunction<_FreeNative>>.fromAddress(
-      descriptor['free'] as int,
+      _address(descriptor, 'free'),
     ).asFunction<_Free>();
     _finalizer = NativeFinalizer(
       Pointer<NativeFunction<Void Function(Pointer<Void>)>>.fromAddress(
-        descriptor['release'] as int,
+        _address(descriptor, 'release'),
       ),
     );
     _release =
         Pointer<NativeFunction<Void Function(Pointer<Void>)>>.fromAddress(
-          descriptor['release'] as int,
+          _address(descriptor, 'release'),
         ).asFunction<void Function(Pointer<Void>)>();
     _finalizer.attach(this, _session, detach: this);
     final attach = Pointer<NativeFunction<_AttachNative>>.fromAddress(
-      descriptor['attach'] as int,
+      _address(descriptor, 'attach'),
     ).asFunction<_Attach>();
     if (!attach(
       _session,
@@ -103,6 +104,15 @@ class _FfiConnection implements Finalizable {
       throw StateError('Core FFI connection was already attached');
     }
     _port.listen(_receive);
+  }
+
+  /// Decodes one exact native address from the string-based FFI descriptor.
+  static int _address(Map<String, dynamic> descriptor, String name) {
+    final value = descriptor[name];
+    if (value is! String) {
+      throw FormatException('FFI descriptor address $name must be a string');
+    }
+    return decodeCoreFfiAddress(value);
   }
 
   final ReceivePort _port = ReceivePort('operit-core-ffi');

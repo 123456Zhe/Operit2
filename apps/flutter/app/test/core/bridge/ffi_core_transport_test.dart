@@ -62,12 +62,13 @@ class _HostConnection {
   /// Publishes function pointers using the same versioned descriptor as the Rust host.
   String descriptor() => jsonEncode({
     'version': 1,
-    'session': token.address,
+    'session': token.address.toString(),
     'attach':
         Pointer.fromFunction<
               Bool Function(Pointer<Void>, Pointer<Void>, Int64)
             >(_attach, false)
-            .address,
+            .address
+            .toString(),
     'submit':
         Pointer.fromFunction<
               Void Function(
@@ -78,14 +79,15 @@ class _HostConnection {
                 UintPtr,
               )
             >(_submit)
-            .address,
+            .address
+            .toString(),
     'allocate': Pointer.fromFunction<Pointer<Uint8> Function(UintPtr)>(
       _allocate,
-    ).address,
+    ).address.toString(),
     'free': Pointer.fromFunction<Void Function(Pointer<Uint8>, UintPtr)>(
       _free,
-    ).address,
-    'release': calloc.nativeFree.address,
+    ).address.toString(),
+    'release': calloc.nativeFree.address.toString(),
   });
 
   /// Copies a framed typed-data message through the actual Dart VM native API.

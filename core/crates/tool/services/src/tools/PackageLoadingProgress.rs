@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
-use std::time::Duration;
 
+use operit_host_api::HostManager::defaultHostRuntimeTaskSchedulerHost;
 use operit_store::PreferencesDataStore::{mutableStateFlow, MutableStateFlow, StateFlow};
 use serde::{Deserialize, Serialize};
 
@@ -250,6 +250,11 @@ pub fn completePluginLoadingSession() {
         }
         progress.forceExpanded = false;
     });
-    std::thread::sleep(Duration::from_millis(120));
-    skipPluginLoading();
+    defaultHostRuntimeTaskSchedulerHost()
+        .scheduleDelayedHostRuntimeTask(
+            "plugin-loading-overlay-hide",
+            120,
+            Box::new(skipPluginLoading),
+        )
+        .expect("plugin loading overlay hide task must be scheduled");
 }
