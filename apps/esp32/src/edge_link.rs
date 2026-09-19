@@ -5,11 +5,11 @@ use std::thread::JoinHandle;
 
 use esp_idf_hal::uart::UartDriver;
 use operit_edge_transport::{
-    AuthenticatedLinkChannel, EdgeLinkServer, EdgePairingAuthority, EdgePairingStore, LinkChannel,
+    AuthenticatedLinkChannel, EdgePairingAuthority, EdgePairingStore, EdgePeerLink,
+    EdgeSpaceRouteClient, LinkChannel,
 };
 use operit_host_api::{HostError, HostResult};
 use operit_link::LinkDeviceInfo;
-use operit_node_edge::EdgeNode;
 use tokio::runtime::Builder;
 
 use crate::edge_serial::Esp32UartLinkChannel;
@@ -22,7 +22,6 @@ pub struct Esp32EdgeLinkServer {
 
 impl Esp32EdgeLinkServer {
     pub fn start(
-        node: Arc<EdgeNode>,
         port: u16,
         token: String,
         status: Arc<FirmwareStatus>,
@@ -78,11 +77,9 @@ impl Esp32EdgeLinkServer {
                     };
                     if let Some(channel) = serialChannel {
                         let serialAuthority = Arc::clone(&authority);
-                        let serialNode = Arc::clone(&node);
                         tokio::spawn(async move {
                             loop {
                                 match handleChannel(
-                                    Arc::clone(&serialNode),
                                     Arc::clone(&serialAuthority),
                                     channel.clone(),
                                 )
@@ -124,9 +121,8 @@ impl Esp32EdgeLinkServer {
                         let channel =
                             operit_edge_transport::tcp::TcpLinkChannel::fromStream(stream);
                         let authority = Arc::clone(&authority);
-                        let node = Arc::clone(&node);
                         tokio::spawn(async move {
-                            if let Err(error) = handleChannel(node, authority, channel).await {
+                            if let Err(error) = handleChannel(authority, channel).await {
                                 log::warn!("Edge Link session: {error}");
                             }
                         });
@@ -140,7 +136,6 @@ impl Esp32EdgeLinkServer {
 
 /// Handles the first frame and then serves one authenticated EdgeLink session.
 async fn handleChannel(
-    node: Arc<EdgeNode>,
     authority: Arc<EdgePairingAuthority>,
     channel: Arc<dyn LinkChannel>,
 ) -> Result<(), String> {
@@ -153,16 +148,44 @@ async fn handleChannel(
             let session = authority
                 .pairFromStart(channel.clone(), request.clone())
                 .await?;
+            let peerId = session.peerDeviceId.clone();
             let authenticated = AuthenticatedLinkChannel::new(channel, session);
-            EdgeLinkServer::new(node, authenticated).run().await
+            let context = tokio::time::timeout(std::time::Duration::from_secs(30), authenticated.receive())
+                .await.map_err(|_| "Space admission timed out".to_string())??
+                .ok_or_else(|| "Space admission context was not received".to_string())?;
+            installSpaceRoute(authenticated, context, &peerId).await?;
+            Ok(())
         }
         operit_link::LinkFramePayload::Authenticated { .. } => {
             let (session, inner) = authority.authenticateFrame(&first)?;
+            let peerId = session.peerDeviceId.clone();
             let authenticated = AuthenticatedLinkChannel::new(channel, session);
-            EdgeLinkServer::new(node, authenticated)
-                .runWithFirstFrame(inner)
-                .await
+            installSpaceRoute(authenticated, inner, &peerId).await?;
+            Ok(())
         }
         _ => Err("Edge Link connection did not start with pairing or authentication".to_string()),
     }
+}
+
+async fn installSpaceRoute(
+    channel: Arc<dyn LinkChannel>,
+    frame: operit_link::LinkFrame,
+    peerId: &str,
+) -> Result<(), String> {
+    let operit_link::LinkFramePayload::SpaceContext { spaceId, adjacentNodeId, ttl, chatId } = frame.payload else {
+        return Err("Edge session did not begin with authenticated Space admission".to_string());
+    };
+    if spaceId.trim().is_empty() || chatId.trim().is_empty() || adjacentNodeId != peerId || ttl == 0 {
+        return Err("Invalid authenticated Space route context".to_string());
+    }
+    let peer = EdgePeerLink::new(channel);
+    let client = EdgeSpaceRouteClient::throughAdjacent(peer.clone(), spaceId, adjacentNodeId, ttl);
+    operit_link::installCoreRouteRuntime(Arc::new(client.clone()));
+    crate::edge_chat::install(client, chatId);
+    // Keep the UART session owner alive while PeerLink owns receive(); the
+    // listener must not compete with it for the next authenticated frame.
+    while peer.isConnected() {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+    Ok(())
 }

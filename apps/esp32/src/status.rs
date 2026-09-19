@@ -115,6 +115,7 @@ pub fn renderHomePage(snapshot: &FirmwareStatusSnapshot) -> String {
 <p>IP: {ip}</p>\
 <p>Pairing code: {pairing}</p>\
 <p><a href=\"/screen\">打开屏幕实时预览</a></p>\
+<p><a href=\"/chat\">打开聊天</a></p>\
 <p>This node is an Edge capability device, not a full CoreNode.</p>\
 </body>\
 </html>",

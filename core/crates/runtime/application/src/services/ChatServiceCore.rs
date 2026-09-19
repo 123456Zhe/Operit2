@@ -54,7 +54,7 @@ use operit_util::AppLogger::AppLogger;
 use operit_util::MarkdownRenderStream::{MarkdownRenderEventStream, MarkdownStreamEvent};
 use operit_util::OCRUtils::{OCRUtils, Quality as OCRQuality};
 use operit_util::OperitPaths;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -837,6 +837,13 @@ impl ChatServiceCore {
     #[allow(non_snake_case)]
     pub fn renderToolPkgXml(&self, tagName: String, xmlContent: String) -> serde_json::Value {
         ToolPkgXmlRenderBridge::renderRegisteredXml(tagName, xmlContent)
+    }
+
+    /// Creates a new chat and makes it available through chat history state.
+    #[operit_route_macros::operit_core_route(binding = chatId)]
+    pub async fn ensureRoutedChat(&mut self, chatId: String) -> Result<(), String> {
+        self.chatHistoryDelegate.chatHistoryManager.ensureRoutedChat(chatId)
+            .map_err(|error| error.to_string())
     }
 
     /// Creates a new chat and makes it available through chat history state.

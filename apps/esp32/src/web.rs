@@ -2,14 +2,12 @@
 
 use std::sync::Arc;
 
+use crate::edge_screen::{EdgeScreenInputRequest, Esp32ScreenService, ScreenService};
 use esp_idf_svc::http::server::{Configuration as HttpConfig, EspHttpServer};
 use esp_idf_svc::http::Method;
 use esp_idf_svc::io::Write;
 use operit_board_esp32::Esp32ScreenMirror;
 use operit_host_api::{HostError, HostResult};
-use operit_node_edge::{EdgeScreenInputRequest, ScreenService};
-
-use crate::edge_screen::Esp32ScreenService;
 
 use crate::status::{renderHomePage, renderStatusJson, FirmwareStatus};
 
@@ -32,7 +30,91 @@ impl Esp32WebHome {
             ..Default::default()
         })
         .map_err(|error| HostError::new(format!("http server: {error}")))?;
+        let chatReadToken = edgeToken.clone();
+        let chatWriteToken = edgeToken.clone();
         crate::ui_deploy::register(&mut server, edgeToken)?;
+        server
+            .fn_handler("/chat", Method::Get, |request| {
+                request
+                    .into_response(
+                        200,
+                        Some("OK"),
+                        &[("Content-Type", "text/html; charset=utf-8")],
+                    )?
+                    .write_all(crate::edge_chat::PAGE.as_bytes())?;
+                Ok::<(), esp_idf_svc::io::EspIOError>(())
+            })
+            .map_err(|e| HostError::new(e.to_string()))?;
+        server
+            .fn_handler("/chat/state", Method::Get, move |request| {
+                let authorized = !chatReadToken.is_empty()
+                    && request.header("X-Edge-Token") == Some(chatReadToken.as_str());
+                let (code, body) = if authorized {
+                    (200, crate::edge_chat::snapshot().to_string())
+                } else {
+                    (401, "{\"error\":\"Unauthorized\"}".into())
+                };
+                request
+                    .into_response(
+                        code,
+                        None,
+                        &[
+                            ("Content-Type", "application/json"),
+                            ("Cache-Control", "no-store"),
+                        ],
+                    )?
+                    .write_all(body.as_bytes())?;
+                Ok::<(), esp_idf_svc::io::EspIOError>(())
+            })
+            .map_err(|e| HostError::new(e.to_string()))?;
+        server
+            .fn_handler("/chat/send", Method::Post, move |mut request| {
+                if chatWriteToken.is_empty()
+                    || request.header("X-Edge-Token") != Some(chatWriteToken.as_str())
+                {
+                    request
+                        .into_response(401, None, &[("Content-Type", "application/json")])?
+                        .write_all(b"{\"error\":\"Unauthorized\"}")?;
+                    return Ok::<(), esp_idf_svc::io::EspIOError>(());
+                }
+                let length = request
+                    .header("Content-Length")
+                    .and_then(|v| v.parse::<usize>().ok())
+                    .unwrap_or(0);
+                if length == 0 || length > 8192 {
+                    request
+                        .into_response(413, None, &[("Content-Type", "application/json")])?
+                        .write_all(b"{\"error\":\"Message must be between 1 and 8192 bytes\"}")?;
+                    return Ok(());
+                }
+                let mut body = vec![0u8; length];
+                let mut offset = 0;
+                while offset < length {
+                    let read = request.read(&mut body[offset..])?;
+                    if read == 0 {
+                        break;
+                    }
+                    offset += read;
+                }
+                let result = serde_json::from_slice::<serde_json::Value>(&body[..offset])
+                    .map_err(|e| e.to_string())
+                    .and_then(|v| {
+                        v.get("text")
+                            .and_then(|v| v.as_str())
+                            .map(str::to_owned)
+                            .ok_or_else(|| "Missing message text".to_string())
+                    })
+                    .and_then(crate::edge_chat::send);
+                let (code, body) = match result {
+                    Ok(()) => (200, serde_json::json!({"ok": true})),
+                    Err(error) => (400, serde_json::json!({"error": error})),
+                };
+                request
+                    .into_response(code, None, &[("Content-Type", "application/json")])?
+                    .write_all(body.to_string().as_bytes())?;
+                Ok(())
+            })
+            .map_err(|e| HostError::new(e.to_string()))?;
         let homeStatus = Arc::clone(&status);
         server
             .fn_handler("/", Method::Get, move |request| {
@@ -113,7 +195,7 @@ impl Esp32WebHome {
                             .write_all(body.as_bytes())?;
                     }
                     Err(error) => {
-                        let body = format!("{{\"error\":\"{}\"}}", error.message);
+                        let body = format!("{{\"error\":\"{}\"}}", error);
                         request
                             .into_response(
                                 400,
@@ -123,7 +205,7 @@ impl Esp32WebHome {
                             .write_all(body.as_bytes())?;
                     }
                 }
-        Ok::<(), esp_idf_svc::io::EspIOError>(())
+                Ok::<(), esp_idf_svc::io::EspIOError>(())
             })
             .map_err(|error| HostError::new(format!("http /screen/input: {error}")))?;
         Ok(Self { _server: server })

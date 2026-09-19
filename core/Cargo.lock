@@ -1871,7 +1871,6 @@ dependencies = [
  "hmac",
  "operit-host-api",
  "operit-link",
- "operit-node-edge",
  "rand_core 0.6.4",
  "serde",
  "sha2",
