@@ -382,7 +382,7 @@ impl TerminalHost for IosTerminalHost {
 
     /// Lists active iSH and system-shell sessions with their exact terminal identities.
     fn listSessions(&self) -> HostResult<Vec<TerminalSessionListEntry>> {
-        let ishResponse = callIshTerminal("terminalList", Value::Null)?;
+        let ishResponse = callIshTerminal("terminalList", json!({}))?;
         let ishSessions = ishResponse
             .get("sessions")
             .and_then(Value::as_array)

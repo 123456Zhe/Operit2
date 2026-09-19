@@ -1420,6 +1420,7 @@ Future<void> _refreshComposeDslJavascriptInterfaces(
       if (typeof window.__operitInstallComposeDslJavascriptInterfaces === 'function') {
         window.__operitInstallComposeDslJavascriptInterfaces();
       }
+      window.dispatchEvent(new Event('operitComposeDslInterfacesReady'));
     })();
   ''');
 }

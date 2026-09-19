@@ -318,11 +318,13 @@ def _compute_hot_reload_signature(output_dir: Path) -> str:
     return digest.hexdigest()
 
 
-
-def _maybe_hot_reload_buildin(
+# Records one plugin output signature for the Flutter build hook's hot-reload path.
+def _maybe_hot_reload_output(
     source_dir: Path,
     output_dir: Path,
     *,
+    state_key: str,
+    label: str,
     dry_run: bool,
     disabled: bool,
     timeout_seconds: float,
@@ -332,13 +334,12 @@ def _maybe_hot_reload_buildin(
     signature = _compute_hot_reload_signature(output_dir)
     state_file = source_dir / HOT_RELOAD_STATE_FILE
     state = _load_state(state_file)
-    key = "buildin-output"
-    if state.get(key) == signature:
-        print("HOT-RELOAD-SKIP: buildin output signature unchanged")
+    if state.get(state_key) == signature:
+        print(f"HOT-RELOAD-SKIP: {label} output signature unchanged")
         return
-    state[key] = signature
+    state[state_key] = signature
     _save_state(state_file, state)
-    print("HOT-RELOAD-DONE: buildin output signature recorded")
+    print(f"HOT-RELOAD-DONE: {label} output signature recorded")
 
 
 # Builds ToolPkg sources before their synchronization operations run.
@@ -541,9 +542,21 @@ def main() -> int:
         total_deleted += deleted
 
     if args.source in {"buildin", "runtime", "all"}:
-        _maybe_hot_reload_buildin(
+        _maybe_hot_reload_output(
             _plugin_packages_root() / "buildin",
             Path(args.buildin_output),
+            state_key="buildin-output",
+            label="buildin",
+            dry_run=args.dry_run,
+            disabled=bool(args.no_hot_reload),
+            timeout_seconds=float(args.hot_reload_timeout),
+        )
+    if args.source in {"external", "runtime", "all"}:
+        _maybe_hot_reload_output(
+            _plugin_packages_root() / "external",
+            Path(args.external_output),
+            state_key="external-output",
+            label="external",
             dry_run=args.dry_run,
             disabled=bool(args.no_hot_reload),
             timeout_seconds=float(args.hot_reload_timeout),

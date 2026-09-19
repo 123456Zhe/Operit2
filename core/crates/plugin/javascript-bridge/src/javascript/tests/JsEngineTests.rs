@@ -461,6 +461,55 @@ fn javascript_timer_can_win_race_against_async_tool_call() {
     engine.destroy();
 }
 
+/// Verifies an asynchronous callback failure cleans its call state before the next request.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn failed_async_callback_does_not_poison_quickjs_engine() {
+    let engine = newTestJsEngine(Arc::new(TestPluginConfigExecutionHost::default()));
+    let params = testParams();
+    let error = engine
+        .execute_script_function(
+            r#"
+                exports.fail_timer = function() {
+                    return new Promise(function(resolve) {
+                        setTimeout(function() {
+                            throw new Error('timer callback failed');
+                        }, 1);
+                        setTimeout(function() {
+                            resolve('must not complete');
+                        }, 50);
+                    });
+                };
+            "#,
+            "fail_timer",
+            &params,
+            &BTreeMap::new(),
+            None,
+            true,
+            2,
+            None,
+        )
+        .expect_err("timer callback failure must reject its request");
+
+    assert_eq!(error.kind, JsExecutionErrorKind::Runtime);
+
+    let output = engine
+        .execute_script_function(
+            "exports.ready_after_failure = function() { return 'ready'; };",
+            "ready_after_failure",
+            &params,
+            &BTreeMap::new(),
+            None,
+            true,
+            2,
+            None,
+        )
+        .expect("the next request must run after an asynchronous callback failure");
+
+    assert_eq!(output.as_deref(), Some("\"ready\""));
+    engine.destroy();
+}
+
 /// Verifies ToolPkg registration timeout interrupts synchronous code and releases the worker.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]

@@ -55,10 +55,7 @@ verify_cached_build_products() {
     return 0
 }
 
-if verify_cached_build_products; then
-    exit 0
-fi
-
+# Prepares patched headers required by Runner even when static libraries are cached.
 python3 "$script_dir/fetch_sources.py"
 
 test -d "$source_dir"
@@ -67,6 +64,10 @@ test -f "$rootfs_path"
 for patch_path in "$script_dir"/patches/*.patch; do
     /usr/bin/patch -d "$source_dir" -p1 -i "$patch_path"
 done
+
+if verify_cached_build_products; then
+    exit 0
+fi
 
 # Builds one pinned iSH static target into the Runner-owned products directory.
 build_target() {

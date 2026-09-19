@@ -456,6 +456,7 @@ extension _ComposeMaterialControls on _ComposeDslRenderer {
     );
     if (type == 'ExtendedFloatingActionButton') {
       return FloatingActionButton.extended(
+        heroTag: null,
         onPressed: onPressed,
         backgroundColor: backgroundColor,
         foregroundColor: foregroundColor,
@@ -469,6 +470,7 @@ extension _ComposeMaterialControls on _ComposeDslRenderer {
         : Icon(_iconData(_string(node.props['icon'])));
     if (type == 'SmallFloatingActionButton') {
       return FloatingActionButton.small(
+        heroTag: null,
         onPressed: onPressed,
         backgroundColor: backgroundColor,
         foregroundColor: foregroundColor,
@@ -478,6 +480,7 @@ extension _ComposeMaterialControls on _ComposeDslRenderer {
     }
     if (type == 'LargeFloatingActionButton') {
       return FloatingActionButton.large(
+        heroTag: null,
         onPressed: onPressed,
         backgroundColor: backgroundColor,
         foregroundColor: foregroundColor,
@@ -486,6 +489,7 @@ extension _ComposeMaterialControls on _ComposeDslRenderer {
       );
     }
     return FloatingActionButton(
+      heroTag: null,
       onPressed: onPressed,
       backgroundColor: backgroundColor,
       foregroundColor: foregroundColor,

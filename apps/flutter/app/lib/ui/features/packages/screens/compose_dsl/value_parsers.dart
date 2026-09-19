@@ -114,6 +114,41 @@ double _flexSpacing(Object? arrangement, Object? spacing) {
   return _number(spacing) ?? 0;
 }
 
+/// Resolves a flow-line gap while preserving distributed arrangement behavior.
+double _flowSpacing(Object? arrangement, Object? spacing) =>
+    _flexSpacing(arrangement, spacing);
+
+/// Resolves a Compose arrangement for Flutter's flow layout.
+WrapAlignment _wrapAlignment(Object? raw) {
+  final token = _string(raw);
+  if (token.isEmpty) {
+    return WrapAlignment.start;
+  }
+  return switch (token) {
+    'start' => WrapAlignment.start,
+    'center' => WrapAlignment.center,
+    'end' => WrapAlignment.end,
+    'spaceBetween' => WrapAlignment.spaceBetween,
+    'spaceAround' => WrapAlignment.spaceAround,
+    'spaceEvenly' => WrapAlignment.spaceEvenly,
+    _ => throw FormatException('Invalid FlowRow arrangement: $raw'),
+  };
+}
+
+/// Resolves a Compose item alignment for Flutter's flow layout.
+WrapCrossAlignment _wrapCrossAxis(Object? raw) {
+  final token = _string(raw);
+  if (token.isEmpty) {
+    return WrapCrossAlignment.start;
+  }
+  return switch (token) {
+    'start' => WrapCrossAlignment.start,
+    'center' => WrapCrossAlignment.center,
+    'end' => WrapCrossAlignment.end,
+    _ => throw FormatException('Invalid FlowRow item alignment: $raw'),
+  };
+}
+
 /// Resolves modifier ops for the Compose DSL renderer.
 List<Map<String, Object?>> _modifierOps(Object? raw) {
   if (raw is! Map || raw['__modifierOps'] is! List) {
@@ -520,9 +555,7 @@ String _requiredActionId(Object? raw, String propertyName) {
 /// Resolves string map for the Compose DSL renderer.
 Map<String, Object?> _stringMap(Object? raw) {
   if (raw is Map) {
-    return raw.map(
-      (key, value) => MapEntry(key.toString(), value as Object?),
-    );
+    return raw.map((key, value) => MapEntry(key.toString(), value as Object?));
   }
   return <String, Object?>{};
 }

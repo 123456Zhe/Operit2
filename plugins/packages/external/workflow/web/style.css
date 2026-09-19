@@ -1,0 +1,358 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.app {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.toolbar {
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 20px !important;
+  min-height: 76px !important;
+}
+
+.title-block {
+  flex: 1;
+  min-width: 80px;
+  overflow: hidden;
+}
+
+.toolbar-actions {
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.list {
+  padding: 24px;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+  align-content: start;
+}
+
+.description {
+  height: 48px;
+  overflow: hidden;
+  margin: 8px 0 16px !important;
+}
+
+.empty {
+  grid-column: 1/-1;
+  text-align: center;
+  padding: 80px 24px;
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+}
+
+.editor {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.palette {
+  padding: 12px 20px;
+  overflow: auto;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.palette button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.hint {
+  margin-left: auto !important;
+  white-space: nowrap;
+  color: #73818c;
+}
+
+.canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.canvas-empty {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.graph-node {
+  width: 220px;
+  background: #fff;
+  color: #18242b;
+  border: 1.5px solid;
+  border-radius: 14px;
+  padding: 14px 18px;
+  box-shadow: 0 2px 5px #00000012;
+}
+
+.graph-node.selected {
+  box-shadow: 0 0 0 3px #5a9bc650;
+}
+
+.node-kind {
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.node-description {
+  font-size: 12px;
+  opacity: 0.65;
+  margin-top: 6px;
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.react-flow__handle {
+  width: 12px;
+  height: 12px;
+  background: #54788d;
+  border: 2px solid white;
+}
+
+.log {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px !important;
+}
+
+.dark .graph-node {
+  background: #263238;
+  color: #edf4fa;
+}
+
+.react-flow__controls {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.react-flow__minimap {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+@media (max-width: 650px) {
+  .toolbar {
+    min-height: 64px !important;
+    height: 64px;
+    padding: 6px 10px !important;
+    gap: 2px;
+    flex-wrap: nowrap;
+  }
+
+  .title-block {
+    min-width: 64px;
+    padding-inline: 4px;
+  }
+
+  .title-block h6 {
+    font-size: 18px;
+    line-height: 24px;
+  }
+
+  .title-block .MuiTypography-caption {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 18px;
+  }
+
+  .toolbar-back,
+  .toolbar-secondary {
+    min-width: 40px !important;
+    width: 40px;
+    height: 40px;
+    padding: 8px !important;
+    border-radius: 50% !important;
+  }
+
+  .toolbar-back .MuiButton-startIcon,
+  .toolbar-secondary .MuiButton-startIcon {
+    margin: 0 !important;
+  }
+
+  .toolbar-back .action-label,
+  .toolbar-secondary .action-label {
+    display: none;
+  }
+
+  .run-action,
+  .new-action {
+    min-width: 0 !important;
+    height: 40px;
+    padding: 8px 12px !important;
+    border-radius: 20px !important;
+  }
+
+  .run-action .MuiButton-startIcon,
+  .new-action .MuiButton-startIcon {
+    margin-right: 3px;
+  }
+
+  .hint,
+  .react-flow__minimap {
+    display: none;
+  }
+
+  .list {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .list .MuiCard-root {
+    border-radius: 14px;
+  }
+
+  .list .MuiCardContent-root {
+    padding: 16px;
+  }
+
+  .list .MuiCardActions-root {
+    padding: 0 10px 10px;
+    flex-wrap: wrap;
+  }
+
+  .empty {
+    padding: 56px 20px;
+  }
+
+  .canvas-empty {
+    width: 85%;
+    top: 42%;
+  }
+
+  .graph-node {
+    width: 190px;
+    border-radius: 12px;
+    padding: 12px 15px;
+  }
+
+  .node-description {
+    max-width: 158px;
+  }
+
+  .react-flow__controls {
+    left: 12px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    flex-direction: row;
+    box-shadow: 0 2px 10px #0000001a;
+  }
+
+  .react-flow__controls-button {
+    width: 40px;
+    height: 40px;
+    border-bottom: 0;
+    border-right: 1px solid var(--xy-controls-button-border-color-default);
+  }
+
+  .react-flow__controls-button:last-child {
+    border-right: 0;
+  }
+
+  .mobile-node-bar {
+    position: absolute;
+    z-index: 6;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    display: flex;
+    gap: 8px;
+    padding: 6px;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 4px 18px #00000024;
+    backdrop-filter: blur(12px);
+  }
+
+  .mobile-node-bar button {
+    height: 44px;
+    border-radius: 17px;
+  }
+
+  .MuiDialog-paperFullScreen {
+    border-radius: 0 !important;
+  }
+
+  .MuiDialog-paperFullScreen .MuiDialogTitle-root {
+    padding: 18px 20px 12px;
+  }
+
+  .MuiDialog-paperFullScreen .MuiDialogContent-root {
+    padding: 12px 20px;
+  }
+
+  .MuiDialog-paperFullScreen .MuiDialogActions-root {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(120, 130, 140, 0.2);
+  }
+}
+body {
+  font-family:
+    "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+}
+.edit-selected {
+  position: fixed !important;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+}
+
+.node-picker-sheet {
+  border-radius: 24px 24px 0 0;
+  padding: 12px 16px calc(20px + env(safe-area-inset-bottom));
+}
+
+.node-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 16px;
+}
+
+.node-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.node-picker-item {
+  min-height: 56px;
+  justify-content: flex-start !important;
+  border-radius: 14px !important;
+}
+
+.node-picker-item:last-child {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 650px) and (prefers-color-scheme: dark) {
+  .mobile-node-bar {
+    background: rgba(31, 42, 48, 0.94);
+  }
+}

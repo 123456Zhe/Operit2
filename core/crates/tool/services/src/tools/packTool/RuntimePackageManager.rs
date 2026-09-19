@@ -1914,9 +1914,23 @@ impl RuntimePackageManager {
     }
 
     #[allow(non_snake_case)]
+    /// Schedules ToolPkg runtime listener delivery after the package manager call returns.
     pub(crate) fn notifyToolPkgRuntimeChangeListeners(&self) {
-        self.toolPkgManager()
-            .notifyToolPkgRuntimeChangeListeners(self.getEnabledToolPkgContainerRuntimes());
+        let toolPkgManager = self.toolPkgManager().clone();
+        let activeContainers = self.getEnabledToolPkgContainerRuntimes();
+        let scheduler = self
+            .context
+            .hostRuntimeTaskSchedulerHost
+            .clone()
+            .expect("HostRuntimeTaskSchedulerHost is required for ToolPkg runtime changes");
+        scheduler
+            .scheduleHostRuntimeTask(
+                "operit-toolpkg-runtime-change",
+                Box::new(move || {
+                    toolPkgManager.notifyToolPkgRuntimeChangeListeners(activeContainers);
+                }),
+            )
+            .expect("ToolPkg runtime change task must be scheduled");
     }
 
     #[allow(non_snake_case)]

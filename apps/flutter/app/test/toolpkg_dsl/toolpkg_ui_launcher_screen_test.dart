@@ -168,6 +168,173 @@ void main() {
     expect(find.text('Dialog body'), findsNothing);
   });
 
+  for (final size in [
+    const Size(1280, 720),
+    const Size(390, 844),
+    const Size(740, 360),
+  ]) {
+    testWidgets('workflow dialog stays bounded at $size', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = size;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final bridge = _ToolPkgDslTestBridge(
+        renderResult: (_) => jsonEncode({
+          'success': true,
+          'tree': _node(
+            'Dialog',
+            props: {
+              'properties': {'usePlatformDefaultWidth': false},
+            },
+            children: [
+              _node(
+                'Column',
+                props: {
+                  'width': 560,
+                  'padding': 24,
+                  'spacing': 16,
+                  'modifier': {
+                    '__modifierOps': [
+                      {
+                        'name': 'heightIn',
+                        'args': [0, 650],
+                      },
+                    ],
+                  },
+                },
+                children: [
+                  _node(
+                    'Text',
+                    props: {'text': 'Edit node', 'style': 'headlineSmall'},
+                  ),
+                  _node(
+                    'LazyColumn',
+                    props: {
+                      'height': 440,
+                      'weight': 1,
+                      'weightFill': false,
+                      'fillMaxWidth': true,
+                      'spacing': 12,
+                    },
+                    children: [
+                      for (var index = 0; index < 30; index++)
+                        _node(
+                          'Text',
+                          props: {'text': 'Field $index', 'height': 48},
+                        ),
+                    ],
+                  ),
+                  _node(
+                    'FlowRow',
+                    props: {
+                      'fillMaxWidth': true,
+                      'horizontalArrangement': 'end',
+                    },
+                    children: [
+                      _node(
+                        'TextButton',
+                        props: {
+                          'text': 'Save',
+                          'onClick': {'__actionId': 'save'},
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        }),
+      );
+      await tester.pumpWidget(_screen(bridge));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getSize(find.byType(Dialog)).width,
+        lessThanOrEqualTo(size.width),
+      );
+      final save = tester.getRect(find.text('Save'));
+      expect(save.bottom, lessThan(size.height));
+      final list = tester.widget<ListView>(find.byType(ListView));
+      list.controller!.jumpTo(list.controller!.position.maxScrollExtent);
+      await tester.pumpAndSettle();
+      expect(find.text('Field 29'), findsOneWidget);
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(bridge.calls.last.args, containsPair('actionId', 'save'));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets(
+    'combined motion supports dragging and pinch without competing recognizers',
+    (tester) async {
+      final bridge = _ToolPkgDslTestBridge(
+        renderResult: (_) => jsonEncode({
+          'success': true,
+          'tree': _node(
+            'Canvas',
+            props: {
+              'width': 400,
+              'height': 300,
+              'commands': [],
+              'modifier': {
+                '__modifierOps': [
+                  {
+                    'name': 'dragGestures',
+                    'args': [
+                      {
+                        'onDragStart': {'__actionId': 'start'},
+                        'onDrag': {'__actionId': 'drag'},
+                        'onDragEnd': {'__actionId': 'end'},
+                        'onDragCancel': {'__actionId': 'cancel'},
+                      },
+                    ],
+                  },
+                  {
+                    'name': 'transformGestures',
+                    'args': [
+                      {
+                        'onGesture': {'__actionId': 'transform'},
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ),
+        }),
+      );
+      await tester.pumpWidget(_screen(bridge));
+      await tester.pumpAndSettle();
+      final origin =
+          tester.getTopLeft(find.byType(CustomPaint).last) +
+          const Offset(70, 70);
+      final first = await tester.startGesture(origin, pointer: 1);
+      await first.moveBy(const Offset(35, 0));
+      await tester.pump();
+      await first.moveBy(const Offset(20, 0));
+      await tester.pump();
+      final second = await tester.startGesture(
+        origin + const Offset(150, 0),
+        pointer: 2,
+      );
+      await second.moveBy(const Offset(45, 0));
+      await tester.pump();
+      await second.moveBy(const Offset(30, 0));
+      await tester.pump();
+      await second.up();
+      await first.up();
+      await tester.pumpAndSettle();
+      final actions = bridge.calls
+          .where((call) => call.args is Map)
+          .map((call) => (call.args as Map)['actionId'])
+          .toList();
+      expect(actions, containsAll(['start', 'drag', 'cancel', 'transform']));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('builds lazy list entries only near the viewport', (
     tester,
   ) async {
@@ -235,6 +402,32 @@ void main() {
     expect(logo.top, section.bottom + 10);
     expect(title.left, logo.right + 12);
     expect(section.left, greaterThan(10));
+  });
+
+  testWidgets('wraps FlowRow children into additional lines', (tester) async {
+    final bridge = _ToolPkgDslTestBridge(
+      renderResult: (_) => jsonEncode({
+        'success': true,
+        'tree': _node(
+          'FlowRow',
+          props: {'width': 118, 'spacing': 10, 'runSpacing': 12},
+          children: [
+            _node('Text', props: {'text': 'Alpha', 'width': 50, 'height': 20}),
+            _node('Text', props: {'text': 'Beta', 'width': 50, 'height': 20}),
+            _node('Text', props: {'text': 'Gamma', 'width': 50, 'height': 20}),
+          ],
+        ),
+      }),
+    );
+    await tester.pumpWidget(_screen(bridge));
+    await tester.pumpAndSettle();
+
+    final alpha = tester.getRect(find.text('Alpha'));
+    final beta = tester.getRect(find.text('Beta'));
+    final gamma = tester.getRect(find.text('Gamma'));
+    expect(find.byType(Wrap), findsOneWidget);
+    expect(beta.top, alpha.top);
+    expect(gamma.top, alpha.bottom + 12);
   });
 
   testWidgets('clickable site card navigates without an action return value', (
@@ -567,6 +760,21 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('weighted rows keep short workflow labels on one line', (
+    tester,
+  ) async {
+    final bridge = _ToolPkgDslTestBridge(
+      renderResult: _weightedWorkflowRowRenderResult,
+    );
+    await tester.pumpWidget(_screen(bridge));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(tester.getSize(find.text('已禁用')).height, lessThan(30));
+    expect(tester.getSize(find.text('节点')).height, lessThan(30));
+    expect(tester.getSize(find.text('工作流标题')).width, greaterThan(100));
   });
 
   testWidgets('renders text field slots and preserves focused input state', (
@@ -1604,6 +1812,37 @@ String _rowSurfaceRenderResult(int count) {
               'Text',
               props: <String, Object?>{'text': '开始/暂停', 'style': 'labelLarge'},
             ),
+          ],
+        ),
+      ],
+    ),
+    'state': <String, Object?>{'count': count},
+    'memo': <String, Object?>{'route': 'main'},
+  });
+}
+
+/// Builds workflow labels beside an explicitly weighted title at card width.
+String _weightedWorkflowRowRenderResult(int count) {
+  return jsonEncode(<String, Object?>{
+    'success': true,
+    'tree': _node(
+      'Box',
+      children: <Map<String, Object?>>[
+        _node(
+          'Row',
+          props: <String, Object?>{'width': 320, 'spacing': 8},
+          children: <Map<String, Object?>>[
+            _node(
+              'Text',
+              props: <String, Object?>{
+                'text': '工作流标题',
+                'weight': 1,
+                'maxLines': 1,
+              },
+            ),
+            _node('Text', props: <String, Object?>{'text': '已禁用'}),
+            _node('Text', props: <String, Object?>{'text': '节点'}),
+            _node('Switch', props: <String, Object?>{'checked': false}),
           ],
         ),
       ],

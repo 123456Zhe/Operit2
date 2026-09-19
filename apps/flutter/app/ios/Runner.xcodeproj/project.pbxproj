@@ -278,7 +278,7 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
-				"$(PROJECT_DIR)/ish-root.tar.gz",
+				"$(PROJECT_DIR)/Runner/ish-root.tar.gz",
 			);
 			name = "Build iSH Runtime";
 			outputFileListPaths = (
