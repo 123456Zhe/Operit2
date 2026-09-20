@@ -6,10 +6,23 @@ function screen(ctx) {
     const controller = ctx.createWebViewController("workflow-web");
     const [path, setPath] = ctx.useState("workflow-html-path", "");
     const [error, setError] = ctx.useState("workflow-html-error", "");
+    const pageReady = ctx.useRef("workflow-page-ready", false);
+    /** Applies the public Theme snapshot using this plugin's own page contract. */
+    async function applyTheme(theme) {
+        if (!pageReady.current)
+            return;
+        await controller.evaluateJavascript(`window.applyWorkflowTheme(${JSON.stringify(theme)});`);
+    }
     /** Registers the service boundary before making the local document available. */
     async function initialize() {
         try {
+            ctx.Theme.subscribe(applyTheme);
             controller.addJavascriptInterface("WorkflowHost", {
+                /** Marks the page ready and returns the current public theme snapshot. */
+                currentTheme: () => {
+                    pageReady.current = true;
+                    return ctx.Theme.getCurrent();
+                },
                 /** Writes user-requested exports through the cross-platform file host. */
                 exportFile: async (...args) => {
                     const [path, content] = args[0];

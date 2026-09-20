@@ -4,6 +4,35 @@ import { readFile, mkdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { chromium } from "playwright";
+import { hostTheme } from "./host-theme.mjs";
+
+/** Checks every exit-animation frame for premature dialog content removal. */
+async function verifyDialogExit(page, buttonText) {
+  const result = await page.getByRole("dialog").evaluate(async (dialog, label) => {
+    const title = dialog.querySelector(".MuiDialogTitle-root").textContent;
+    const content = dialog.querySelector(".MuiDialogContent-root");
+    const text = content.textContent;
+    const values = [...content.querySelectorAll("input, textarea")].map((field) => field.value);
+    const button = [...dialog.querySelectorAll("button")].find(
+      (item) => item.textContent === label,
+    );
+    button.click();
+    let frames = 0;
+    while (dialog.isConnected && frames < 120) {
+      await new Promise(requestAnimationFrame);
+      if (!dialog.isConnected) break;
+      frames++;
+      if (
+        dialog.querySelector(".MuiDialogTitle-root").textContent !== title ||
+        content.textContent !== text ||
+        JSON.stringify([...content.querySelectorAll("input, textarea")].map((field) => field.value)) !== JSON.stringify(values)
+      ) return { preserved: false, frames };
+    }
+    return { preserved: !dialog.isConnected, frames };
+  }, buttonText);
+  assert.equal(result.preserved, true, "Dialog content must survive its exit animation");
+  assert.ok(result.frames > 0, "The test must observe the exit animation");
+}
 
 test(
   "Material editor creates, saves, runs and reopens graphs at desktop and phone widths",
@@ -16,9 +45,9 @@ test(
       async flush() {},
     };
     const require = createRequire(import.meta.url);
-    const { dispatch } = require("../dist/service.js");
+    const { dispatch } = require("../../dist/service.js");
     const html = await readFile(
-      new URL("../resources/workflow.html", import.meta.url),
+      new URL("../../resources/workflow.html", import.meta.url),
       "utf8",
     );
     const server = createServer(async (request, response) => {
@@ -51,6 +80,9 @@ test(
       page.on("pageerror", (error) => errors.push(String(error)));
       await page.addInitScript(() => {
         window.WorkflowHost = {
+          async currentTheme() {
+            return window.workflowTheme;
+          },
           async request(message) {
             const response = await fetch("/service", {
               method: "POST",
@@ -61,12 +93,30 @@ test(
           },
         };
       });
+      await page.addInitScript((theme) => { window.workflowTheme = theme; }, hostTheme);
       await page.goto(`http://127.0.0.1:${server.address().port}`);
       await page
         .getByRole("button", { name: "新建工作流", exact: true })
         .click();
       await page.getByLabel("名称", { exact: true }).fill("浏览器验证");
+      const documentId = await page.evaluate(() => {
+        window.themeTestDocument = "same-document";
+        const previous = window.workflowTheme;
+        window.applyWorkflowTheme({
+          ...previous,
+          colors: { ...previous.colors, primary: "#008800", surface: "#fff8e1" },
+        });
+        return window.themeTestDocument;
+      });
+      await page.waitForFunction(() => getComputedStyle(document.documentElement)
+        .getPropertyValue("--operit-primary").trim() === "#008800");
+      assert.equal(await page.getByLabel("名称", { exact: true }).inputValue(), "浏览器验证");
+      assert.equal(await page.evaluate(() => window.themeTestDocument), documentId);
+      await verifyDialogExit(page, "关闭");
+      await page.getByRole("button", { name: "新建工作流", exact: true }).click();
+      await page.getByLabel("名称", { exact: true }).fill("浏览器验证");
       await page.getByRole("button", { name: "确定", exact: true }).click();
+      await page.getByRole("button", { name: "添加节点", exact: true }).click();
       await page.getByRole("button", { name: "触发", exact: true }).click();
       await page.getByRole("button", { name: "应用", exact: true }).click();
       await page.getByRole("button", { name: "保存", exact: true }).click();
@@ -105,6 +155,7 @@ test(
         .getByText("成功", { exact: true })
         .waitFor();
       await page.getByRole("button", { name: "关闭", exact: true }).click();
+      await page.getByRole("button", { name: "添加节点", exact: true }).click();
       await page.getByRole("button", { name: "条件", exact: true }).click();
       await page.getByRole("button", { name: "应用", exact: true }).click();
       await page.locator(".react-flow__controls-fitview").click();
@@ -123,6 +174,14 @@ test(
       await page.screenshot({ path: "web/test-results/desktop.png" });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.getByRole("button", { name: "返回列表", exact: true }).click();
+      const workflowCard = await page
+        .locator(".workflow-card")
+        .first()
+        .boundingBox();
+      assert.ok(
+        workflowCard.height < 260,
+        "Phone workflow cards must remain compact",
+      );
       await page
         .getByRole("button", { name: "打开工作流", exact: true })
         .click();
@@ -161,6 +220,9 @@ test(
       await page.screenshot({ path: "web/test-results/phone-wide.png" });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.locator(".graph-node").first().click();
+      await page.getByRole("button", { name: "编辑节点", exact: true }).click();
+      await page.getByLabel("节点名称", { exact: true }).fill("触屏编辑");
+      await verifyDialogExit(page, "取消");
       await page.getByRole("button", { name: "编辑节点", exact: true }).click();
       await page.getByLabel("节点名称", { exact: true }).fill("触屏编辑");
       await page.getByRole("button", { name: "应用", exact: true }).click();

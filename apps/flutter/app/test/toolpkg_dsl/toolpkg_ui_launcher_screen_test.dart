@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:operit2/core/bridge/OperitRuntimeBridge.dart';
 import 'package:operit2/core/link/CoreLinkCodec.dart';
 import 'package:operit2/core/link/CoreLinkProtocol.dart';
+import 'package:operit2/core/logging/ClientLogger.dart';
 import 'package:operit2/core/proxy/generated/CoreProxyClients.g.dart';
 import 'package:operit2/core/proxy/generated/CoreProxyModels.g.dart'
     as core_proxy;
@@ -16,6 +17,49 @@ import 'package:operit2/ui/main/navigation/AppNavigationModels.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(ClientLogger.initialize);
+
+  testWidgets(
+    'publishes color-only theme changes without reloading the UI context',
+    (tester) async {
+      final bridge = _ToolPkgDslTestBridge();
+      final clients = GeneratedCoreProxyClients(bridge);
+      final plugin = _pluginRuntime();
+
+      /// Rebuilds the same plugin route with a different application color scheme.
+      Widget themed(Color seed) => MaterialApp(
+        theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: seed)),
+        home: ToolPkgUiLauncherScreen(clients: clients, plugin: plugin),
+      );
+      await tester.pumpWidget(themed(Colors.red));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Increment'));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(themed(Colors.green));
+      await tester.pumpAndSettle();
+      expect(find.text('Counter: 1'), findsOneWidget);
+      expect(
+        bridge.calls.where(
+          (call) => call.methodName == 'executeToolPkgComposeDslScript',
+        ),
+        hasLength(1),
+      );
+      final changes = bridge.calls.where(
+        (call) =>
+            call.methodName == 'dispatchToolPkgComposeDslActionEvents' &&
+            (call.args as Map)['actionId'] == '__operit_theme_changed',
+      );
+      expect(changes, isNotEmpty);
+      final snapshot = (changes.last.args as Map)['payload'] as Map;
+      expect(snapshot['brightness'], 'light');
+      final expected = ColorScheme.fromSeed(seedColor: Colors.green).primary;
+      final rgb = (expected.toARGB32() & 0xffffff)
+          .toRadixString(16)
+          .padLeft(6, '0');
+      expect((snapshot['colors'] as Map)['primary'], '#${rgb}ff');
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('one DSL frame builds both window content and published pixels', (
     tester,

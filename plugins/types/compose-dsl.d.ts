@@ -3921,9 +3921,46 @@ export interface ComposeRouteInfo {
 }
 
 /**
+ * Resolved colors and brightness supplied by the current UI host.
+ */
+export interface ComposeThemeSnapshot {
+  /**
+   * Effective host brightness, either light or dark.
+   */
+  brightness: string;
+  /**
+   * Resolved Material color roles encoded as CSS RRGGBBAA hex strings.
+   */
+  colors: Record<string, string>;
+}
+
+/**
+ * Completion returned by a theme change listener.
+ */
+export type ComposeThemeListenerOutput = void | Promise<void>;
+
+/**
+ * Host theme service independent of any WebView or rendering framework.
+ */
+export interface ComposeTheme {
+  /**
+   * Returns the current resolved theme; throws when no UI host supplied a theme.
+   */
+  getCurrent(): ComposeThemeSnapshot;
+  /**
+   * Observes later theme changes and returns an unsubscribe function.
+   */
+  subscribe(listener: (arg0: ComposeThemeSnapshot) => ComposeThemeListenerOutput): () => void;
+}
+
+/**
  * Theme, modifier builder, and component factories supplied to a screen renderer.
  */
 export interface ComposeDslContext {
+  /**
+   * Reads and observes the resolved theme of the current plugin UI host.
+   */
+  Theme: ComposeTheme;
   /**
    * Active Material theme values resolved by the host.
    */

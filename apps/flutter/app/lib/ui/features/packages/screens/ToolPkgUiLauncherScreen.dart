@@ -1,6 +1,7 @@
 // ignore_for_file: file_names
 
 import 'dart:async';
+import '../../../../core/application/PluginHotReload.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -8,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/link/CoreLinkProtocol.dart';
+import '../../../../core/logging/ClientLogger.dart';
+import '../../../../core/theme/PluginThemeSnapshot.dart';
 
 import '../../../../core/proxy/generated/CoreProxyClients.g.dart';
 import '../../../../core/proxy/generated/CoreProxyModels.g.dart' as core_proxy;
@@ -66,6 +69,7 @@ class ToolPkgUiLauncherScreen extends StatefulWidget {
 
 class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
   static int _nextExecutionOwnerId = 0;
+  static const String _logTag = 'ToolPkgUiLauncher';
 
   late final int _executionOwnerId = _nextExecutionOwnerId++;
   late final String _selectedRouteId = _initialRouteId();
@@ -76,6 +80,7 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
   bool _loadedInitialRoute = false;
   int _routeLoadGeneration = 0;
   String _currentLanguageTag = 'en';
+  ColorScheme? _themeScheme;
   String? _error;
   Future<Object?> _actionTail = Future<Object?>.value();
 
@@ -86,11 +91,27 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
   void initState() {
     super.initState();
     ComposeDslWebViewHostRegistry.ensureHostInteractionRegistered();
+    PluginHotReload.revision.addListener(_reloadDevelopmentPackage);
+  }
+
+  /// Recreates the visible plugin document after runtime packages reload.
+  void _reloadDevelopmentPackage() {
+    setState(() {
+      _renderResult = null;
+      _loading = true;
+      _activeExecutionContext = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_loadRoute());
+    });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final scheme = Theme.of(context).colorScheme;
+    final themeChanged = _themeScheme != scheme;
+    _themeScheme = scheme;
     final languageTag = _resolveCurrentLanguage();
     final shouldLoadRoute =
         !_loadedInitialRoute || languageTag != _currentLanguageTag;
@@ -102,6 +123,47 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
           _loadRoute();
         }
       });
+    } else if (themeChanged) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_loading) unawaited(_notifyThemeChanged());
+      });
+    }
+  }
+
+  /// Sends the current UI theme through the normal serialized plugin action lifecycle.
+  Future<void> _notifyThemeChanged() async {
+    final scheme = _themeScheme!;
+    final uiModuleId = _selectedUiModuleId();
+    final routeInstanceId = _selectedRouteInstanceId();
+    final executionContextKey = _executionContextKey(
+      uiModuleId: uiModuleId,
+      routeInstanceId: routeInstanceId,
+    );
+    ClientLogger.i(
+      'event=theme_dispatch_start package=${widget.plugin.packageName} '
+      'context=$executionContextKey brightness=${scheme.brightness.name} '
+      'primary=${scheme.primary.toARGB32().toRadixString(16)}',
+      tag: _logTag,
+    );
+    try {
+      await _dispatchAction(
+        '__operit_theme_changed',
+        pluginThemeSnapshot(scheme),
+      );
+      ClientLogger.i(
+        'event=theme_dispatch_done package=${widget.plugin.packageName} '
+        'context=$executionContextKey',
+        tag: _logTag,
+      );
+    } catch (error, stackTrace) {
+      ClientLogger.e(
+        'event=theme_dispatch_failed package=${widget.plugin.packageName} '
+        'context=$executionContextKey',
+        tag: _logTag,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
     }
   }
 
@@ -183,6 +245,7 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
         );
       }
       _scriptScreenPath = screenPath;
+      final renderedTheme = _themeScheme;
       final raw = await _packageManager.executeToolPkgComposeDslScript(
         contextKey: executionContextKey,
         containerPackageName: widget.plugin.packageName,
@@ -205,6 +268,9 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
         _renderResult = result;
         _loading = false;
       });
+      if (_themeScheme != renderedTheme) {
+        _scheduleThemeDispatchAfterRouteRender(routeLoadGeneration);
+      }
       _navigateCommands(_ComposeDslRenderResult.navigationCommandsOf(raw));
     } catch (error, stackTrace) {
       if (!_isCurrentRouteLoad(routeLoadGeneration)) {
@@ -220,6 +286,15 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
 
   bool _isCurrentRouteLoad(int routeLoadGeneration) {
     return mounted && routeLoadGeneration == _routeLoadGeneration;
+  }
+
+  /// Dispatches a theme change after Flutter has bound controllers from the new tree.
+  void _scheduleThemeDispatchAfterRouteRender(int routeLoadGeneration) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_isCurrentRouteLoad(routeLoadGeneration) && !_loading) {
+        unawaited(_notifyThemeChanged());
+      }
+    });
   }
 
   /// Acquires one page-owned ToolPkg execution context.
@@ -245,6 +320,7 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
   /// Releases the active ToolPkg context when this page leaves the widget tree.
   @override
   void dispose() {
+    PluginHotReload.revision.removeListener(_reloadDevelopmentPackage);
     _routeLoadGeneration += 1;
     final executionContext = _activeExecutionContext;
     _activeExecutionContext = null;
@@ -370,6 +446,7 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
   }) {
     return <String, Object?>{
       'packageName': widget.plugin.packageName,
+      'theme': pluginThemeSnapshot(_themeScheme!),
       'containerPackageName': widget.plugin.packageName,
       'toolPkgId': widget.plugin.packageName,
       '__operit_ui_package_name': widget.plugin.packageName,
@@ -460,6 +537,13 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
       'error=$diagnostic',
     );
     debugPrintStack(stackTrace: stackTrace);
+    ClientLogger.e(
+      'event=compose_dispatch_failed phase=$phase '
+      'package=${widget.plugin.packageName} route=$_selectedRouteId',
+      tag: _logTag,
+      error: error,
+      stackTrace: stackTrace,
+    );
   }
 
   Map<String, Object?> _moduleSpec(String routeId) {

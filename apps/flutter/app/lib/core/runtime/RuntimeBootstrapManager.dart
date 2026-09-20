@@ -330,6 +330,9 @@ class RuntimeBootstrapManager extends ChangeNotifier {
     if (persist) {
       await _writeBootstrapConfig(config);
     }
+    if (config.confirmed) {
+      ClientLogger.attachPersistentStorage();
+    }
     notifyListeners();
     ClientLogger.i(
       'apply done persist=$persist elapsedMs=${stopwatch.elapsedMilliseconds}',

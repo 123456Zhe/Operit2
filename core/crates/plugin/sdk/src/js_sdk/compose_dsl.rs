@@ -3003,8 +3003,36 @@ pub struct ComposeRouteInfo {
     /// Tool-package UI module rendered by the destination.
     pub toolPkgUiModuleId: JsOptional<String>,
 }
+/// Resolved colors and brightness supplied by the current UI host.
+pub struct ComposeThemeSnapshot {
+    /// Effective host brightness, either light or dark.
+    pub brightness: String,
+    /// Resolved Material color roles encoded as CSS RRGGBBAA hex strings.
+    pub colors: BTreeMap<String, String>,
+}
+/// Completion returned by a theme change listener.
+pub enum ComposeThemeListenerOutput {
+    /// Completes a synchronous theme update.
+    Variant1(()),
+    /// Completes an asynchronous theme update.
+    Variant2(JsFuture<()>),
+}
+/// Host theme service independent of any WebView or rendering framework.
+pub struct ComposeTheme;
+/// Public theme operations scoped to the current UI execution context.
+pub trait ComposeThemeMethods: Send + Sync {
+    /// Returns the current resolved theme; throws when no UI host supplied a theme.
+    fn getCurrent(&self) -> ComposeThemeSnapshot;
+    /// Observes later theme changes and returns an unsubscribe function.
+    fn subscribe(
+        &self,
+        listener: Arc<dyn Fn(ComposeThemeSnapshot) -> ComposeThemeListenerOutput + Send + Sync>,
+    ) -> Arc<dyn Fn() -> () + Send + Sync>;
+}
 /// Theme, modifier builder, and component factories supplied to a screen renderer.
 pub struct ComposeDslContext {
+    /// Reads and observes the resolved theme of the current plugin UI host.
+    pub Theme: ComposeTheme,
     /// Active Material theme values resolved by the host.
     pub MaterialTheme: ComposeMaterialTheme,
     /// Empty modifier chain from which node modifiers are built.

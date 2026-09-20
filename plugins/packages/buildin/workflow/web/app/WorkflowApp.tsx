@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { createRoot } from "react-dom/client";
 import {
   Alert,
   AppBar,
@@ -10,12 +9,12 @@ import {
   CardContent,
   Chip,
   CssBaseline,
+  GlobalStyles,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
-  Drawer,
   FormControlLabel,
   IconButton,
   MenuItem,
@@ -24,6 +23,7 @@ import {
   TextField,
   ThemeProvider,
   Toolbar,
+  Tooltip,
   Typography,
   createTheme,
   useMediaQuery,
@@ -42,7 +42,7 @@ import BuildOutlinedIcon from "@mui/icons-material/BuildOutlined";
 import CallSplitOutlinedIcon from "@mui/icons-material/CallSplitOutlined";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import FunctionsOutlinedIcon from "@mui/icons-material/FunctionsOutlined";
-import CloseIcon from "@mui/icons-material/Close";
+import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import {
   ReactFlow,
   Background,
@@ -57,7 +57,7 @@ import {
   type NodeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import "./style.css";
+import "../styles/style.css";
 import {
   copy,
   id,
@@ -69,535 +69,68 @@ import {
   type Snapshot,
   type Value,
   type Run,
-} from "../src/model";
-import { validateGraph, parseNode } from "../src/validation";
-import { templates } from "../src/templates";
-import type { Request } from "../src/service";
+} from "../../src/model";
+import { validateGraph, parseNode } from "../../src/validation";
+import { templates } from "../../src/templates";
+import type { Request } from "../../src/service";
 
 declare global {
   interface Window {
     WorkflowHost: {
       request(request: Request): Promise<Snapshot>;
       exportFile(path: string, content: string): Promise<void>;
+      currentTheme(): Promise<import("../../../../../types/compose-dsl").ComposeThemeSnapshot>;
     };
   }
 }
-type GraphNode = Node<{ node: WorkflowNode; result?: string }>;
-const statuses: Record<string, string> = {
-  RUNNING: "运行中",
-  SUCCESS: "成功",
-  FAILED: "失败",
-  CANCELLED: "已取消",
-  pending: "等待",
-  running: "运行中",
-  success: "成功",
-  failed: "失败",
-  skipped: "跳过",
-};
+import {
+  fitOptions,
+  flowOptions,
+  nodeIcons,
+  nodeTypes,
+  statuses,
+  type GraphNode,
+  WorkflowCanvas,
+} from "../components/WorkflowCanvas";
+import { NodeForm } from "../components/NodeForm";
+import { useHostTheme } from "./HostTheme";
 
-/** Renders a compact node with standard graph handles and execution state. */
-function WorkflowCard({ data, selected }: NodeProps<GraphNode>) {
-  const style = STYLES[data.node.type];
-  return (
-    <div
-      className={"graph-node" + (selected ? " selected" : "")}
-      style={{ borderColor: style.color }}
-    >
-      {data.node.type !== "trigger" && (
-        <Handle type="target" position={Position.Left} />
-      )}
-      <div className="node-kind" style={{ color: style.color }}>
-        {style.label}
-        {data.result && " · " + statuses[data.result]}
-      </div>
-      <strong>{data.node.name}</strong>
-      <div className="node-description">
-        {data.node.description || "双击配置节点"}
-      </div>
-      <Handle type="source" position={Position.Right} />
-    </div>
-  );
-}
-const nodeTypes = {
-  workflow: React.memo(
-    WorkflowCard,
-    (previous, next) =>
-      previous.data === next.data && previous.selected === next.selected,
-  ),
-};
-const fitOptions = { maxZoom: 1, padding: 0.2 };
-const flowOptions = { hideAttribution: true };
-
-/** Keeps pointer-frequency node updates inside the canvas instead of the application shell. */
-function WorkflowCanvas({
-  nodes: incomingNodes,
-  ...props
-}: ReactFlowProps<GraphNode> & { nodes: GraphNode[] }) {
-  const [nodes, setNodes] = useState(incomingNodes);
-  const [source, setSource] = useState(incomingNodes);
-  // Synchronize committed edits during render so an effect cannot overwrite an ongoing gesture.
-  if (source !== incomingNodes) {
-    setSource(incomingNodes);
-    setNodes(incomingNodes);
-  }
-  /** Applies positions, selection and measured dimensions only within this canvas. */
-  const changeNodes = React.useCallback((changes: NodeChange<GraphNode>[]) => {
-    setNodes((current) => applyNodeChanges(changes, current));
-  }, []);
-  return <ReactFlow {...props} nodes={nodes} onNodesChange={changeNodes} />;
-}
-const nodeIcons: Record<WorkflowNode["type"], React.ReactNode> = {
-  trigger: <BoltOutlinedIcon />,
-  execute: <BuildOutlinedIcon />,
-  condition: <CallSplitOutlinedIcon />,
-  logic: <AccountTreeOutlinedIcon />,
-  extract: <FunctionsOutlinedIcon />,
-};
-
-/** Edits literals and upstream references using the persisted parameter contract. */
-function Parameter({
-  label,
-  value,
-  nodes,
-  change,
-}: {
-  label: string;
-  value: Value;
-  nodes: WorkflowNode[];
-  change(value: Value): void;
-}) {
-  return (
-    <Stack spacing={1}>
-      <Typography variant="body2">{label}</Typography>
-      <TextField
-        select
-        size="small"
-        label="值来源"
-        value={"value" in value ? "literal" : "reference"}
-        onChange={(event) => {
-          if (event.target.value === "literal") change({ value: "" });
-          else if (nodes.length) change({ nodeId: nodes[0].id });
-        }}
-      >
-        <MenuItem value="literal">固定值</MenuItem>
-        <MenuItem value="reference" disabled={!nodes.length}>
-          节点输出
-        </MenuItem>
-      </TextField>
-      {"value" in value ? (
-        <TextField
-          size="small"
-          multiline
-          label={label}
-          value={value.value}
-          onChange={(event) => change({ value: event.target.value })}
-        />
-      ) : (
-        <TextField
-          select
-          size="small"
-          label="来源节点"
-          value={value.nodeId}
-          onChange={(event) => change({ nodeId: event.target.value })}
-        >
-          {nodes.map((node) => (
-            <MenuItem key={node.id} value={node.id}>
-              {node.name}
-            </MenuItem>
-          ))}
-        </TextField>
-      )}
-    </Stack>
-  );
-}
-
-/** Edits every node kind without changing the execution schema. */
-function NodeForm({
-  node,
-  workflow,
-  change,
-}: {
-  node: WorkflowNode;
-  workflow: Workflow;
-  change(node: WorkflowNode): void;
-}) {
-  const [key, setKey] = useState("");
-  const sources = workflow.nodes.filter((item) => item.id !== node.id);
-  /** Updates a typed field on the current node draft. */
-  function set(field: string, value: unknown) {
-    change({ ...node, [field]: value } as WorkflowNode);
-  }
-  /** Builds a controlled text or integer input for one draft field. */
-  function field(
-    label: string,
-    name: string,
-    value: string | number,
-    numeric = false,
-  ) {
-    return (
-      <TextField
-        key={name}
-        size="small"
-        label={label}
-        type={numeric ? "number" : "text"}
-        value={value}
-        onChange={(event) =>
-          set(name, numeric ? Number(event.target.value) : event.target.value)
-        }
-      />
+/** Retains dialog content until its closing transition has finished. */
+function useDialogContent<T>(empty: T) {
+  const [state, setState] = useState({ value: empty, open: false });
+  /** Changes content when opening and only changes visibility when closing. */
+  function setValue(value: T) {
+    setState((current) =>
+      Object.is(value, empty)
+        ? { ...current, open: false }
+        : { value, open: true },
     );
   }
-  /** Builds an exact-choice selector for a draft field. */
-  function select(
-    label: string,
-    name: string,
-    value: string,
-    options: string[],
-  ) {
-    return (
-      <TextField
-        select
-        size="small"
-        label={label}
-        value={value}
-        onChange={(event) => set(name, event.target.value)}
-      >
-        {options.map((item) => (
-          <MenuItem key={item} value={item}>
-            {item}
-          </MenuItem>
-        ))}
-      </TextField>
+  /** Clears closed content without disturbing a newly opened dialog. */
+  function onExited() {
+    setState((current) =>
+      current.open ? current : { value: empty, open: false },
     );
   }
-  /** Changes one schedule field while retaining the remaining configuration. */
-  function config(name: string, value: string) {
-    if (node.type === "trigger")
-      change({
-        ...node,
-        triggerConfig: { ...node.triggerConfig, [name]: value },
-      });
-  }
-  return (
-    <Stack spacing={2} sx={{ pt: 1 }}>
-      {field("节点名称", "name", node.name)}
-      {field("说明", "description", node.description)}
-      {node.type === "trigger" && (
-        <>
-          <TextField
-            select
-            size="small"
-            label="触发方式"
-            value={node.triggerType}
-            onChange={(event) => {
-              const kind = event.target.value as typeof node.triggerType;
-              change({
-                ...node,
-                triggerType: kind,
-                triggerConfig:
-                  kind === "schedule"
-                    ? {
-                        schedule_type: "interval",
-                        interval_ms: "900000",
-                        enabled: "true",
-                        repeat: "true",
-                      }
-                    : kind === "event"
-                      ? { topic: "app.lifecycle.resumed" }
-                      : {},
-              });
-            }}
-          >
-            {Object.entries({
-              manual: "手动",
-              schedule: "定时",
-              app_open: "应用启动",
-              event: "宿主事件",
-            }).map(([value, label]) => (
-              <MenuItem key={value} value={value}>
-                {label}
-              </MenuItem>
-            ))}
-          </TextField>
-          {node.triggerType === "event" && (
-            <TextField
-              label="事件主题"
-              size="small"
-              value={node.triggerConfig.topic}
-              onChange={(event) => config("topic", event.target.value)}
-            />
-          )}
-          {node.triggerType === "schedule" && (
-            <>
-              <TextField
-                select
-                size="small"
-                label="定时方式"
-                value={node.triggerConfig.schedule_type}
-                onChange={(event) =>
-                  change({
-                    ...node,
-                    triggerConfig: {
-                      enabled: "true",
-                      repeat: "true",
-                      schedule_type: event.target.value,
-                      ...{
-                        interval: { interval_ms: "900000" },
-                        specific_time: { specific_time: "2026-12-31 12:00:00" },
-                        cron: { cron_expression: "0 9 * * *" },
-                      }[event.target.value],
-                    },
-                  })
-                }
-              >
-                {["interval", "specific_time", "cron"].map((value) => (
-                  <MenuItem key={value} value={value}>
-                    {value}
-                  </MenuItem>
-                ))}
-              </TextField>
-              {Object.entries(node.triggerConfig)
-                .filter(
-                  ([name]) =>
-                    !["enabled", "repeat", "schedule_type"].includes(name),
-                )
-                .map(([name, value]) => (
-                  <TextField
-                    key={name}
-                    size="small"
-                    label={name}
-                    value={value}
-                    onChange={(event) => config(name, event.target.value)}
-                  />
-                ))}
-              {["enabled", "repeat"].map((name) => (
-                <FormControlLabel
-                  key={name}
-                  label={name === "enabled" ? "启用定时" : "重复"}
-                  control={
-                    <Switch
-                      checked={node.triggerConfig[name] === "true"}
-                      onChange={(_, checked) => config(name, String(checked))}
-                    />
-                  }
-                />
-              ))}
-            </>
-          )}
-        </>
-      )}
-      {node.type === "execute" && (
-        <>
-          {field("工具名称（包名:工具名）", "actionType", node.actionType)}
-          {Object.entries(node.actionConfig).map(([name, value]) => (
-            <Stack key={name} spacing={1}>
-              <Parameter
-                label={name}
-                value={value}
-                nodes={sources}
-                change={(next) =>
-                  set("actionConfig", { ...node.actionConfig, [name]: next })
-                }
-              />
-              <Button
-                color="error"
-                onClick={() => {
-                  const next = { ...node.actionConfig };
-                  delete next[name];
-                  set("actionConfig", next);
-                }}
-              >
-                移除参数
-              </Button>
-            </Stack>
-          ))}
-          <Stack direction="row" spacing={1}>
-            <TextField
-              label="参数名称"
-              size="small"
-              value={key}
-              onChange={(event) => setKey(event.target.value)}
-            />
-            <Button
-              disabled={
-                !key.trim() || Object.hasOwn(node.actionConfig, key.trim())
-              }
-              onClick={() => {
-                set("actionConfig", {
-                  ...node.actionConfig,
-                  [key.trim()]: { value: "" },
-                });
-                setKey("");
-              }}
-            >
-              添加参数
-            </Button>
-          </Stack>
-          <FormControlLabel
-            label="JavaScript 执行"
-            control={
-              <Switch
-                checked={node.jsCode !== null}
-                onChange={(_, checked) =>
-                  set("jsCode", checked ? "return inputs;" : null)
-                }
-              />
-            }
-          />
-          {node.jsCode !== null && (
-            <TextField
-              multiline
-              minRows={6}
-              label="脚本（inputs、trigger、Tools、toolCall）"
-              value={node.jsCode}
-              onChange={(event) => set("jsCode", event.target.value)}
-            />
-          )}
-        </>
-      )}
-      {node.type === "condition" && (
-        <>
-          <Parameter
-            label="左值"
-            value={node.left}
-            nodes={sources}
-            change={(value) => set("left", value)}
-          />
-          {select("比较方式", "operator", node.operator, [
-            "EQ",
-            "NE",
-            "GT",
-            "GTE",
-            "LT",
-            "LTE",
-            "CONTAINS",
-            "NOT_CONTAINS",
-            "IN",
-            "NOT_IN",
-          ])}
-          <Parameter
-            label="右值"
-            value={node.right}
-            nodes={sources}
-            change={(value) => set("right", value)}
-          />
-        </>
-      )}
-      {node.type === "logic" &&
-        select("逻辑运算", "operator", node.operator, ["AND", "OR"])}
-      {node.type === "extract" && (
-        <>
-          {select("运算方式", "mode", node.mode, [
-            "REGEX",
-            "JSON",
-            "SUB",
-            "CONCAT",
-            "RANDOM_INT",
-            "RANDOM_STRING",
-          ])}
-          <Parameter
-            label="输入值"
-            value={node.source}
-            nodes={sources}
-            change={(value) => set("source", value)}
-          />
-          {["REGEX", "JSON"].includes(node.mode) &&
-            field("表达式 / JSON 路径", "expression", node.expression)}
-          {node.mode === "REGEX" && field("捕获组", "group", node.group, true)}
-          {node.mode === "SUB" && (
-            <>
-              {field("起始位置", "startIndex", node.startIndex, true)}
-              {field("长度（-1 到结尾）", "length", node.length, true)}
-            </>
-          )}
-          {node.mode === "CONCAT" && (
-            <>
-              {node.others.map((value, index) => (
-                <Stack key={index}>
-                  <Parameter
-                    label={"拼接值 " + (index + 1)}
-                    value={value}
-                    nodes={sources}
-                    change={(next) =>
-                      set(
-                        "others",
-                        node.others.map((item, i) =>
-                          i === index ? next : item,
-                        ),
-                      )
-                    }
-                  />
-                  <Button
-                    onClick={() =>
-                      set(
-                        "others",
-                        node.others.filter((_, i) => i !== index),
-                      )
-                    }
-                  >
-                    移除
-                  </Button>
-                </Stack>
-              ))}
-              <Button
-                onClick={() => set("others", [...node.others, { value: "" }])}
-              >
-                添加拼接值
-              </Button>
-            </>
-          )}
-          {["RANDOM_INT", "RANDOM_STRING"].includes(node.mode) && (
-            <>
-              <FormControlLabel
-                label="使用固定值"
-                control={
-                  <Switch
-                    checked={node.useFixed}
-                    onChange={(_, checked) => set("useFixed", checked)}
-                  />
-                }
-              />
-              {node.useFixed ? (
-                field("固定值", "fixedValue", node.fixedValue)
-              ) : node.mode === "RANDOM_INT" ? (
-                <>
-                  {field("最小值", "randomMin", node.randomMin, true)}
-                  {field("最大值", "randomMax", node.randomMax, true)}
-                </>
-              ) : (
-                <>
-                  {field(
-                    "长度",
-                    "randomStringLength",
-                    node.randomStringLength,
-                    true,
-                  )}
-                  {field(
-                    "字符集",
-                    "randomStringCharset",
-                    node.randomStringCharset,
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </>
-      )}
-    </Stack>
-  );
+  return { value: state.value, open: state.open, setValue, onExited };
 }
 
 /** Runs the Material list, graph editor and transactional dialogs inside the WebView. */
 function App() {
-  const dark = useMediaQuery("(prefers-color-scheme: dark)");
+  const hostTheme = useHostTheme();
+  const dark = hostTheme?.brightness === "dark";
   const compact = useMediaQuery("(max-width:650px)");
   const theme = React.useMemo(
     () =>
-      createTheme({
+      hostTheme && createTheme({
         palette: {
-          mode: dark ? "dark" : "light",
-          primary: { main: dark ? "#a0cde4" : "#286783" },
-          background: { default: dark ? "#151c20" : "#f7f9fc" },
+          mode: hostTheme.brightness === "dark" ? "dark" : "light",
+          primary: { main: hostTheme.colors.primary, contrastText: hostTheme.colors.onPrimary },
+          secondary: { main: hostTheme.colors.secondary, contrastText: hostTheme.colors.onSecondary },
+          error: { main: hostTheme.colors.error, contrastText: hostTheme.colors.onError },
+          background: { default: hostTheme.colors.surface, paper: hostTheme.colors.surfaceContainer },
+          text: { primary: hostTheme.colors.onSurface, secondary: hostTheme.colors.onSurfaceVariant },
+          divider: hostTheme.colors.outlineVariant,
         },
         shape: { borderRadius: 16 },
         typography: {
@@ -610,7 +143,7 @@ function App() {
           MuiDialog: { styleOverrides: { paper: { borderRadius: 24 } } },
         },
       }),
-    [dark],
+    [hostTheme],
   );
   const [snapshot, setSnapshot] = useState<Snapshot>({
     workflows: [],
@@ -621,10 +154,12 @@ function App() {
   const [ready, setReady] = useState(false),
     [busy, setBusy] = useState(false),
     [dirty, setDirty] = useState(false);
-  const [error, setError] = useState(""),
-    [dialog, setDialog] = useState("");
-  const [draft, setDraft] = useState<WorkflowNode | null>(null),
-    [edgeId, setEdgeId] = useState("");
+  const [error, setError] = useState("");
+  const dialogState = useDialogContent("");
+  const { value: dialog, setValue: setDialog } = dialogState;
+  const draftState = useDialogContent<WorkflowNode | null>(null);
+  const { value: draft, setValue: setDraft } = draftState;
+  const [edgeId, setEdgeId] = useState("");
   const [name, setName] = useState(""),
     [description, setDescription] = useState(""),
     [text, setText] = useState("");
@@ -663,6 +198,7 @@ function App() {
           throw new Error("工作流宿主接口未就绪");
       }
       await waitForWorkflowHost();
+      window.applyWorkflowTheme(await window.WorkflowHost.currentTheme());
       await request({ action: "list" });
       setReady(true);
     });
@@ -765,9 +301,13 @@ function App() {
       })) ?? [],
     [workflow?.connections, busy],
   );
+  if (!theme || !hostTheme) return null;
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
+      <GlobalStyles styles={{ ":root": Object.fromEntries(
+        Object.entries(hostTheme.colors).map(([role, color]) => [`--operit-${role}`, color]),
+      ) }} />
       <Box className="app">
         <AppBar position="static" color="transparent" elevation={0}>
           <Toolbar
@@ -798,6 +338,17 @@ function App() {
             </Box>
             {workflow ? (
               <Stack className="toolbar-actions" direction="row" spacing={0.5}>
+                {!compact && (
+                  <Button
+                    className="toolbar-secondary"
+                    aria-label="添加节点"
+                    startIcon={<AddIcon />}
+                    disabled={busy}
+                    onClick={() => setNodePicker(true)}
+                  >
+                    <span className="action-label">添加节点</span>
+                  </Button>
+                )}
                 <Button
                   className="toolbar-secondary"
                   aria-label="设置"
@@ -937,44 +488,64 @@ function App() {
               </Box>
             )}
             {snapshot.workflows.map((item) => (
-              <Card key={item.id} variant="outlined">
+              <Card key={item.id} className="workflow-card" variant="outlined">
                 <CardContent
+                  className="workflow-card-content"
                   onClick={() => open(item)}
-                  sx={{ cursor: "pointer" }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      open(item);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
-                  <Typography variant="h6" noWrap>
-                    {item.name}
-                  </Typography>
-                  <Typography color="text.secondary" className="description">
+                  <Box className="workflow-card-heading">
+                    <Box className="workflow-card-icon">
+                      <AccountTreeOutlinedIcon />
+                    </Box>
+                    <Typography className="workflow-card-name" variant="h6" noWrap>
+                      {item.name}
+                    </Typography>
+                    <Typography
+                      className={
+                        "workflow-card-status " +
+                        (item.enabled ? "is-enabled" : "is-disabled")
+                      }
+                      variant="caption"
+                    >
+                      {item.enabled ? "已启用" : "已停用"}
+                    </Typography>
+                  </Box>
+                  <Typography color="text.secondary" className="workflow-card-description">
                     {item.description || "暂无说明"}
                   </Typography>
-                  <Stack direction="row" spacing={1}>
-                    <Chip size="small" label={item.nodes.length + " 个节点"} />
-                    <Chip
-                      size="small"
-                      label={item.enabled ? "已启用" : "已停用"}
-                    />
+                  <Stack className="workflow-card-meta" direction="row" spacing={1}>
+                    <Chip size="small" label={`${item.nodes.length} 个节点`} />
                     {item.lastExecutionStatus && (
-                      <Chip
-                        size="small"
-                        label={statuses[item.lastExecutionStatus]}
-                      />
+                      <Chip size="small" label={`最近 ${statuses[item.lastExecutionStatus]}`} />
                     )}
                   </Stack>
                 </CardContent>
-                <CardActions>
-                  <Button onClick={() => open(item)}>打开工作流</Button>
-                  <Button
-                    onClick={() =>
-                      perform(async () => {
-                        await request({ action: "copy", id: item.id });
-                      })
-                    }
-                  >
-                    复制
+                <CardActions className="workflow-card-actions">
+                  <Button size="small" variant="contained" onClick={() => open(item)}>
+                    打开工作流
                   </Button>
+                  <Tooltip title="复制工作流">
+                    <IconButton
+                      aria-label="复制工作流"
+                      onClick={() =>
+                        perform(async () => {
+                          await request({ action: "copy", id: item.id });
+                        })
+                      }
+                    >
+                      <ContentCopyOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                   <FormControlLabel
-                    sx={{ ml: "auto" }}
+                    className="workflow-card-toggle"
                     label="启用"
                     control={
                       <Switch
@@ -997,24 +568,6 @@ function App() {
           </Box>
         ) : (
           <Box className="editor">
-            {!compact && (
-              <Stack className="palette" direction="row" spacing={1}>
-                {Object.entries(STYLES).map(([kind, style]) => (
-                  <Button
-                    key={kind}
-                    disabled={busy}
-                    variant="outlined"
-                    startIcon={nodeIcons[kind as WorkflowNode["type"]]}
-                    onClick={() => addNode(kind as WorkflowNode["type"])}
-                  >
-                    {style.label}
-                  </Button>
-                ))}
-                <Typography className="hint" variant="caption">
-                  双击配置 · 拖动端口连线 · 滚轮缩放
-                </Typography>
-              </Stack>
-            )}
             <Box className="canvas">
               <WorkflowCanvas
                 key={workflow.id}
@@ -1133,43 +686,41 @@ function App() {
             </Button>
           </Box>
         )}
-        <Drawer
-          anchor="bottom"
+        <Dialog
           open={nodePicker}
           onClose={() => setNodePicker(false)}
-          slotProps={{ paper: { className: "node-picker-sheet" } }}
+          maxWidth="sm"
+          fullWidth
         >
-          <Box className="node-picker-header">
-            <Box>
-              <Typography variant="h6">添加节点</Typography>
-              <Typography variant="body2" color="text.secondary">
-                选择要放入画布的节点类型
-              </Typography>
+          <DialogTitle>添加节点</DialogTitle>
+          <DialogContent>
+            <Typography color="text.secondary" sx={{ mb: 2 }}>
+              选择要放入画布的节点类型
+            </Typography>
+            <Box className="node-picker-grid">
+              {Object.entries(STYLES).map(([kind, style]) => (
+                <Button
+                  key={kind}
+                  className="node-picker-item"
+                  variant="outlined"
+                  startIcon={nodeIcons[kind as WorkflowNode["type"]]}
+                  onClick={() => addNode(kind as WorkflowNode["type"])}
+                >
+                  {style.label}
+                </Button>
+              ))}
             </Box>
-            <IconButton aria-label="关闭" onClick={() => setNodePicker(false)}>
-              <CloseIcon />
-            </IconButton>
-          </Box>
-          <Box className="node-picker-grid">
-            {Object.entries(STYLES).map(([kind, style]) => (
-              <Button
-                key={kind}
-                className="node-picker-item"
-                variant="outlined"
-                startIcon={nodeIcons[kind as WorkflowNode["type"]]}
-                onClick={() => addNode(kind as WorkflowNode["type"])}
-              >
-                {style.label}
-              </Button>
-            ))}
-          </Box>
-        </Drawer>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setNodePicker(false)}>关闭</Button>
+          </DialogActions>
+        </Dialog>
         <Dialog
-          open={draft !== null}
+          open={draftState.open}
+          slotProps={{ transition: { onExited: draftState.onExited } }}
           onClose={() => setDraft(null)}
           maxWidth="sm"
           fullWidth
-          fullScreen={compact}
         >
           <DialogTitle>配置节点</DialogTitle>
           <DialogContent>
@@ -1214,13 +765,13 @@ function App() {
           </DialogActions>
         </Dialog>
         <Dialog
-          open={dialog !== ""}
+          open={dialogState.open}
+          slotProps={{ transition: { onExited: dialogState.onExited } }}
           onClose={() => {
             if (!busy) setDialog("");
           }}
           maxWidth="sm"
           fullWidth
-          fullScreen={compact}
         >
           <DialogTitle>
             {
@@ -1483,4 +1034,4 @@ function App() {
     </ThemeProvider>
   );
 }
-createRoot(document.getElementById("root")!).render(<App />);
+export { App as WorkflowApp };

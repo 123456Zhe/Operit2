@@ -36,22 +36,137 @@ body,
 }
 
 .list {
-  padding: 24px;
+  padding: 20px 24px 28px;
   overflow: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
   gap: 16px;
   align-content: start;
 }
 
-.description {
-  height: 48px;
+.workflow-card {
+  min-width: 0;
   overflow: hidden;
-  margin: 8px 0 16px !important;
+  border: 1px solid var(--operit-outlineVariant) !important;
+  border-radius: 20px !important;
+  background: var(--operit-surfaceContainer);
+  box-shadow: 0 8px 24px rgba(47, 76, 89, 0.08);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.workflow-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(47, 76, 89, 0.14);
+}
+
+.workflow-card-content {
+  min-width: 0;
+  cursor: pointer;
+  outline: none;
+  padding: 20px 20px 16px !important;
+}
+
+.workflow-card-content:focus-visible {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+
+.workflow-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workflow-card-icon {
+  display: grid;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--operit-primary);
+  background: var(--operit-primaryContainer);
+}
+
+.workflow-card-name {
+  min-width: 0;
+  flex: 1;
+  font-size: 18px !important;
+}
+
+.workflow-card-status {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 5px;
+}
+
+.workflow-card-status::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.workflow-card-status.is-enabled {
+  color: var(--operit-primary);
+}
+
+.workflow-card-status.is-disabled {
+  color: var(--operit-onSurfaceVariant);
+}
+
+.workflow-card-description {
+  min-height: 24px;
+  margin: 12px 0 14px !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-card-meta {
+  align-items: center;
+}
+
+.workflow-card-meta .MuiChip-root {
+  height: 26px;
+  color: var(--operit-onSurfaceVariant);
+  background: var(--operit-surfaceContainerHigh);
+}
+
+.workflow-card-actions {
+  min-height: 58px;
+  padding: 8px 14px 12px !important;
+  border-top: 1px solid var(--operit-outlineVariant);
+  background: var(--operit-surfaceContainerHigh);
+}
+
+.workflow-card-toggle {
+  margin: 0 0 0 auto !important;
+}
+
+.workflow-card-toggle .MuiFormControlLabel-label {
+  font-size: 13px;
+}
+
+.workflow-list-item,
+.workflow-list-summary,
+.workflow-list-heading,
+.workflow-list-name,
+.workflow-enabled-status,
+.workflow-list-description,
+.workflow-list-meta,
+.workflow-list-actions,
+.workflow-enabled-toggle {
+  display: none;
+}
+
+.workflow-card-content:focus-visible {
+  box-shadow: 0 0 0 2px currentColor;
 }
 
 .empty {
-  grid-column: 1/-1;
   text-align: center;
   padding: 80px 24px;
   display: grid;
@@ -81,10 +196,20 @@ body,
 .hint {
   margin-left: auto !important;
   white-space: nowrap;
-  color: #73818c;
+  color: var(--operit-onSurfaceVariant);
 }
 
 .canvas {
+  --xy-background-color: var(--operit-surface);
+  --xy-background-pattern-dots-color: var(--operit-outlineVariant);
+  --xy-edge-stroke: var(--operit-outline);
+  --xy-edge-stroke-selected: var(--operit-primary);
+  --xy-controls-button-background-color: var(--operit-surfaceContainer);
+  --xy-controls-button-background-color-hover: var(--operit-surfaceContainerHigh);
+  --xy-controls-button-color: var(--operit-onSurface);
+  --xy-controls-button-border-color: var(--operit-outlineVariant);
+  --xy-minimap-background-color: var(--operit-surfaceContainer);
+  --xy-minimap-node-background-color: var(--operit-primaryContainer);
   flex: 1;
   min-height: 0;
   position: relative;
@@ -101,8 +226,8 @@ body,
 
 .graph-node {
   width: 220px;
-  background: #fff;
-  color: #18242b;
+  background: var(--operit-surfaceContainer);
+  color: var(--operit-onSurface);
   border: 1.5px solid;
   border-radius: 14px;
   padding: 14px 18px;
@@ -110,7 +235,7 @@ body,
 }
 
 .graph-node.selected {
-  box-shadow: 0 0 0 3px #5a9bc650;
+  box-shadow: 0 0 0 3px var(--operit-primaryContainer);
 }
 
 .node-kind {
@@ -131,19 +256,14 @@ body,
 .react-flow__handle {
   width: 12px;
   height: 12px;
-  background: #54788d;
-  border: 2px solid white;
+  background: var(--operit-primary);
+  border: 2px solid var(--operit-surface);
 }
 
 .log {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 13px !important;
-}
-
-.dark .graph-node {
-  background: #263238;
-  color: #edf4fa;
 }
 
 .react-flow__controls {
@@ -221,21 +341,35 @@ body,
   }
 
   .list {
-    padding: 12px;
-    gap: 12px;
+    padding: 0 16px 16px;
   }
 
-  .list .MuiCard-root {
-    border-radius: 14px;
+  .workflow-list-item {
+    display: flex;
+    gap: 4px 8px;
+    min-height: 0;
+    padding: 16px 0;
   }
 
-  .list .MuiCardContent-root {
-    padding: 16px;
+  .workflow-list-summary {
+    grid-column: 1 / -1;
   }
 
-  .list .MuiCardActions-root {
-    padding: 0 10px 10px;
-    flex-wrap: wrap;
+  .workflow-list-actions {
+    justify-content: flex-end;
+    margin-top: 0;
+  }
+
+  .workflow-enabled-toggle .MuiFormControlLabel-label {
+    display: none;
+  }
+
+  .workflow-list-name {
+    font-size: 16px !important;
+  }
+
+  .workflow-list-meta {
+    margin-top: 7px;
   }
 
   .empty {
@@ -284,7 +418,7 @@ body,
     gap: 8px;
     padding: 6px;
     border-radius: 22px;
-    background: rgba(255, 255, 255, 0.94);
+    background: var(--operit-surfaceContainer);
     box-shadow: 0 4px 18px #00000024;
     backdrop-filter: blur(12px);
   }
@@ -308,7 +442,7 @@ body,
 
   .MuiDialog-paperFullScreen .MuiDialogActions-root {
     padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-    border-top: 1px solid rgba(120, 130, 140, 0.2);
+    border-top: 1px solid var(--operit-outlineVariant);
   }
 }
 body {
@@ -351,8 +485,3 @@ body {
   grid-column: 1 / -1;
 }
 
-@media (max-width: 650px) and (prefers-color-scheme: dark) {
-  .mobile-node-bar {
-    background: rgba(31, 42, 48, 0.94);
-  }
-}

@@ -1,6 +1,7 @@
 import type {
   ComposeDslContext,
   ComposeNode,
+  ComposeThemeSnapshot,
 } from "../../../../../types/compose-dsl";
 import type { Request } from "../service";
 import type { Snapshot } from "../model";
@@ -10,10 +11,24 @@ export default function screen(ctx: ComposeDslContext): ComposeNode {
   const controller = ctx.createWebViewController("workflow-web");
   const [path, setPath] = ctx.useState("workflow-html-path", "");
   const [error, setError] = ctx.useState("workflow-html-error", "");
+  const pageReady = ctx.useRef("workflow-page-ready", false);
+  /** Applies the public Theme snapshot using this plugin's own page contract. */
+  async function applyTheme(theme: ComposeThemeSnapshot): Promise<void> {
+    if (!pageReady.current) return;
+    await controller.evaluateJavascript(
+      `window.applyWorkflowTheme(${JSON.stringify(theme)});`,
+    );
+  }
   /** Registers the service boundary before making the local document available. */
   async function initialize(): Promise<void> {
     try {
+      ctx.Theme.subscribe(applyTheme);
       controller.addJavascriptInterface("WorkflowHost", {
+        /** Marks the page ready and returns the current public theme snapshot. */
+        currentTheme: () => {
+          pageReady.current = true;
+          return ctx.Theme.getCurrent();
+        },
         /** Writes user-requested exports through the cross-platform file host. */
         exportFile: async (...args: unknown[]) => {
           const [path, content] = args[0] as [string, string];

@@ -298,6 +298,7 @@ class _OperitMaterialApp extends StatelessWidget {
         enabled: hostInteractionHostsEnabled,
         child: WorkspaceWebVisitHost(
           child: ToolApprovalHost(
+            enabled: hostInteractionHostsEnabled,
             child: Stack(
               fit: StackFit.expand,
               children: <Widget>[

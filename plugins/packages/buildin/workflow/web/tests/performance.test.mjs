@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { build } from "esbuild";
 import { chromium } from "playwright";
+import { hostTheme } from "./host-theme.mjs";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-const { newWorkflow, newNode } = require("../dist/model.js");
+const { newWorkflow, newNode } = require("../../dist/model.js");
 
 test("dragging measures page and card renders without host traffic", async () => {
   const graph = newWorkflow("Performance");
@@ -24,7 +25,7 @@ test("dragging measures page and card renders without host traffic", async () =>
         name: "render-counts",
         /** Instruments only this test bundle, leaving shipped code untouched. */
         setup(builder) {
-          builder.onLoad({ filter: /app\.tsx$/ }, async ({ path }) => {
+          builder.onLoad({ filter: /\.tsx$/ }, async ({ path }) => {
             const source = await readFile(path, "utf8");
             return {
               contents: source
@@ -51,6 +52,9 @@ test("dragging measures page and card renders without host traffic", async () =>
     await page.evaluate((workflow) => {
       window.renderCounts = { app: 0, card: 0, calls: 0 };
       window.WorkflowHost = {
+        async currentTheme() {
+          return window.workflowTheme;
+        },
         async request() {
           window.renderCounts.calls++;
           return { workflows: [workflow], runs: [] };
@@ -60,6 +64,7 @@ test("dragging measures page and card renders without host traffic", async () =>
     await page.setContent(
       '<div id="root"></div><style>html,body,#root{height:100%;margin:0}</style>',
     );
+    await page.evaluate((theme) => { window.workflowTheme = theme; }, hostTheme);
     await page.addStyleTag({
       content: result.outputFiles.find((file) => file.path.endsWith(".css"))
         .text,
