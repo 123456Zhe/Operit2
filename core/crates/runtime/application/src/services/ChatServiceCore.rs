@@ -840,6 +840,13 @@ impl ChatServiceCore {
     }
 
     /// Creates a new chat and makes it available through chat history state.
+    #[operit_route_macros::operit_core_route(binding = chatId)]
+    pub async fn ensureRoutedChat(&mut self, chatId: String) -> Result<(), String> {
+        self.chatHistoryDelegate.chatHistoryManager.ensureRoutedChat(chatId)
+            .map_err(|error| error.to_string())
+    }
+
+    /// Creates a new chat and makes it available through chat history state.
     pub fn createNewChat(
         &mut self,
         characterCardName: Option<String>,
