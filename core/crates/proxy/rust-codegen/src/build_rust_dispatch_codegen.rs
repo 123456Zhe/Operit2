@@ -252,8 +252,14 @@ pub(crate) fn render_core_proxy_dispatch(objects: &[SourceObject]) -> String {
         let Some((holder_field, resolver_method)) = resolved_holder_metadata(&object.access) else {
             continue;
         };
+        let holder_lookup = render_resolved_holder_lookup(
+            object,
+            resolver_method,
+            "request.targetObjectId",
+            "            ",
+        );
         output.push_str(&format!(
-            "    if generated_object_id_matches_{}(request.targetObjectId) {{\n        let mut holder = proxy.{holder_field}.lock().await;\n        if let Some(object) = holder.{resolver_method}(request.targetObjectId) {{\n            return {};\n        }}\n    }}\n",
+            "    if generated_object_id_matches_{}(request.targetObjectId) {{\n        let mut holder = proxy.{holder_field}.lock().await;\n        if let Some(object) = {holder_lookup} {{\n            return {};\n        }}\n    }}\n",
             object.dispatch_name,
             render_direct_call_dispatch_expression(object, "object", "request", "            ")
         ));
@@ -304,8 +310,14 @@ pub(crate) fn render_core_proxy_dispatch(objects: &[SourceObject]) -> String {
         let Some((holder_field, resolver_method)) = resolved_holder_metadata(&object.access) else {
             continue;
         };
+        let holder_lookup = render_resolved_holder_lookup(
+            object,
+            resolver_method,
+            "request.targetObjectId",
+            "        ",
+        );
         output.push_str(&format!(
-            "    if generated_object_id_matches_{}(request.targetObjectId) {{\n        let propertyName = request.propertyName.clone();\n        let mut holder = proxy.{holder_field}.lock().await;\n        if let Some(object) = holder.{resolver_method}(request.targetObjectId) {{\n            let value = generated_dispatch_{}_watch_snapshot_async(object, &request).await?;\n            return Ok(operit_link::CoreEvent {{ requestId: Some(request.requestId), targetObjectId: request.targetObjectId, propertyName, kind: operit_link::CoreEventKind::Snapshot, value }});\n        }}\n    }}\n",
+            "    if generated_object_id_matches_{}(request.targetObjectId) {{\n        let propertyName = request.propertyName.clone();\n        let mut holder = proxy.{holder_field}.lock().await;\n        if let Some(object) = {holder_lookup} {{\n            let value = generated_dispatch_{}_watch_snapshot_async(object, &request).await?;\n            return Ok(operit_link::CoreEvent {{ requestId: Some(request.requestId), targetObjectId: request.targetObjectId, propertyName, kind: operit_link::CoreEventKind::Snapshot, value }});\n        }}\n    }}\n",
             object.dispatch_name,
             object.dispatch_name
         ));
@@ -338,8 +350,14 @@ pub(crate) fn render_core_proxy_dispatch(objects: &[SourceObject]) -> String {
         let Some((holder_field, resolver_method)) = resolved_holder_metadata(&object.access) else {
             continue;
         };
+        let holder_lookup = render_resolved_holder_lookup(
+            object,
+            resolver_method,
+            "request.targetObjectId",
+            "        ",
+        );
         output.push_str(&format!(
-            "    if generated_object_id_matches_{}(request.targetObjectId) {{\n        let mut holder = proxy.{holder_field}.lock().await;\n        if let Some(object) = holder.{resolver_method}(request.targetObjectId) {{\n            return generated_dispatch_{}_watch_async(object, request, proxy.streamAttachmentAdopter()).await;\n        }}\n    }}\n",
+            "    if generated_object_id_matches_{}(request.targetObjectId) {{\n        let mut holder = proxy.{holder_field}.lock().await;\n        if let Some(object) = {holder_lookup} {{\n            return generated_dispatch_{}_watch_async(object, request, proxy.streamAttachmentAdopter()).await;\n        }}\n    }}\n",
             object.dispatch_name,
             object.dispatch_name
         ));
@@ -368,8 +386,14 @@ pub(crate) fn render_core_proxy_dispatch(objects: &[SourceObject]) -> String {
         let Some((holder_field, resolver_method)) = resolved_holder_metadata(&object.access) else {
             continue;
         };
+        let holder_lookup = render_resolved_holder_lookup(
+            object,
+            resolver_method,
+            "request.targetObjectId",
+            "        ",
+        );
         output.push_str(&format!(
-            "    if generated_object_id_matches_{}(request.targetObjectId) {{\n        let propertyName = request.propertyName.clone();\n        let mut holder = proxy.{holder_field}.try_lock().map_err(|_| operit_link::CoreLinkError::internal(\"Resolved holder is busy\"))?;\n        if let Some(object) = holder.{resolver_method}(request.targetObjectId) {{\n            let value = generated_dispatch_{}_watch_snapshot(object, &request)?;\n            return Ok(operit_link::CoreEvent {{ requestId: Some(request.requestId), targetObjectId: request.targetObjectId, propertyName, kind: operit_link::CoreEventKind::Snapshot, value }});\n        }}\n    }}\n",
+            "    if generated_object_id_matches_{}(request.targetObjectId) {{\n        let propertyName = request.propertyName.clone();\n        let mut holder = proxy.{holder_field}.try_lock().map_err(|_| operit_link::CoreLinkError::internal(\"Resolved holder is busy\"))?;\n        if let Some(object) = {holder_lookup} {{\n            let value = generated_dispatch_{}_watch_snapshot(object, &request)?;\n            return Ok(operit_link::CoreEvent {{ requestId: Some(request.requestId), targetObjectId: request.targetObjectId, propertyName, kind: operit_link::CoreEventKind::Snapshot, value }});\n        }}\n    }}\n",
             object.dispatch_name,
             object.dispatch_name
         ));
@@ -428,8 +452,14 @@ pub(crate) fn render_core_proxy_dispatch(objects: &[SourceObject]) -> String {
         let Some((holder_field, resolver_method)) = resolved_holder_metadata(&object.access) else {
             continue;
         };
+        let holder_lookup = render_resolved_holder_lookup(
+            object,
+            resolver_method,
+            "request.targetObjectId",
+            "        ",
+        );
         output.push_str(&format!(
-            "    if generated_object_id_matches_{}(request.targetObjectId) {{\n        let mut holder = proxy.{holder_field}.try_lock().map_err(|_| operit_link::CoreLinkError::internal(\"Resolved holder is busy\"))?;\n        if let Some(object) = holder.{resolver_method}(request.targetObjectId) {{\n            return generated_dispatch_{}_watch(object, request, attachmentAdopter.clone());\n        }}\n    }}\n",
+            "    if generated_object_id_matches_{}(request.targetObjectId) {{\n        let mut holder = proxy.{holder_field}.try_lock().map_err(|_| operit_link::CoreLinkError::internal(\"Resolved holder is busy\"))?;\n        if let Some(object) = {holder_lookup} {{\n            return generated_dispatch_{}_watch(object, request, attachmentAdopter.clone());\n        }}\n    }}\n",
             object.dispatch_name,
             object.dispatch_name
         ));
@@ -881,6 +911,25 @@ fn resolved_holder_metadata(access: &ObjectAccess) -> Option<(&str, &str)> {
         } => Some((holder_field.as_str(), resolver_method.as_str())),
         _ => None,
     }
+}
+
+/// Renders the holder lookup used by generated proxy dispatch.
+///
+/// Detached chat windows bind the same generated object schema as the main
+/// window, so their slot identity is carried in `__core_instance_id` rather
+/// than in the numeric generated object id.
+fn render_resolved_holder_lookup(
+    object: &SourceObject,
+    resolver_method: &str,
+    object_id: &str,
+    indent: &str,
+) -> String {
+    if object.schema_key != "chatRuntimeHolderMain" {
+        return format!("holder.{resolver_method}({object_id})");
+    }
+    format!(
+        "{{\n{indent}    let mut __core_args = operit_rslink_runtime::object_args(request.args.clone())?;\n{indent}    let __core_instance_id: Option<String> = operit_rslink_runtime::decode_core_arg(&mut __core_args, \"__core_instance_id\")?;\n{indent}    match __core_instance_id {{\n{indent}        Some(instance_id) => holder.coreForInstanceId(instance_id),\n{indent}        None => holder.{resolver_method}({object_id}),\n{indent}    }}\n{indent}}}"
+    )
 }
 
 /// Renders the generated call expression for one already resolved object.

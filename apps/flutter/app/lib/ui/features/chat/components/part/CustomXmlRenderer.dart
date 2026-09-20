@@ -17,6 +17,7 @@ import '../../../../common/markdown/StreamMarkdownRenderer.dart';
 import '../../../../common/markdown/XmlRenderPluginRegistry.dart';
 import '../../../../../util/ChatMarkupRegex.dart';
 import '../../../packages/screens/ToolPkgUiLauncherScreen.dart';
+import '../ChatRuntimeScope.dart';
 import 'DetailsTagRenderer.dart';
 import 'DialogComponents.dart';
 import 'FileDiffDisplay.dart';
@@ -76,6 +77,7 @@ class CustomXmlRenderer extends StatelessWidget {
       isStreaming: isStreaming,
       textColor: textColor,
       splitMarkdownContent: splitMarkdownContent,
+      chatCore: ChatRuntimeScope.maybeOf(context),
       defaultBuilder: (context) => _buildDefaultXml(context, parsed),
     );
   }
@@ -190,6 +192,7 @@ class _ToolPkgXmlRenderBridge extends StatefulWidget {
     required this.textColor,
     required this.defaultBuilder,
     required this.splitMarkdownContent,
+    required this.chatCore,
   });
 
   final String tagName;
@@ -198,6 +201,7 @@ class _ToolPkgXmlRenderBridge extends StatefulWidget {
   final Color textColor;
   final WidgetBuilder defaultBuilder;
   final MarkdownContentSplitter splitMarkdownContent;
+  final GeneratedChatRuntimeHolderMainCoreProxy? chatCore;
 
   @override
   State<_ToolPkgXmlRenderBridge> createState() =>
@@ -215,14 +219,15 @@ class _ToolPkgXmlRenderBridgeState extends State<_ToolPkgXmlRenderBridge> {
   void didUpdateWidget(covariant _ToolPkgXmlRenderBridge oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.tagName != widget.tagName ||
-        oldWidget.xmlContent != widget.xmlContent) {
+        oldWidget.xmlContent != widget.xmlContent ||
+        oldWidget.chatCore != widget.chatCore) {
       _renderFuture = _loadRender();
     }
   }
 
   /// Requests ToolPkg XML render output from the active Core runtime.
   Future<Object?> _loadRender() {
-    return _clients.chatRuntimeHolderMain.renderToolPkgXml(
+    return (widget.chatCore ?? _clients.chatRuntimeHolderMain).renderToolPkgXml(
       tagName: widget.tagName,
       xmlContent: widget.xmlContent,
     );

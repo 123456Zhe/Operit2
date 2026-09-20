@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../common/components/AdaptiveSidePanel.dart';
+import '../../../../core/proxy/generated/CoreProxyClients.g.dart';
 import '../viewmodel/WorkspaceFileModels.dart';
 import 'workspace/WorkspaceLayoutMetrics.dart';
 import 'workspace/WorkspacePanel.dart';
@@ -17,6 +18,7 @@ class WorkspaceShell extends StatelessWidget {
     required this.currentChatId,
     required this.hasBoundWorkspace,
     required this.workspacePath,
+    required this.chatCore,
     required this.onListWorkspaceFiles,
     required this.onListWorkspaceBindingDirectories,
     required this.onReadWorkspaceTextFile,
@@ -33,6 +35,7 @@ class WorkspaceShell extends StatelessWidget {
   final String? currentChatId;
   final bool hasBoundWorkspace;
   final String? workspacePath;
+  final GeneratedChatRuntimeHolderMainCoreProxy chatCore;
   final Future<List<WorkspaceFileEntry>> Function(String path)
   onListWorkspaceFiles;
   final Future<List<WorkspaceFileEntry>> Function(String path)
@@ -63,6 +66,7 @@ class WorkspaceShell extends StatelessWidget {
         currentChatId: currentChatId,
         hasBoundWorkspace: hasBoundWorkspace,
         workspacePath: workspacePath,
+        chatCore: chatCore,
         onListWorkspaceFiles: onListWorkspaceFiles,
         onListWorkspaceBindingDirectories: onListWorkspaceBindingDirectories,
         onReadWorkspaceTextFile: onReadWorkspaceTextFile,

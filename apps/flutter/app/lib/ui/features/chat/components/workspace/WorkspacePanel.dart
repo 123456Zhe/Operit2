@@ -29,6 +29,7 @@ class WorkspacePanel extends StatefulWidget {
     required this.currentChatId,
     required this.hasBoundWorkspace,
     required this.workspacePath,
+    required this.chatCore,
     required this.onListWorkspaceFiles,
     required this.onListWorkspaceBindingDirectories,
     required this.onReadWorkspaceTextFile,
@@ -42,6 +43,7 @@ class WorkspacePanel extends StatefulWidget {
   final String? currentChatId;
   final bool hasBoundWorkspace;
   final String? workspacePath;
+  final GeneratedChatRuntimeHolderMainCoreProxy chatCore;
   final Future<List<WorkspaceFileEntry>> Function(String path)
   onListWorkspaceFiles;
   final Future<List<WorkspaceFileEntry>> Function(String path)
@@ -229,7 +231,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
 
   /// Watches chat histories used by the workspace overview.
   void _watchWorkspaceOverviewHistories() {
-    _workspaceOverviewHistorySubscription = _coreClients.chatRuntimeHolderMain
+    _workspaceOverviewHistorySubscription = widget.chatCore
         .chatHistoryListItemsFlow()
         .listen(
           (histories) {
@@ -737,8 +739,8 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
       onOpenWorkspaceCreator: _showCreateWorkspaceDialog,
       onBindWorkspace: _bindWorkspaceFolder,
       onChooseExistingWorkspace: _openWorkspaceBindingPickerTab,
-      splitMarkdownContent: (content) => _coreClients.chatRuntimeHolderMain
-          .splitMarkdownContent(content: content),
+      splitMarkdownContent: (content) =>
+          widget.chatCore.splitMarkdownContent(content: content),
     );
   }
 
