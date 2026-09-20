@@ -130,6 +130,21 @@ pub fn snapshot() -> serde_json::Value {
     }
 }
 
+/// Small bounded summary for the physical display; full messages remain in Space.
+pub fn preview() -> String {
+    let snapshot = snapshot();
+    if let Some(error) = snapshot.get("error").and_then(|v| v.as_str()) {
+        return error.chars().take(72).collect();
+    }
+    if snapshot.get("connected").and_then(|v| v.as_bool()) != Some(true) {
+        return "No chat session".into();
+    }
+    snapshot.get("messages").and_then(|v| v.as_array()).and_then(|items| items.last())
+        .and_then(|message| message.get("text").and_then(|v| v.as_str()))
+        .map(|text| text.chars().take(72).collect())
+        .unwrap_or_else(|| "Connected to Space".into())
+}
+
 fn displayMessages(value: &CoreValue, streams: &BTreeMap<String, StreamText>) -> serde_json::Value {
     let mut messages = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
     if let Some(messages) = messages.as_array_mut() {
@@ -177,19 +192,6 @@ pub fn send(text: String) -> Result<(), String> {
     });
     Ok(())
 }
-
-pub const PAGE: &str = r#"<!doctype html><html lang="zh-CN"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Edge 聊天</title>
-<style>body{font:16px system-ui;max-width:720px;margin:auto;padding:20px;background:#f4f6fa;color:#172133}#messages{min-height:45vh;white-space:pre-wrap}article{background:white;padding:14px;margin:10px 0;border-radius:12px}textarea,input,button{font:inherit;padding:10px;box-sizing:border-box}textarea{width:100%;min-height:80px}button{cursor:pointer}#status{color:#536178}#error{color:#a21d2c}</style>
-<h1>Edge 聊天</h1><p id="status">正在连接…</p><label>设备连接令牌 <input id="token" type="password" autocomplete="off"></label>
-<p id="error" role="alert"></p><div id="messages" aria-live="polite"></div>
-<form id="form"><textarea id="text" placeholder="输入消息" required></textarea><button id="send">发送</button></form>
-<script>
-const $=id=>document.getElementById(id);let busy=false;
-const headers=()=>({'X-Edge-Token':$('token').value,'Content-Type':'application/json'});
-async function refresh(){try{const r=await fetch('/chat/state',{headers:headers(),cache:'no-store'});if(!r.ok)throw Error('请填写正确的设备连接令牌');const s=await r.json();$('status').textContent=s.connected?(s.sending?'正在发送…':'已连接 Space'):'未连接 Space';if(!busy)$('error').textContent=s.error||'';$('send').disabled=busy||s.sending||!s.connected;const root=$('messages');root.replaceChildren();for(const m of s.messages||[]){const a=document.createElement('article');a.textContent=(m.sender||m.role||'消息')+'\n'+(m.content||m.text||'');root.append(a);}}catch(e){$('status').textContent=e.message;$('send').disabled=true;}finally{setTimeout(refresh,1200);}}
-$('form').onsubmit=async e=>{e.preventDefault();if(busy)return;busy=true;$('send').disabled=true;$('error').textContent='';try{const r=await fetch('/chat/send',{method:'POST',headers:headers(),body:JSON.stringify({text:$('text').value})});const s=await r.json();if(!r.ok)throw Error(s.error);$('text').value='';}catch(e){$('error').textContent=e.message;}finally{busy=false;}};refresh();
-</script></html>"#;
 
 #[cfg(test)]
 mod tests {

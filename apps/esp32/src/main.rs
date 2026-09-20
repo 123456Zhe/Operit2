@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 mod edge_chat;
+mod edge_session;
 mod config;
 #[cfg(target_os = "espidf")]
 mod edge_link;
@@ -233,6 +234,9 @@ fn runFirmware() -> operit_host_api::HostResult<()> {
                     // a duplicate listener.
                     setExpression("listening")?;
                 }
+                "edge_search" => setExpression("listening")?,
+                "edge_pair" => setExpression("listening")?,
+                "edge_chat" => {}
                 _ => log::debug!("operit-esp32 LVGL action: {action}"),
             }
         }
@@ -243,6 +247,7 @@ fn runFirmware() -> operit_host_api::HostResult<()> {
             }
         }
         updateStatus(&mut lvgl, &status, edgeReady);
+        lvgl.setChatPreview(&crate::edge_chat::preview());
         if std::time::Instant::now() >= nextHealth {
             logRuntimeHealth("running");
             nextHealth = std::time::Instant::now() + std::time::Duration::from_secs(30);
