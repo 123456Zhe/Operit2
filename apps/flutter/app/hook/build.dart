@@ -106,6 +106,7 @@ void main(List<String> args) async {
       syncScript.path,
       '--source',
       'buildin',
+      '--no-hot-reload',
     ], workingDirectory: repoRoot.path);
 
     if (shouldBuildWebAssets) {

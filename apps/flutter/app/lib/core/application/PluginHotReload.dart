@@ -17,7 +17,10 @@ class PluginHotReload {
     if (!kDebugMode || _registered) return;
     _registered = true;
     final uploads = <String, StringBuffer>{};
-    developer.registerExtension('ext.operit.reloadPlugins', (method, args) async {
+    developer.registerExtension('ext.operit.reloadPlugins', (
+      method,
+      args,
+    ) async {
       try {
         final action = args['action'];
         final name = args['name'];
@@ -33,7 +36,8 @@ class PluginHotReload {
           case 'commit':
             if (uploads.isEmpty) throw StateError('No packages uploaded');
             final manager = clients.application.packageManager();
-            final root = await manager.getExternalPackagesPath();
+            final root = await clients.repositoryRuntimeStorageRepository
+                .externalPackagesDirPath();
             for (final entry in uploads.entries) {
               await clients.repositoryRuntimeStorageRepository.writeBase64(
                 path: '$root/${entry.key}',
@@ -46,7 +50,9 @@ class PluginHotReload {
           default:
             throw ArgumentError('Unknown hot reload action');
         }
-        return developer.ServiceExtensionResponse.result(jsonEncode({'ok': true}));
+        return developer.ServiceExtensionResponse.result(
+          jsonEncode({'ok': true}),
+        );
       } catch (error) {
         uploads.clear();
         return developer.ServiceExtensionResponse.error(

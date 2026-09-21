@@ -96,6 +96,16 @@ Widget _withModifier(
     nodeType: nodeType,
     modifierScope: modifierScope,
   );
+  if (nodeType == 'Row') {
+    final actionId = _actionId(props['onClick']);
+    if (actionId != null) {
+      current = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onAction(actionId),
+        child: current,
+      );
+    }
+  }
   for (final op in ops.reversed) {
     final name = _normalizeToken((op['name'] ?? '').toString());
     final args = op['args'] is List<Object?>

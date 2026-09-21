@@ -5,6 +5,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -423,6 +424,55 @@ def _compute_hot_reload_signature(output_dir: Path) -> str:
     return digest.hexdigest()
 
 
+# Lists command lines of currently running processes for VM service discovery.
+def _running_process_command_lines() -> list[str]:
+    if os.name == "nt":
+        command = [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Get-CimInstance Win32_Process | Select-Object -ExpandProperty CommandLine",
+        ]
+    else:
+        command = ["ps", "-Ao", "args="]
+    completed = subprocess.run(
+        command,
+        capture_output=True,
+        check=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+
+
+# Finds the authenticated VM service URI created by Flutter's development service.
+def _discover_vm_service() -> str:
+    uri_pattern = re.compile(
+        r"--vm-service-uri=(?:\"([^\"]+)\"|'([^']+)'|([^\s]+))"
+    )
+    candidates: set[str] = set()
+    for command_line in _running_process_command_lines():
+        if not re.search(r"\bdevelopment-service\b", command_line):
+            continue
+        match = uri_pattern.search(command_line)
+        if match is None:
+            continue
+        candidate = next(value for value in match.groups() if value)
+        parsed = urllib.parse.urlsplit(candidate)
+        if parsed.scheme in {"http", "https", "ws", "wss"} and parsed.netloc:
+            candidates.add(candidate)
+    if len(candidates) != 1:
+        raise RuntimeError(
+            "Expected exactly one running Flutter development service with an authenticated VM Service URI; "
+            f"found {len(candidates)}"
+        )
+    discovered = next(iter(candidates))
+    print(f"AUTO-DISCOVERED-VM-SERVICE: {discovered}")
+    return discovered
+
+
 # Uploads packages and waits for the running application's reload acknowledgement.
 def _maybe_hot_reload_output(
     source_dir: Path,
@@ -438,8 +488,7 @@ def _maybe_hot_reload_output(
     if dry_run or disabled:
         return
     if vm_service is None:
-        print(f"SYNC-ONLY: {label}; use --vm-service to reload a running application")
-        return
+        vm_service = _discover_vm_service()
     parsed = urllib.parse.urlsplit(vm_service)
     if parsed.scheme not in {"http", "https", "ws", "wss"} or not parsed.netloc:
         raise ValueError("--vm-service must be a complete authenticated VM Service URL")

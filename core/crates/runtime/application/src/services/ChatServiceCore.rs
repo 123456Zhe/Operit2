@@ -835,8 +835,13 @@ impl ChatServiceCore {
 
     /// Renders one XML block through registered ToolPkg XML render hooks.
     #[allow(non_snake_case)]
-    pub fn renderToolPkgXml(&self, tagName: String, xmlContent: String) -> serde_json::Value {
-        ToolPkgXmlRenderBridge::renderRegisteredXml(tagName, xmlContent)
+    pub fn renderToolPkgXml(
+        &self,
+        tagName: String,
+        xmlContent: String,
+        chatId: Option<String>,
+    ) -> serde_json::Value {
+        ToolPkgXmlRenderBridge::renderRegisteredXml(tagName, xmlContent, chatId)
     }
 
     /// Creates a new chat and makes it available through chat history state.

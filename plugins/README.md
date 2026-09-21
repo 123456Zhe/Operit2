@@ -16,19 +16,18 @@ Bundled Skill sources may include `skill.include.json`. The runtime build script
 # Plugin development hot reload
 
 Start a debug Flutter application containing the `ext.operit.reloadPlugins`
-extension. Copy its authenticated VM Service URL from the run console, then run
-from the repository root:
+extension, then run from the repository root:
 
 ```powershell
-.venv/Scripts/python.exe plugins/tools/sync_plugin_packages.py --source buildin --vm-service "http://127.0.0.1:PORT/AUTH/" --hot-reload-timeout 60
+.venv/Scripts/python.exe plugins/tools/sync_plugin_packages.py
 ```
 
-The script builds packages, transfers them through the VM service, writes them
+The script discovers the authenticated VM Service created by the running
+Flutter development service, builds packages, transfers them through the VM service, writes them
 into runtime package storage through the host API, and reloads the catalog and
 visible plugin page. Development packages persist in runtime package storage
 and replace matching bundled packages through the existing package scan rules.
 Reloading discards unsaved plugin UI state and recreates plugin execution engines.
 The VM service must be reachable from this computer (including the forwarded
 port used by Flutter for a connected phone). Keep the authenticated URL private.
-Without `--vm-service`, the script only synchronizes local build assets.
 `--no-hot-reload` disables remote delivery explicitly.

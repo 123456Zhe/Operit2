@@ -1952,6 +1952,7 @@ class _AIChatSurfaceState extends State<_AIChatSurface> {
     if (widget.embedded) {
       return ChatRuntimeScope(
         chatCore: _viewModel.chatCore,
+        chatId: _currentChatId,
         child: _buildChatContent(),
       );
     }
@@ -1963,10 +1964,15 @@ class _AIChatSurfaceState extends State<_AIChatSurface> {
     );
     final content = _buildChatContent();
     if (useMainLayoutWorkspace) {
-      return ChatRuntimeScope(chatCore: _viewModel.chatCore, child: content);
+      return ChatRuntimeScope(
+        chatCore: _viewModel.chatCore,
+        chatId: _currentChatId,
+        child: content,
+      );
     }
     return ChatRuntimeScope(
       chatCore: _viewModel.chatCore,
+      chatId: _currentChatId,
       child: WorkspaceShell(
         workspaceOpen: _workspaceOpen,
         onWorkspaceOpenChanged: _setWorkspaceOpen,

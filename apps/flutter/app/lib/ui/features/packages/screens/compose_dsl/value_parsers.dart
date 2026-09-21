@@ -99,9 +99,6 @@ EdgeInsets? _commonPaddingFromProps(Map<String, Object?> props) {
       vertical: vertical ?? 0,
     );
   }
-  if (props['contentPadding'] != null) {
-    return _edgeInsetsFromValue(props['contentPadding']);
-  }
   return null;
 }
 
@@ -448,35 +445,7 @@ Color? _colorToken(ColorScheme scheme, String token) {
 
 /// Resolves icon data for the Compose DSL renderer.
 IconData _iconData(String name) {
-  final alias = switch (name) {
-    'add' || 'plus' => Icons.add,
-    'close' => Icons.close,
-    'check' => Icons.check,
-    'settings' => Icons.settings,
-    'search' => Icons.search,
-    'delete' => Icons.delete_outline,
-    'edit' => Icons.edit_outlined,
-    'refresh' => Icons.refresh,
-    'download' => Icons.download,
-    'upload' => Icons.upload,
-    'save' => Icons.save_outlined,
-    'home' => Icons.home_outlined,
-    'info' => Icons.info_outline,
-    'warning' => Icons.warning_amber_outlined,
-    'person' || 'account' => Icons.person_outline,
-    'folder' => Icons.folder_outlined,
-    'file' => Icons.insert_drive_file_outlined,
-    'play' => Icons.play_arrow,
-    'pause' => Icons.pause,
-    'stop' => Icons.stop,
-    'menu' => Icons.menu,
-    'more' || 'moreVert' => Icons.more_vert,
-    'arrowBack' || 'back' => Icons.arrow_back,
-    'arrowForward' || 'forward' => Icons.arrow_forward,
-    _ => null,
-  };
-  return alias ??
-      MaterialIconNameResolver.resolveOrDefault(name, Icons.widgets_outlined);
+  return MaterialIconNameResolver.resolve(name);
 }
 
 /// Resolves box fit for the Compose DSL renderer.

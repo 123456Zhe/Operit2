@@ -57,6 +57,17 @@ class HotReloadTests(unittest.TestCase):
                     sync._maybe_hot_reload_output(root, root, **arguments)
                 self.assertFalse(state.exists())
 
+    def test_discovers_flutter_development_service(self):
+        """Extracts the authenticated VM service URI from the Flutter service process."""
+        command_lines = [
+            'dart.exe development-service --vm-service-uri="http://127.0.0.1:4906/token/"'
+        ]
+        with patch.object(sync, '_running_process_command_lines', return_value=command_lines):
+            self.assertEqual(
+                sync._discover_vm_service(),
+                'http://127.0.0.1:4906/token/',
+            )
+
 
 if __name__ == '__main__':
     unittest.main()

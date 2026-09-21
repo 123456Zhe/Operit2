@@ -64,6 +64,29 @@ const TOOLPKG_CACHE_SIGNATURE_FILE: &str = ".toolpkg-cache-signature";
 const MARKET_TOOLPKG_FILE_PREFIX: &str = "market-";
 const PACKAGE_MANAGER_LOG_TAG: &str = "ToolPkg";
 
+/// Describes one slash command contributed by an enabled ToolPkg package.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[allow(non_snake_case)]
+pub struct ToolPkgCoreCommandInfo {
+    pub containerPackageName: String,
+    pub commandId: String,
+    pub name: String,
+    pub title: String,
+    pub description: String,
+    pub usage: String,
+}
+
+/// Contains the text and structured output returned by a ToolPkg command.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ToolPkgCoreCommandExecutionResult {
+    #[serde(default)]
+    pub stdout: String,
+    #[serde(default)]
+    pub stderr: String,
+    #[serde(default)]
+    pub json: Option<serde_json::Value>,
+}
+
 /// Creates SDK-owned ToolPkg execution engines through the installed JavaScript bridge.
 #[derive(Clone)]
 struct RuntimeToolPkgExecutionEngineFactory {
@@ -1543,6 +1566,96 @@ impl RuntimePackageManager {
     /// Returns desktop widgets exposed by enabled ToolPkg containers.
     pub fn getToolPkgDesktopWidgets(&self, useEnglish: bool) -> Vec<ToolPkgDesktopWidget> {
         ToolPkgPackageService::new(self).getToolPkgDesktopWidgets(useEnglish)
+    }
+
+    #[allow(non_snake_case)]
+    /// Returns slash commands contributed by enabled ToolPkg packages.
+    pub fn getToolPkgCoreCommands(
+        &self,
+        useEnglish: bool,
+    ) -> Result<Vec<ToolPkgCoreCommandInfo>, String> {
+        let mut owners = BTreeMap::new();
+        let mut commands = Vec::new();
+        for runtime in self.getEnabledToolPkgContainerRuntimes() {
+            for command in runtime.coreCommands {
+                let key = command.name.to_lowercase();
+                if let Some(existingOwner) = owners.insert(key, runtime.packageName.clone()) {
+                    return Err(format!(
+                        "duplicate enabled plugin command /{}: {} and {}",
+                        command.name, existingOwner, runtime.packageName
+                    ));
+                }
+                commands.push(ToolPkgCoreCommandInfo {
+                    containerPackageName: runtime.packageName.clone(),
+                    commandId: command.id,
+                    name: command.name,
+                    title: command.title.resolve(useEnglish),
+                    description: command.description.resolve(useEnglish),
+                    usage: command.usage,
+                });
+            }
+        }
+        commands.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+        Ok(commands)
+    }
+
+    #[allow(non_snake_case)]
+    /// Executes one slash command contributed by an enabled ToolPkg package.
+    pub fn executeToolPkgCoreCommand(
+        &self,
+        commandName: &str,
+        args: &[String],
+        jsonMode: bool,
+    ) -> Result<ToolPkgCoreCommandExecutionResult, String> {
+        let normalizedName = commandName.trim();
+        let mut matched = self
+            .getEnabledToolPkgContainerRuntimes()
+            .into_iter()
+            .flat_map(|runtime| {
+                let packageName = runtime.packageName;
+                runtime
+                    .coreCommands
+                    .into_iter()
+                    .filter(move |command| command.name.eq_ignore_ascii_case(normalizedName))
+                    .map(move |command| (packageName.clone(), command))
+            })
+            .collect::<Vec<_>>();
+        if matched.is_empty() {
+            return Err(format!("plugin command not found: /{normalizedName}"));
+        }
+        if matched.len() > 1 {
+            let owners = matched
+                .iter()
+                .map(|(packageName, _)| packageName.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(format!(
+                "duplicate enabled plugin command /{normalizedName}: {owners}"
+            ));
+        }
+        let (packageName, command) = matched.remove(0);
+        let raw = self
+            .runToolPkgMainHook(
+                &packageName,
+                &command.function,
+                operit_plugin_sdk::toolpkg::ToolPkgCommonPluginConstants::TOOLPKG_EVENT_CORE_COMMAND,
+                Some("core_command"),
+                Some(&command.id),
+                command.functionSource.as_deref(),
+                serde_json::json!({
+                    "commandId": command.id,
+                    "commandName": command.name,
+                    "args": args,
+                    "json": jsonMode,
+                }),
+                None,
+                None,
+                None,
+            )?
+            .ok_or_else(|| format!("plugin command /{normalizedName} returned no result"))?;
+        serde_json::from_str::<ToolPkgCoreCommandExecutionResult>(&raw).map_err(|error| {
+            format!("plugin command /{normalizedName} returned an invalid result: {error}")
+        })
     }
 
     /// Renders a registered desktop widget and settles its initial load action for any host.

@@ -57,6 +57,7 @@ extension _ComposeMaterialControls on _ComposeDslRenderer {
       contentPadding: node.props['contentPadding'],
     );
     return Card(
+      margin: EdgeInsets.zero,
       color: _colorWithAlpha(
         context,
         node.props['containerColor'],

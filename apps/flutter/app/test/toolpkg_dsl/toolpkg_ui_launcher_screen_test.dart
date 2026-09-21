@@ -474,6 +474,37 @@ void main() {
     expect(gamma.top, alpha.bottom + 12);
   });
 
+  testWidgets('dispatches direct Row onClick actions', (tester) async {
+    final bridge = _ToolPkgDslTestBridge(
+      renderResult: (_) => jsonEncode({
+        'success': true,
+        'tree': _node(
+          'Row',
+          props: <String, Object?>{
+            'onClick': <String, Object?>{'__actionId': 'expand'},
+            'padding': <String, Object?>{'horizontal': 14, 'vertical': 12},
+          },
+          children: <Map<String, Object?>>[
+            _node('Text', props: <String, Object?>{'text': 'Expand'}),
+          ],
+        ),
+        'state': <String, Object?>{},
+        'memo': <String, Object?>{},
+      }),
+    );
+    await tester.pumpWidget(_screen(bridge));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Expand'));
+    await tester.pumpAndSettle();
+
+    final actionCall = bridge.calls.lastWhere(
+      (request) =>
+          request.methodName == 'dispatchToolPkgComposeDslActionEvents',
+    );
+    expect((actionCall.args as Map<String, Object?>)['actionId'], 'expand');
+  });
+
   testWidgets('clickable site card navigates without an action return value', (
     tester,
   ) async {
@@ -484,7 +515,7 @@ void main() {
         expect(source, RouteEntrySource.script);
         expect(args['id'], 'doubao');
       },
-      reset: (_, __, ___) {},
+      reset: (_, _, _) {},
     );
     addTearDown(AppRouterGateway.clear);
     var clicked = false;
@@ -686,6 +717,54 @@ void main() {
     expect(moduleSpec['routeId'], 'toolbox');
     expect(moduleSpec['runtime'], 'compose_dsl');
     expect(moduleSpec['screen'], 'ui/toolbox.js');
+  });
+
+  testWidgets('renders an embedded XML screen by its explicit resource path', (
+    tester,
+  ) async {
+    final bridge = _ToolPkgDslTestBridge();
+    await tester.pumpWidget(
+      _screen(
+        bridge,
+        plugin: _moduleOnlyPluginRuntime(),
+        initialRouteId: 'xml_render',
+        initialModuleSpec: <String, Object?>{
+          'id': 'xml_render',
+          'runtime': 'compose_dsl',
+          'screen': 'ui/planask/index.ui.js',
+          'toolPkgId': 'module_only_toolpkg',
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Counter: 0'), findsOneWidget);
+    final resourceCall = bridge.calls.singleWhere(
+      (request) => request.methodName == 'readToolPkgTextResource',
+    );
+    expect(
+      (resourceCall.args as Map<String, Object?>)['resourcePath'],
+      'ui/planask/index.ui.js',
+    );
+    expect(
+      bridge.calls.where(
+        (request) => request.methodName == 'getToolPkgComposeDslScript',
+      ),
+      isEmpty,
+    );
+    final renderCall = bridge.calls.singleWhere(
+      (request) => request.methodName == 'executeToolPkgComposeDslScript',
+    );
+    final renderArgs = renderCall.args as Map<String, Object?>;
+    expect(
+      renderArgs['contextKey'],
+      startsWith(
+        'toolpkg_xml_render:module_only_toolpkg:ui/planask/index.ui.js:',
+      ),
+    );
+    final runtimeOptions = renderArgs['runtimeOptions'] as Map<String, Object?>;
+    expect(runtimeOptions['uiModuleId'], 'xml_render');
+    expect(runtimeOptions['__operit_script_screen'], 'ui/planask/index.ui.js');
   });
 
   testWidgets('dispatches compose dsl action and renders returned tree', (
@@ -1452,11 +1531,15 @@ void main() {
 Widget _screen(
   _ToolPkgDslTestBridge bridge, {
   core_proxy.ToolPkgContainerRuntime? plugin,
+  String? initialRouteId,
+  Map<String, Object?>? initialModuleSpec,
 }) {
   return MaterialApp(
     home: ToolPkgUiLauncherScreen(
       clients: GeneratedCoreProxyClients(bridge),
       plugin: plugin ?? _pluginRuntime(),
+      initialRouteId: initialRouteId,
+      initialModuleSpec: initialModuleSpec,
     ),
   );
 }
@@ -1526,6 +1609,7 @@ core_proxy.ToolPkgContainerRuntime _pluginRuntime() {
     promptFinalizeHooks: <core_proxy.ToolPkgFunctionHookRuntime>[],
     promptEstimateFinalizeHooks: <core_proxy.ToolPkgFunctionHookRuntime>[],
     summaryGenerateHooks: <core_proxy.ToolPkgFunctionHookRuntime>[],
+    coreCommands: <core_proxy.ToolPkgCoreCommandRuntime>[],
     aiProviders: <core_proxy.ToolPkgAiProviderRuntime>[],
     logoResource: null,
     marketOrigin: null,
@@ -1586,6 +1670,7 @@ core_proxy.ToolPkgContainerRuntime _moduleOnlyPluginRuntime() {
     promptFinalizeHooks: <core_proxy.ToolPkgFunctionHookRuntime>[],
     promptEstimateFinalizeHooks: <core_proxy.ToolPkgFunctionHookRuntime>[],
     summaryGenerateHooks: <core_proxy.ToolPkgFunctionHookRuntime>[],
+    coreCommands: <core_proxy.ToolPkgCoreCommandRuntime>[],
     aiProviders: <core_proxy.ToolPkgAiProviderRuntime>[],
     logoResource: null,
     marketOrigin: null,
@@ -1642,6 +1727,8 @@ class _ToolPkgDslTestBridge extends OperitRuntimeBridge {
       case 'releaseToolPkgExecutionEngine':
         return null;
       case 'getToolPkgComposeDslScript':
+        return 'export default function render() {}';
+      case 'readToolPkgTextResource':
         return 'export default function render() {}';
       case 'getToolPkgComposeDslScreenPath':
         final args = request.args as Map<String, Object?>;

@@ -170,6 +170,9 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
   String _initialRouteId() {
     final requested = widget.initialRouteId?.trim();
     if (requested != null && requested.isNotEmpty) {
+      if (_embeddedScreenPath() != null) {
+        return requested;
+      }
       final matched = widget.plugin.uiRoutes.any(
         (route) => route.routeId == requested || route.id == requested,
       );
@@ -228,20 +231,39 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
           return;
         }
       }
-      final script = await _packageManager.getToolPkgComposeDslScript(
-        containerPackageName: widget.plugin.packageName,
-        uiModuleId: uiModuleId,
-      );
-      final screenPath = await _packageManager.getToolPkgComposeDslScreenPath(
-        containerPackageName: widget.plugin.packageName,
-        uiModuleId: uiModuleId,
-      );
+      final embeddedScreenPath = _embeddedScreenPath();
+      final String? script;
+      final String? screenPath;
+      if (embeddedScreenPath != null) {
+        script = await _packageManager.readToolPkgTextResource(
+          packageNameOrSubpackageId: widget.plugin.packageName,
+          resourcePath: embeddedScreenPath,
+          preferEnabledContainer: true,
+        );
+        screenPath = embeddedScreenPath;
+      } else {
+        script = await _packageManager.getToolPkgComposeDslScript(
+          containerPackageName: widget.plugin.packageName,
+          uiModuleId: uiModuleId,
+        );
+        screenPath = await _packageManager.getToolPkgComposeDslScreenPath(
+          containerPackageName: widget.plugin.packageName,
+          uiModuleId: uiModuleId,
+        );
+      }
       if (!_isCurrentRouteLoad(routeLoadGeneration)) {
         return;
       }
       if (script == null || script.trim().isEmpty) {
+        if (embeddedScreenPath != null) {
+          throw StateError(
+            'compose_dsl screen not found: '
+            'package=${widget.plugin.packageName}, screen=$embeddedScreenPath',
+          );
+        }
         throw StateError(
-          'compose_dsl script not found: package=${widget.plugin.packageName}, module=$uiModuleId',
+          'compose_dsl script not found: '
+          'package=${widget.plugin.packageName}, module=$uiModuleId',
         );
       }
       _scriptScreenPath = screenPath;
@@ -501,7 +523,25 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
     final route = routeInstanceId.trim().isEmpty
         ? 'default'
         : routeInstanceId.trim();
+    final embeddedScreenPath = _embeddedScreenPath();
+    if (embeddedScreenPath != null) {
+      return 'toolpkg_xml_render:$container:$embeddedScreenPath:$_executionOwnerId';
+    }
     return 'toolpkg_compose_dsl:$container:$module:$route:$_executionOwnerId';
+  }
+
+  /// Returns the explicit screen resource path for an embedded XML renderer.
+  String? _embeddedScreenPath() {
+    final moduleSpec = widget.initialModuleSpec;
+    if (moduleSpec == null) {
+      return null;
+    }
+    final screen = moduleSpec['screen'];
+    if (screen is! String) {
+      return null;
+    }
+    final normalized = screen.trim();
+    return normalized.isEmpty ? null : normalized;
   }
 
   String _currentLanguage() {
@@ -617,7 +657,7 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
           )
         : const _NoUiView();
     if (!widget.showLauncherChrome) {
-      return SizedBox.expand(child: content);
+      return content;
     }
     return Scaffold(
       appBar: AppBar(title: Text(toolPkgContainerDisplayName(widget.plugin))),
@@ -626,6 +666,9 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
   }
 
   bool _hasSelectedUi() {
+    if (_embeddedScreenPath() != null) {
+      return true;
+    }
     for (final route in widget.plugin.uiRoutes) {
       if (route.routeId == _selectedRouteId || route.id == _selectedRouteId) {
         return true;

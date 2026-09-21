@@ -9,10 +9,12 @@ class ChatRuntimeScope extends InheritedWidget {
   const ChatRuntimeScope({
     super.key,
     required this.chatCore,
+    required this.chatId,
     required super.child,
   });
 
   final GeneratedChatRuntimeHolderMainCoreProxy chatCore;
+  final String? chatId;
 
   static GeneratedChatRuntimeHolderMainCoreProxy? maybeOf(
     BuildContext context,
@@ -22,8 +24,15 @@ class ChatRuntimeScope extends InheritedWidget {
         ?.chatCore;
   }
 
+  /// Reads the chat id associated with the current chat surface.
+  static String? maybeChatIdOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<ChatRuntimeScope>()
+        ?.chatId;
+  }
+
   @override
   bool updateShouldNotify(ChatRuntimeScope oldWidget) {
-    return oldWidget.chatCore != chatCore;
+    return oldWidget.chatCore != chatCore || oldWidget.chatId != chatId;
   }
 }
