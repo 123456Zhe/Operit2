@@ -3492,10 +3492,18 @@ String? _formatContextLength(double? maxContextLength) {
   if (maxContextLength == null || maxContextLength <= 0) {
     return null;
   }
-  if (maxContextLength >= 1000) {
-    return '${(maxContextLength / 1000).round()}K';
+  final k = maxContextLength >= 10000
+      ? maxContextLength / 1000.0
+      : maxContextLength;
+  if (k >= 950) {
+    final millions = k / 1000.0;
+    final millionsRounded = millions.round();
+    if ((millions - millionsRounded).abs() < 0.08) {
+      return '${millionsRounded}M';
+    }
+    return '${millions.toStringAsFixed(1)}M';
   }
-  return '${maxContextLength.round()}';
+  return '${k.round()}K';
 }
 
 String _providerTypeDisplayName(AppLocalizations l10n, String providerTypeId) {
@@ -4523,8 +4531,10 @@ class _ModelSettingsEditorDialogState
     _enableSummary = widget.initialSummary.enableSummary;
     _enableSummaryByMessageCount =
         widget.initialSummary.enableSummaryByMessageCount;
+    final rawContext = widget.initialContext.maxContextLength;
+    final normalizedContext = rawContext >= 10000 ? (rawContext / 1024).roundToDouble() : rawContext;
     _maxContextLengthController = TextEditingController(
-      text: widget.initialContext.maxContextLength.toStringAsFixed(0),
+      text: normalizedContext > 0 ? normalizedContext.toStringAsFixed(0) : '200',
     );
     _summaryThresholdController = TextEditingController(
       text: widget.initialSummary.summaryTokenThreshold.toString(),
@@ -4733,6 +4743,7 @@ class _ModelSettingsEditorDialogState
                 style: textStyle,
                 decoration: InputDecoration(
                   labelText: l10n.settingsModelMaxContextLength,
+                  suffixText: 'K',
                   errorText: _maxContextLengthError,
                 ),
                 keyboardType: TextInputType.number,
@@ -5487,7 +5498,10 @@ String _availableModelSubtitle(
   }
   final context = model.context;
   if (context != null) {
-    labels.add('${context.maxContextLength.toStringAsFixed(0)}k');
+    final formatted = _formatContextLength(context.maxContextLength);
+    if (formatted != null) {
+      labels.add(formatted);
+    }
   }
   return labels.isEmpty ? '-' : labels.join(' · ');
 }
