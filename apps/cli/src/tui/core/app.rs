@@ -116,6 +116,7 @@ pub(super) struct OperitTui {
     pub(super) status_message: String,
     pub(super) status_message_expires_at: Option<Instant>,
     pub(super) transient_status_message: Option<String>,
+    toast_receiver: mpsc::Receiver<String>,
     pub(super) context_usage_label: String,
     pub(super) transcript_scroll: u16,
     pub(super) transcript_viewport_height: u16,
@@ -352,6 +353,7 @@ impl OperitTui {
         startup_install_prompt: Option<StartupInstallPrompt>,
         startup_update_prompt: Option<StartupUpdatePrompt>,
         startup_workspace_prompt_path: Option<String>,
+        toast_receiver: mpsc::Receiver<String>,
     ) -> Result<Self, String> {
         let chat_histories = core
             .chat_runtime_holder_main()
@@ -448,6 +450,7 @@ impl OperitTui {
             status_message,
             status_message_expires_at: None,
             transient_status_message: None,
+            toast_receiver,
             context_usage_label: String::new(),
             transcript_scroll: 0,
             transcript_viewport_height: 1,
@@ -551,6 +554,7 @@ impl OperitTui {
         while !self.should_quit {
             self.ensure_pending_queue_chat_id();
             self.apply_pushed_events().await?;
+            self.apply_toast_messages();
             if let Err(error) = self.sync_compose_surfaces().await {
                 self.status_message = error;
             }
@@ -571,6 +575,13 @@ impl OperitTui {
         self.status_message = message.clone();
         self.transient_status_message = Some(message);
         self.status_message_expires_at = Some(Instant::now() + TRANSIENT_STATUS_DURATION);
+    }
+
+    /// Applies queued host toasts to the TUI transient status line.
+    fn apply_toast_messages(&mut self) {
+        while let Ok(message) = self.toast_receiver.try_recv() {
+            self.set_transient_status_message(message);
+        }
     }
 
     fn clear_expired_status_message(&mut self) {

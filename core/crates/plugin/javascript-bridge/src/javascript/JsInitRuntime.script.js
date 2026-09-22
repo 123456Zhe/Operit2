@@ -48,6 +48,8 @@
         callState.callId = resolvedCallId;
         callState.params = params && typeof params === 'object' ? params : {};
         callState.completed = false;
+        callState.detached = false;
+        callState.pendingReferences = 0;
         callState.safetyTimeout = null;
         callState.safetyTimeoutFinal = null;
         callState.lastExecStage = '';
@@ -74,6 +76,7 @@
             callState.timerIds = {};
         }
         callState.timerIds[String(timerId)] = true;
+        callState.pendingReferences += 1;
     }
 
     function unregisterCallTimer(callId, timerId) {
@@ -81,7 +84,40 @@
         if (!callState || !callState.timerIds || typeof callState.timerIds !== 'object') {
             return;
         }
-        delete callState.timerIds[String(timerId)];
+        var key = String(timerId);
+        if (!callState.timerIds[key]) return;
+        delete callState.timerIds[key];
+        releaseCallReference(callId);
+    }
+
+    function retainCallReference(callId) {
+        var callState = getCallState(callId);
+        if (callState) callState.pendingReferences = Number(callState.pendingReferences || 0) + 1;
+    }
+
+    function releaseCallReference(callId) {
+        var callState = getCallState(callId);
+        if (!callState) return;
+        callState.pendingReferences = Math.max(0, Number(callState.pendingReferences || 0) - 1);
+        if (callState.detached && callState.pendingReferences === 0) cleanupCallSession(callId);
+    }
+
+    function detachedCallIds() {
+        var registry = ensureCallRegistry();
+        var result = [];
+        Object.keys(registry).forEach(function(callId) {
+            var state = registry[callId];
+            if (state && state.detached && Number(state.pendingReferences || 0) > 0) result.push(callId);
+        });
+        return result;
+    }
+
+    function activateCall(callId) {
+        var state = getCallState(callId);
+        if (!state || state.completed) return false;
+        root.__operitCurrentCallId = callId;
+        root.__operit_call_runtime_ref = state.callRuntime;
+        return true;
     }
 
     function clearCallTimers(callState) {
@@ -159,6 +195,15 @@
     expose('__operitRegisterCallSession', registerCallSession);
     expose('__operitRegisterCallTimer', registerCallTimer);
     expose('__operitUnregisterCallTimer', unregisterCallTimer);
+    expose('__operitRetainCallReference', retainCallReference);
+    expose('__operitReleaseCallReference', releaseCallReference);
+    expose('__operitGetDetachedCallIds', detachedCallIds);
+    expose('__operitActivateCall', activateCall);
+    expose('__operitNotifyDetachedCall', function(callId) {
+        if (typeof root.__operitNativeNotifyDetachedCall === 'function') {
+            root.__operitNativeNotifyDetachedCall(normalizeCallId(callId));
+        }
+    });
     expose('__operitCleanupCallSession', cleanupCallSession);
     expose('__operitCancelCallSession', cancelCallSession);
     expose('__operitBuildRuntimeContext', buildRuntimeContext);

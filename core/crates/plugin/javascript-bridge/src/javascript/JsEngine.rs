@@ -2,8 +2,9 @@ use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::Value;
@@ -91,6 +92,7 @@ struct JsAsyncCallback {
 }
 
 type JsAsyncCallbackSink = Arc<dyn Fn(JsAsyncCallback) + Send + Sync>;
+type JsBackgroundWake = Arc<dyn Fn() + Send + Sync>;
 
 #[derive(Clone)]
 struct JsCallContext {
@@ -125,6 +127,7 @@ struct JsEngineState {
     runtime: Box<dyn HostJavaScriptRuntime>,
     asyncCallbackSender: mpsc::Sender<JsAsyncCallback>,
     asyncCallbackReceiver: mpsc::Receiver<JsAsyncCallback>,
+    backgroundWake: Arc<Mutex<Option<JsBackgroundWake>>>,
     executionHost: Option<Arc<dyn JsExecutionHost>>,
     toolPkgContext: Option<ToolPkgExecutionContext>,
     composeDslTextResources: Option<Arc<ToolPkgTextResources>>,
@@ -139,22 +142,71 @@ impl JsEngineWorker {
     ) -> Self {
         let runtimeHost = defaultHostJavaScriptRuntimeHost();
         let runtimeHostForState = runtimeHost.clone();
+        let backgroundWake = Arc::new(Mutex::new(None));
+        let backgroundWakeForState = backgroundWake.clone();
         let stateHandle = runtimeHost
             .createHostJavaScriptRuntimeState(
                 "OperitQuickJsEngine",
                 Box::new(move || {
                     let runtime = runtimeHostForState.createHostJavaScriptRuntime()?;
-                    let state =
-                        JsEngineState::newWithRuntime(runtime, executionHost, toolPkgContext)
-                            .map_err(HostError::new)?;
+                    let state = JsEngineState::newWithRuntime(
+                        runtime,
+                        executionHost,
+                        toolPkgContext,
+                        backgroundWakeForState,
+                    )
+                    .map_err(HostError::new)?;
                     Ok(Box::new(state))
                 }),
             )
             .expect("JavaScript runtime state must be created by the Host");
-        Self {
-            runtimeHost,
-            stateHandle,
-        }
+        let scheduled = Arc::new(AtomicBool::new(false));
+        let requested = Arc::new(AtomicBool::new(false));
+        let wakeRuntimeHost = runtimeHost.clone();
+        let wakeScheduler = defaultHostRuntimeTaskSchedulerHost();
+        let wakeSlot = backgroundWake.clone();
+        let wake: JsBackgroundWake = Arc::new(move || {
+            requested.store(true, Ordering::Release);
+            if scheduled.swap(true, Ordering::AcqRel) {
+                return;
+            }
+            let taskRuntimeHost = wakeRuntimeHost.clone();
+            let taskScheduler = wakeScheduler.clone();
+            let taskScheduled = scheduled.clone();
+            let taskRequested = requested.clone();
+            let taskWakeSlot = wakeSlot.clone();
+            let task: operit_host_api::HostRuntimeAsyncTask = Box::new(move || Box::pin(async move {
+                taskRequested.store(false, Ordering::Release);
+                let result = taskRuntimeHost
+                    .executeHostJavaScriptRuntimeStateAsyncTask(
+                        stateHandle,
+                        60_000,
+                        Box::new(move |state, _interrupt| Box::pin(async move {
+                            let state = state.downcast_mut::<JsEngineState>().ok_or_else(|| {
+                                HostError::new("JavaScript runtime state type does not match")
+                            })?;
+                            state.advanceDetachedJavaScriptExecution().map_err(HostError::new)?;
+                            Ok(Box::new(()) as HostJavaScriptRuntimeStateOutput)
+                        })),
+                    )
+                    .await;
+                if let Err(error) = result {
+                    AppLogger::e(TAG, &format!("detached JavaScript execution failed: {error}"));
+                }
+                taskScheduled.store(false, Ordering::Release);
+                if taskRequested.swap(false, Ordering::AcqRel) {
+                    if let Some(wake) = taskWakeSlot.lock().expect("background wake mutex poisoned").clone() {
+                        wake();
+                    }
+                }
+            }));
+            if let Err(error) = taskScheduler.scheduleHostRuntimeAsyncTask("operit-js-detached", task) {
+                scheduled.store(false, Ordering::Release);
+                AppLogger::e(TAG, &format!("schedule detached JavaScript execution failed: {error}"));
+            }
+        });
+        *backgroundWake.lock().expect("background wake mutex poisoned") = Some(wake);
+        Self { runtimeHost, stateHandle }
     }
 
     /// Executes one JavaScript request through the host-owned state executor.
@@ -906,12 +958,14 @@ impl JsEngineState {
         runtime: Box<dyn HostJavaScriptRuntime>,
         executionHost: Option<Arc<dyn JsExecutionHost>>,
         toolPkgContext: Option<ToolPkgExecutionContext>,
+        backgroundWake: Arc<Mutex<Option<JsBackgroundWake>>>,
     ) -> Result<Self, String> {
         let (asyncCallbackSender, asyncCallbackReceiver) = mpsc::channel();
         let mut state = Self {
             runtime,
             asyncCallbackSender,
             asyncCallbackReceiver,
+            backgroundWake,
             executionHost,
             toolPkgContext,
             composeDslTextResources: None,
@@ -1420,6 +1474,34 @@ impl JsEngineState {
         }
     }
 
+    /// Advances detached JavaScript calls after their original request has returned.
+    fn advanceDetachedJavaScriptExecution(&mut self) -> Result<(), String> {
+        self.runJavaScriptJobs()?;
+        loop {
+            match self.asyncCallbackReceiver.try_recv() {
+                Ok(callback) => {
+                    self.deliverAsyncCallback(callback)?;
+                    self.runJavaScriptJobs()?;
+                }
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => return Err("JavaScript asynchronous callback queue disconnected".to_string()),
+            }
+        }
+        let ids = self
+            .evalJavaScriptString("JSON.stringify(typeof __operitGetDetachedCallIds === 'function' ? __operitGetDetachedCallIds() : [])")?;
+        let ids: Vec<String> = serde_json::from_str(&ids).map_err(|error| error.to_string())?;
+        for callId in ids {
+            let callIdJson = serde_json::to_string(&callId).map_err(|error| error.to_string())?;
+            let prepared = self.evalJavaScriptString(&format!(
+                "typeof __operitPrepareDetachedCall === 'function' && __operitPrepareDetachedCall({callIdJson})"
+            ))?;
+            if prepared == "true" {
+                self.runJavaScriptJobs()?;
+            }
+        }
+        Ok(())
+    }
+
     #[allow(non_snake_case)]
     fn runJavaScriptJobs(&mut self) -> Result<(), String> {
         self.runtime
@@ -1681,6 +1763,16 @@ impl JsEngineState {
                 }),
             ),
             (
+                "__operitNativeGetToolCatalogJson",
+                Arc::new(|arguments| {
+                    let [] = exactHostJavaScriptArguments(
+                        "__operitNativeGetToolCatalogJson",
+                        arguments,
+                    )?;
+                    Ok(nativeGetToolCatalogJsonString())
+                }),
+            ),
+            (
                 "__operitNativeResolveToolName",
                 Arc::new(|arguments| {
                     let [packageName, subpackageId, toolName, preferImported] =
@@ -1774,8 +1866,12 @@ impl JsEngineState {
 
         let executionHost = self.executionHost.clone();
         let asyncCallbackSender = self.asyncCallbackSender.clone();
+        let backgroundWake = self.backgroundWake.clone();
         let asyncCallbackSink: JsAsyncCallbackSink = Arc::new(move |callback| {
             let _ = asyncCallbackSender.send(callback);
+            if let Some(wake) = backgroundWake.lock().expect("background wake mutex poisoned").clone() {
+                wake();
+            }
         });
         let toolExecutionHost = self.executionHost.clone();
         let toolAsyncCallbackSink = asyncCallbackSink.clone();
@@ -1805,6 +1901,16 @@ impl JsEngineState {
                     let [callId, error] =
                         exactHostJavaScriptArguments("__operitNativeSetCallError", arguments)?;
                     nativeSetCallErrorStrings(callId, error);
+                    Ok(())
+                }),
+            ),
+            (
+                "__operitNativeNotifyDetachedCall",
+                Arc::new(|arguments| {
+                    let [_callId] = exactHostJavaScriptArguments(
+                        "__operitNativeNotifyDetachedCall",
+                        arguments,
+                    )?;
                     Ok(())
                 }),
             ),
@@ -2722,6 +2828,15 @@ fn nativeListImportedPackagesJsonString() -> String {
     currentExecutionHost()
         .and_then(|host| host.list_imported_packages())
         .and_then(|packages| serde_json::to_string(&packages).map_err(|error| error.to_string()))
+        .unwrap_or_else(|error| buildJsExecutionErrorPayload(&error))
+}
+
+/// Returns the executable tool catalog exposed by the active host.
+#[allow(non_snake_case)]
+fn nativeGetToolCatalogJsonString() -> String {
+    currentExecutionHost()
+        .and_then(|host| host.get_tool_catalog())
+        .and_then(|catalog| serde_json::to_string(&catalog).map_err(|error| error.to_string()))
         .unwrap_or_else(|error| buildJsExecutionErrorPayload(&error))
 }
 

@@ -40,6 +40,7 @@ pub const TOOLPKG_EVENT_AI_PROVIDER_CALCULATE_INPUT_TOKENS: &str =
 
 pub const TOOLPKG_REGISTRATION_TOOLBOX_UI_MODULE: &str = "registerToolPkgToolboxUiModule";
 pub const TOOLPKG_REGISTRATION_UI_ROUTE: &str = "registerToolPkgUiRoute";
+pub const TOOLPKG_REGISTRATION_CHAT_COMPOSER_SLOT: &str = "registerToolPkgChatComposerSlot";
 pub const TOOLPKG_REGISTRATION_NAVIGATION_ENTRY: &str = "registerToolPkgNavigationEntry";
 pub const TOOLPKG_REGISTRATION_DESKTOP_WIDGET: &str = "registerToolPkgDesktopWidget";
 pub const TOOLPKG_REGISTRATION_APP_LIFECYCLE_HOOK: &str = "registerToolPkgAppLifecycleHook";
@@ -69,10 +70,13 @@ pub const TOOLPKG_REGISTRATION_PROMPT_ESTIMATE_FINALIZE_HOOK: &str =
 pub const TOOLPKG_REGISTRATION_SUMMARY_GENERATE_HOOK: &str = "registerToolPkgSummaryGenerateHook";
 pub const TOOLPKG_REGISTRATION_CORE_COMMAND: &str = "registerToolPkgCoreCommand";
 pub const TOOLPKG_REGISTRATION_AI_PROVIDER: &str = "registerToolPkgAiProvider";
+pub const TOOLPKG_REGISTRATION_MANIFEST_EXTENSION: &str = "registerManifestExtension";
 
 pub const TOOLPKG_NAV_SURFACE_TOOLBOX: &str = "toolbox";
 pub const TOOLPKG_NAV_SURFACE_MAIN_SIDEBAR_PLUGINS: &str = "main_sidebar_plugins";
 pub const TOOLPKG_NAV_SURFACE_APP_BAR: &str = "app_bar";
+
+pub const TOOLPKG_CHAT_COMPOSER_SLOT_ABOVE_INPUT: &str = "above_input";
 
 /// Builds the globally unique route id used by a ToolPkg UI route.
 #[allow(non_snake_case)]

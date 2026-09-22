@@ -1556,6 +1556,8 @@ core_proxy.ToolPkgContainerRuntime _pluginRuntime() {
     version: '1.0.0',
     apiVersion: '2.0.0',
     requires: <core_proxy.ToolPkgManifestRequirement>[],
+    dependencyIssues: <core_proxy.ToolPkgDependencyIssue>[],
+    manifestExtensions: <String, Object?>{},
     author: <String>['Operit'],
     mainEntry: 'dist/main.js',
     sourceType: core_proxy.ToolPkgSourceType.externalValue,
@@ -1588,6 +1590,7 @@ core_proxy.ToolPkgContainerRuntime _pluginRuntime() {
         keepAlive: true,
       ),
     ],
+    chatComposerSlots: <core_proxy.ToolPkgChatComposerSlotRuntime>[],
     navigationEntries: <core_proxy.ToolPkgNavigationEntryRuntime>[],
     desktopWidgets: <core_proxy.ToolPkgDesktopWidgetRuntime>[],
     appLifecycleHooks: <core_proxy.ToolPkgAppLifecycleHookRuntime>[],
@@ -1611,6 +1614,8 @@ core_proxy.ToolPkgContainerRuntime _pluginRuntime() {
     summaryGenerateHooks: <core_proxy.ToolPkgFunctionHookRuntime>[],
     coreCommands: <core_proxy.ToolPkgCoreCommandRuntime>[],
     aiProviders: <core_proxy.ToolPkgAiProviderRuntime>[],
+    manifestExtensionHandlers:
+        <core_proxy.ToolPkgRegisteredManifestExtension>[],
     logoResource: null,
     marketOrigin: null,
   );
@@ -1628,6 +1633,8 @@ core_proxy.ToolPkgContainerRuntime _moduleOnlyPluginRuntime() {
     version: '1.0.0',
     apiVersion: '2.0.0',
     requires: <core_proxy.ToolPkgManifestRequirement>[],
+    dependencyIssues: <core_proxy.ToolPkgDependencyIssue>[],
+    manifestExtensions: <String, Object?>{},
     author: <String>['Operit'],
     mainEntry: 'dist/main.js',
     sourceType: core_proxy.ToolPkgSourceType.externalValue,
@@ -1649,6 +1656,7 @@ core_proxy.ToolPkgContainerRuntime _moduleOnlyPluginRuntime() {
       ),
     ],
     uiRoutes: <core_proxy.ToolPkgUiRouteRuntime>[],
+    chatComposerSlots: <core_proxy.ToolPkgChatComposerSlotRuntime>[],
     navigationEntries: <core_proxy.ToolPkgNavigationEntryRuntime>[],
     desktopWidgets: <core_proxy.ToolPkgDesktopWidgetRuntime>[],
     appLifecycleHooks: <core_proxy.ToolPkgAppLifecycleHookRuntime>[],
@@ -1672,6 +1680,8 @@ core_proxy.ToolPkgContainerRuntime _moduleOnlyPluginRuntime() {
     summaryGenerateHooks: <core_proxy.ToolPkgFunctionHookRuntime>[],
     coreCommands: <core_proxy.ToolPkgCoreCommandRuntime>[],
     aiProviders: <core_proxy.ToolPkgAiProviderRuntime>[],
+    manifestExtensionHandlers:
+        <core_proxy.ToolPkgRegisteredManifestExtension>[],
     logoResource: null,
     marketOrigin: null,
   );

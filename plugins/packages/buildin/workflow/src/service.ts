@@ -1,9 +1,9 @@
-import { copy, duplicate, newWorkflow, type Workflow, type Snapshot, type Run, type Trigger } from "./model";
+import { copy, duplicate, newWorkflow, type Workflow, type Snapshot, type Run, type Trigger, type ManifestWorkflowTemplate } from "./model";
 import { execute, errorText } from "./engine";
 import { isDue } from "./schedule";
 import { parseWorkflow, validateGraph } from "./validation";
 
-interface Database { version: number; workflows: Workflow[]; runs: Run[]; fired: Record<string, number> }
+interface Database { version: number; workflows: Workflow[]; runs: Run[]; fired: Record<string, number>; manifestTemplates: ManifestWorkflowTemplate[] }
 export type Request =
   | { action: "list" }
   | { action: "save"; workflow: Workflow }
@@ -11,11 +11,15 @@ export type Request =
   | { action: "copy"; id: string }
   | { action: "delete"; ids: string[] }
   | { action: "import"; json: string }
+  | { action: "import_manifest_template"; sourceToolPkgId: string; templateId: string }
+  | { action: "tool_catalog" }
   | { action: "run"; id: string; triggerId: string | null; extras: Record<string, string> }
+  | { action: "start"; id: string; triggerId: string | null; extras: Record<string, string> }
   | { action: "cancel"; id: string };
 let database: Promise<Database> | null = null;
 let writes: Promise<void> = Promise.resolve();
 const active = new Map<string, { cancelled: boolean }>();
+const launching = new Set<string>();
 
 /** Loads plugin-owned storage exactly once in the main runtime. */
 async function load(): Promise<Database> {
@@ -25,8 +29,13 @@ async function load(): Promise<Database> {
 
 /** Marks unfinished records as interrupted after a runtime restart. */
 async function initialize(): Promise<Database> {
-  const db = await PluginConfig.use<Database>("workflows", { version: 1, workflows: [], runs: [], fired: {} });
-  if (db.version !== 1) throw new Error(`不支持的数据版本：${db.version}`);
+  const db = await PluginConfig.use<Database>("workflows", { version: 2, workflows: [], runs: [], fired: {}, manifestTemplates: [] });
+  if (db.version === 1) {
+    db.version = 2;
+    db.manifestTemplates = [];
+    await PluginConfig.flush(db);
+  }
+  if (db.version !== 2) throw new Error(`不支持的数据版本：${db.version}`);
   const runs = copy(db.runs);
   let changed = false;
   for (const run of runs) {
@@ -50,7 +59,22 @@ async function persist(db: Database): Promise<void> {
 /** Returns detached state so UI edits cannot mutate stored definitions. */
 async function snapshot(): Promise<Snapshot> {
   const db = await load();
-  return copy({ workflows: db.workflows, runs: db.runs });
+  return copy({ workflows: db.workflows, runs: db.runs, manifestTemplates: db.manifestTemplates });
+}
+
+/** Returns the persisted workflow snapshot together with host-owned tool schemas. */
+async function toolCatalogSnapshot(): Promise<Snapshot> {
+  const result = await snapshot();
+  result.tools = getToolCatalog().tools;
+  return result;
+}
+
+/** Replaces one source package in the persisted manifest-template registry. */
+export async function replaceManifestTemplates(sourceToolPkgId: string, templates: ManifestWorkflowTemplate[]): Promise<void> {
+  const db = await load();
+  const retained = db.manifestTemplates.filter(item => item.sourceToolPkgId !== sourceToolPkgId);
+  db.manifestTemplates = [...retained, ...copy(templates)];
+  await persist(db);
 }
 
 /** Looks up an existing workflow by exact identity. */
@@ -93,9 +117,9 @@ async function record(db: Database, run: Run): Promise<void> {
 }
 
 /** Executes a saved workflow independently of its UI route lifetime. */
-async function runWorkflow(workflowId: string, triggerId: string | null, extras: Record<string, string>, observer?: (run: Run) => Promise<void>): Promise<void> {
+async function runWorkflow(workflowId: string, triggerId: string | null, extras: Record<string, string>, observer?: (run: Run) => Promise<void>, reserved = false): Promise<void> {
   const db = await load();
-  editable(workflowId);
+  if (!reserved) editable(workflowId);
   const workflow = copy(find(db, workflowId));
   if (!workflow.enabled) throw new Error("工作流已停用");
   const control = { cancelled: false };
@@ -120,11 +144,22 @@ async function runWorkflow(workflowId: string, triggerId: string | null, extras:
   } finally { active.delete(workflowId); }
 }
 
+/** Starts a workflow without holding the caller context open for its full execution. */
+async function startWorkflow(workflowId: string, triggerId: string | null, extras: Record<string, string>, observer?: (run: Run) => Promise<void>): Promise<Snapshot> {
+  if (active.has(workflowId) || launching.has(workflowId)) throw new Error("工作流正在执行，结束后才能再次触发");
+  launching.add(workflowId);
+  void runWorkflow(workflowId, triggerId, extras, observer, true)
+    .catch(error => console.error(`[workflow] Background execution failed for ${workflowId}: ${errorText(error)}`))
+    .finally(() => launching.delete(workflowId));
+  return snapshot();
+}
+
 /** Owns all UI and tool mutations, with optimistic revisions for saved graphs. */
 export async function dispatch(request: Request, observer?: (run: Run) => Promise<void>): Promise<Snapshot> {
   const db = await load();
   switch (request.action) {
     case "list": return snapshot();
+    case "tool_catalog": return toolCatalogSnapshot();
     case "create": {
       if (!request.name.trim()) throw new Error("工作流名称不能为空");
       db.workflows = [...db.workflows, newWorkflow(request.name.trim(), request.description)]; break;
@@ -155,7 +190,17 @@ export async function dispatch(request: Request, observer?: (run: Run) => Promis
       next.enabled = false;
       db.workflows = [...db.workflows, next]; break;
     }
+    case "import_manifest_template": {
+      const template = db.manifestTemplates.find(item => item.sourceToolPkgId === request.sourceToolPkgId && item.templateId === request.templateId);
+      if (template === undefined) throw new Error(`工作流模板不存在：${request.sourceToolPkgId}/${request.templateId}`);
+      const next = duplicate(template.workflow);
+      next.name = template.displayName;
+      next.description = template.description;
+      next.enabled = false;
+      db.workflows = [...db.workflows, next]; break;
+    }
     case "run": await runWorkflow(request.id, request.triggerId, request.extras, observer); return snapshot();
+    case "start": return startWorkflow(request.id, request.triggerId, request.extras, observer);
     case "cancel": {
       const control = active.get(request.id);
       if (!control) throw new Error("该工作流没有正在进行的执行");
@@ -169,13 +214,17 @@ export async function dispatch(request: Request, observer?: (run: Run) => Promis
 /** Routes cross-runtime requests and keeps progress observers outside execution semantics. */
 export async function receive(request: Request, meta: ToolPkg.IpcMeta): Promise<Snapshot> {
   const context = meta.callerContextKey;
-  if (request.action !== "run" || context === undefined) return dispatch(request);
-  return dispatch(request, async run => {
+  if (request.action !== "run" && request.action !== "start") return dispatch(request);
+  if (context === undefined) return dispatch(request);
+  const observer = async (run: Run) => {
     // The UI context is awaiting this service call and cannot acknowledge progress yet.
     // Detach a snapshot so notification delivery never holds the execution lock.
     void ToolPkg.ipc.call<Run, boolean>("workflow.progress", copy(run), { targetRuntime: "ui", targetContextKey: context })
       .catch(error => { console.error("[workflow] Progress delivery failed", error); });
-  });
+  };
+  return request.action === "start"
+    ? startWorkflow(request.id, request.triggerId, request.extras, observer)
+    : dispatch(request, observer);
 }
 
 /** Creates a stable schedule identity including its exact configuration. */

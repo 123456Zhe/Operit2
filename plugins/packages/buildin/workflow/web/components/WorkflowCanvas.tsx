@@ -32,9 +32,14 @@ export const statuses: Record<string, string> = {
 /** Renders a compact node with standard graph handles and execution state. */
 export function WorkflowCard({ data, selected }: NodeProps<GraphNode>) {
   const style = STYLES[data.node.type];
+  const result = data.result;
   return (
     <div
-      className={"graph-node" + (selected ? " selected" : "")}
+      className={
+        "graph-node" +
+        (selected ? " selected" : "") +
+        (result ? " is-" + result : "")
+      }
       style={{ borderColor: style.color }}
     >
       {data.node.type !== "trigger" && (
@@ -42,7 +47,7 @@ export function WorkflowCard({ data, selected }: NodeProps<GraphNode>) {
       )}
       <div className="node-kind" style={{ color: style.color }}>
         {style.label}
-        {data.result && " · " + statuses[data.result]}
+        {result && <span className="node-status">{statuses[result]}</span>}
       </div>
       <strong>{data.node.name}</strong>
       <div className="node-description">

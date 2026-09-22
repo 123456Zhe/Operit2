@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
 
-const base = new URL('../../plugins/packages/external/workflow/dist/', import.meta.url);
+const base = new URL('../../plugins/packages/buildin/workflow/dist/', import.meta.url);
 const bridgeRoot = new URL('../../core/crates/plugin/sdk/src/toolpkg/', import.meta.url);
 
 /** Extracts the production embedded JavaScript bridge. */
@@ -48,6 +48,7 @@ function runtime() {
       /** Confirms persistence without modifying the user's actual data. */
       async flush() {},
     },
+    getToolCatalog() { return { tools: [] }; },
   });
   const load = loader(context);
   load(new URL('main.js', base));
@@ -96,13 +97,37 @@ test('cold main module registers workflow IPC without metadata registration', as
   assert.equal(state.workflows[0].nodes.length, 0);
 });
 
+test('tool catalog request preserves runtime schemas for the web editor', async () => {
+  const { channels, context } = runtime();
+  context.getToolCatalog = () => ({
+    tools: [{
+      name: 'demo:send',
+      description: 'Sends a structured test value.',
+      parameters: [{
+        name: 'enabled',
+        type: 'boolean',
+        description: 'Whether sending is enabled.',
+        required: true,
+        default: 'true',
+      }],
+      category: 'Demo',
+      source: 'package',
+      packageName: 'demo',
+    }],
+  });
+  const snapshot = await channels.get('workflow.service')({ action: 'tool_catalog' }, {});
+  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.tools)), context.getToolCatalog().tools);
+});
+
 test('WebView interface decodes browser argument arrays through the production action bridge', async () => {
   const { context, load, channels } = runtime();
   let registered;
+  const commands = [];
   context.NativeInterface = {
     /** Captures the action descriptor installed into the native WebView registry. */
     composeWebViewControllerCommand(json) {
       const command = JSON.parse(json);
+      commands.push(command);
       if (command.command === 'addJavascriptInterface') registered = command.payload.object;
       return JSON.stringify({ success: true, data: null });
     },
@@ -121,7 +146,7 @@ test('WebView interface decodes browser argument arrays through the production a
   frame = await context.__operit_dispatch_compose_dsl_action({ actionId: registered.request.__actionId,
     payload: [{ action: 'run', id, triggerId: null, extras: {} }] });
   assert.equal(frame.actionResult.runs[0].status, 'FAILED');
-  assert.equal(channels.has('workflow.progress'), false, 'Web execution must not await reverse UI IPC');
+  assert.equal(channels.has('workflow.progress'), true, 'WebView must receive live workflow progress');
 });
 
 test('empty execution releases its lock while the UI cannot acknowledge progress', { timeout: 1500 }, async () => {

@@ -9,6 +9,51 @@ body,
   box-sizing: border-box;
 }
 
+/* Keeps every scroll surface aligned with Material's quiet, rounded scrollbar. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--operit-outline) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 36px;
+  background: var(--operit-outline);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--operit-onSurfaceVariant);
+  border-width: 1px;
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: var(--operit-primary);
+  border-width: 1px;
+}
+
+*::-webkit-scrollbar-button,
+*::-webkit-scrollbar-button:single-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .app {
   height: 100dvh;
   display: flex;
@@ -36,11 +81,11 @@ body,
 }
 
 .list {
-  padding: 20px 24px 28px;
+  padding: 16px 20px 24px;
   overflow: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
   align-content: start;
 }
 
@@ -48,22 +93,22 @@ body,
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--operit-outlineVariant) !important;
-  border-radius: 20px !important;
+  border-radius: 14px !important;
   background: var(--operit-surfaceContainer);
-  box-shadow: 0 8px 24px rgba(47, 76, 89, 0.08);
+  box-shadow: 0 4px 14px rgba(47, 76, 89, 0.07);
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
 
 .workflow-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(47, 76, 89, 0.14);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(47, 76, 89, 0.12);
 }
 
 .workflow-card-content {
   min-width: 0;
   cursor: pointer;
   outline: none;
-  padding: 20px 20px 16px !important;
+  padding: 14px 14px 12px !important;
 }
 
 .workflow-card-content:focus-visible {
@@ -73,17 +118,17 @@ body,
 .workflow-card-heading {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
 .workflow-card-icon {
   display: grid;
-  flex: 0 0 36px;
-  width: 36px;
-  height: 36px;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 9px;
   color: var(--operit-primary);
   background: var(--operit-primaryContainer);
 }
@@ -91,19 +136,19 @@ body,
 .workflow-card-name {
   min-width: 0;
   flex: 1;
-  font-size: 18px !important;
+  font-size: 16px !important;
 }
 
 .workflow-card-status {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-  gap: 5px;
+  gap: 4px;
 }
 
 .workflow-card-status::before {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: currentColor;
   content: "";
@@ -118,8 +163,8 @@ body,
 }
 
 .workflow-card-description {
-  min-height: 24px;
-  margin: 12px 0 14px !important;
+  min-height: 20px;
+  margin: 8px 0 10px !important;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -130,14 +175,15 @@ body,
 }
 
 .workflow-card-meta .MuiChip-root {
-  height: 26px;
+  height: 22px;
+  font-size: 11px;
   color: var(--operit-onSurfaceVariant);
   background: var(--operit-surfaceContainerHigh);
 }
 
 .workflow-card-actions {
-  min-height: 58px;
-  padding: 8px 14px 12px !important;
+  min-height: 46px;
+  padding: 4px 10px 6px !important;
   border-top: 1px solid var(--operit-outlineVariant);
   background: var(--operit-surfaceContainerHigh);
 }
@@ -147,7 +193,7 @@ body,
 }
 
 .workflow-card-toggle .MuiFormControlLabel-label {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .workflow-list-item,
@@ -164,6 +210,19 @@ body,
 
 .workflow-card-content:focus-visible {
   box-shadow: 0 0 0 2px currentColor;
+}
+
+.template-option {
+  justify-content: flex-start !important;
+  padding: 12px 14px !important;
+  text-align: left;
+}
+
+.template-option .MuiTypography-caption {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .empty {
@@ -225,12 +284,12 @@ body,
 }
 
 .graph-node {
-  width: 220px;
+  width: 180px;
   background: var(--operit-surfaceContainer);
   color: var(--operit-onSurface);
   border: 1.5px solid;
-  border-radius: 14px;
-  padding: 14px 18px;
+  border-radius: 12px;
+  padding: 10px 12px;
   box-shadow: 0 2px 5px #00000012;
 }
 
@@ -238,16 +297,106 @@ body,
   box-shadow: 0 0 0 3px var(--operit-primaryContainer);
 }
 
+.graph-node.is-pending {
+  border-color: var(--operit-outline) !important;
+  opacity: 0.68;
+}
+
+.graph-node.is-running {
+  border-color: var(--operit-primary) !important;
+  box-shadow: 0 0 0 3px var(--operit-primaryContainer);
+}
+
+.graph-node.is-success {
+  border-color: #43a047 !important;
+}
+
+.graph-node.is-failed {
+  border-color: var(--operit-error) !important;
+}
+
+.graph-node.is-skipped {
+  border-color: var(--operit-outline) !important;
+  opacity: 0.52;
+}
+
 .node-kind {
-  font-size: 12px;
-  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+
+.node-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--operit-onSurfaceVariant);
+}
+
+.node-status::before {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.is-running .node-status {
+  color: var(--operit-primary);
+}
+
+.is-running .node-status::before {
+  animation: workflow-node-pulse 900ms ease-in-out infinite;
+}
+
+.is-success .node-status {
+  color: #43a047;
+}
+
+.is-failed .node-status {
+  color: var(--operit-error);
+}
+
+@keyframes workflow-node-pulse {
+  50% {
+    opacity: 0.25;
+    transform: scale(1.8);
+  }
+}
+
+.workflow-edge.edge-running .react-flow__edge-path {
+  stroke: var(--operit-primary);
+  stroke-width: 2.5px;
+}
+
+.workflow-edge.edge-success .react-flow__edge-path {
+  stroke: #43a047;
+  stroke-width: 2px;
+}
+
+.workflow-edge.edge-failed .react-flow__edge-path {
+  stroke: var(--operit-error);
+  stroke-width: 2px;
+}
+
+.workflow-edge.edge-skipped .react-flow__edge-path {
+  opacity: 0.35;
+  stroke-dasharray: 5 4;
+}
+
+.graph-node strong {
+  display: block;
+  font-size: 14px;
+  line-height: 18px;
 }
 
 .node-description {
-  font-size: 12px;
+  font-size: 11px;
   opacity: 0.65;
-  margin-top: 6px;
-  max-width: 180px;
+  margin-top: 4px;
+  max-width: 150px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -382,13 +531,13 @@ body,
   }
 
   .graph-node {
-    width: 190px;
-    border-radius: 12px;
-    padding: 12px 15px;
+    width: 164px;
+    border-radius: 10px;
+    padding: 9px 11px;
   }
 
   .node-description {
-    max-width: 158px;
+    max-width: 136px;
   }
 
   .react-flow__controls {

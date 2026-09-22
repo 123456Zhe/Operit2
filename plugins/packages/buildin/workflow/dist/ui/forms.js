@@ -41,6 +41,40 @@ function parameterField(ctx, key, label, value, workflow, self, change) {
             : field(ctx, key, "静态值", value.value, text => change({ value: text }), true),
     ]);
 }
+/** Renders one tool parameter using its declared type and an upstream reference switch. */
+function toolParameterField(ctx, key, schema, value, workflow, self, change) {
+    const type = schema.type.trim().toLowerCase();
+    const referenced = "nodeId" in value;
+    const referenceToggle = ctx.UI.Row({ verticalAlignment: "center", spacing: 8 }, [
+        ctx.UI.Text({ text: schema.name + (schema.required ? " · 必填" : " · 可选"), weight: 1 }),
+        ctx.UI.Switch({ checked: referenced, onCheckedChange: checked => {
+                if (checked) {
+                    const source = workflow.nodes.find(node => node.id !== self);
+                    if (source === undefined) {
+                        void ctx.showToast("请先创建上游节点");
+                        return;
+                    }
+                    change({ nodeId: source.id });
+                }
+                else
+                    change({ value: schema.default ?? "" });
+            } }),
+        ctx.UI.Text({ text: referenced ? "引用节点" : "固定值", style: "labelSmall" }),
+    ]);
+    const input = referenced
+        ? choose(ctx, key + ":source", "来源", value.nodeId, workflow.nodes.filter(node => node.id !== self).map(node => ({ value: node.id, label: `${node.name} · ${node.id.slice(-6)}` })), nodeId => change({ nodeId }))
+        : ["bool", "boolean"].includes(type)
+            ? ctx.UI.Row({ verticalAlignment: "center", spacing: 8 }, [
+                ctx.UI.Text({ text: value.value === "true" ? "开启" : "关闭", weight: 1 }),
+                ctx.UI.Switch({ checked: value.value === "true", onCheckedChange: checked => change({ value: String(checked) }) }),
+            ])
+            : field(ctx, key, schema.description || schema.name, value.value, text => change({ value: text }), ["array", "object", "json"].includes(type));
+    return ctx.UI.Column({ fillMaxWidth: true, spacing: 5 }, [
+        referenceToggle,
+        ...(schema.description ? [ctx.UI.Text({ text: schema.description, style: "bodySmall", color: "onSurfaceVariant" })] : []),
+        input,
+    ]);
+}
 /** Edits integral values with visible validation instead of silently coercing text. */
 function integer(ctx, key, label, value, change) {
     return field(ctx, key, label, String(value), text => {
@@ -76,7 +110,7 @@ function scheduleForm(ctx, node, change) {
     ];
 }
 /** Renders all node-specific settings with typed parameter references. */
-function nodeForm(ctx, workflow, node, change, configureSchedule) {
+function nodeForm(ctx, workflow, node, tools, change, configureSchedule) {
     const UI = ctx.UI;
     const content = [
         field(ctx, `${node.id}:name`, "节点名称", node.name, name => change({ ...node, name })),
@@ -97,34 +131,36 @@ function nodeForm(ctx, workflow, node, change, configureSchedule) {
             content.push(choose(ctx, `${node.id}:topic`, "事件", node.triggerConfig.topic, options(["app.lifecycle.resumed", "system.network.changed", "system.power.connected", "system.power.disconnected", "system.screen.on", "system.screen.off", "system.battery.low", "system.battery.okay"]), topic => change({ ...node, triggerConfig: { topic } })));
     }
     if (node.type === "execute") {
-        content.push(field(ctx, `${node.id}:tool`, "工具名称（支持 包名:工具名）", node.actionType, actionType => change({ ...node, actionType })));
-        content.push(choose(ctx, `${node.id}:tools`, "常用工具", node.actionType, options(["send_message_to_ai", "http_request", "read_file", "write_file", "sleep", "send_notification", "execute_hidden_terminal_command"]), actionType => change({ ...node, actionType })));
-        for (const [key, value] of Object.entries(node.actionConfig))
-            content.push(UI.Column({ spacing: 4, fillMaxWidth: true }, [
-                parameterField(ctx, `${node.id}:param:${key}`, key, value, workflow, node.id, next => change({ ...node, actionConfig: { ...node.actionConfig, [key]: next } })),
-                UI.Button({ text: `移除参数 ${key}`, onClick: () => { const config = { ...node.actionConfig }; delete config[key]; change({ ...node, actionConfig: config }); } }),
-            ]));
-        const [key, setKey] = ctx.useState(`parameter-name:${node.id}`, "");
-        content.push(field(ctx, `${node.id}:new-param`, "新参数名称", key, setKey), UI.Button({ text: "添加参数", onClick: () => {
-                if (!key.trim() || Object.prototype.hasOwnProperty.call(node.actionConfig, key.trim())) {
-                    void ctx.showToast("参数名为空或已存在");
-                    return;
-                }
-                change({ ...node, actionConfig: { ...node.actionConfig, [key.trim()]: { value: "" } } });
-                setKey("");
-            } }));
+        const orderedTools = [...tools].sort((left, right) => left.name.localeCompare(right.name));
+        const selectedTool = orderedTools.find(tool => tool.name === node.actionType);
+        content.push(choose(ctx, `${node.id}:tools`, "执行工具", node.actionType, orderedTools.map(tool => ({ value: tool.name, label: tool.name })), actionType => {
+            const tool = orderedTools.find(item => item.name === actionType);
+            if (tool === undefined)
+                throw new Error(`工具元数据不存在：${actionType}`);
+            const actionConfig = Object.fromEntries(tool.parameters.map(parameter => [parameter.name, node.actionConfig[parameter.name] ?? { value: parameter.default ?? "" }]));
+            change({ ...node, actionType, actionConfig });
+        }));
+        if (selectedTool?.description)
+            content.push(UI.Text({ text: selectedTool.description, style: "bodySmall", color: "onSurfaceVariant" }));
+        if (selectedTool) {
+            for (const schema of selectedTool.parameters) {
+                content.push(toolParameterField(ctx, `${node.id}:param:${schema.name}`, schema, node.actionConfig[schema.name] ?? { value: schema.default ?? "" }, workflow, node.id, next => change({ ...node, actionConfig: { ...node.actionConfig, [schema.name]: next } })));
+            }
+            if (selectedTool.parameters.length === 0)
+                content.push(UI.Text({ text: "此工具不需要参数", style: "bodySmall", color: "onSurfaceVariant" }));
+        }
         content.push(UI.Row({ spacing: 8, verticalAlignment: "center" }, [UI.Text({ text: "JavaScript 执行模式", weight: 1 }), UI.Switch({ checked: node.jsCode !== null, onCheckedChange: value => change({ ...node, jsCode: value ? "return inputs;" : null }) })]));
         if (node.jsCode !== null)
             content.push(field(ctx, `${node.id}:js`, "脚本（return 返回结果，支持 await）", node.jsCode, jsCode => change({ ...node, jsCode }), true), UI.Text({ text: "可用 inputs、trigger、Tools 和 toolCall。脚本直接运行在插件环境中。", style: "bodySmall" }));
     }
     if (node.type === "condition")
         content.push(parameterField(ctx, `${node.id}:left`, "左值", node.left, workflow, node.id, left => change({ ...node, left })), choose(ctx, `${node.id}:operator`, "比较方式", node.operator, [
-            { value: "EQ", label: "等于 (==)" }, { value: "NE", label: "不等于 (!=)" }, { value: "GT", label: "大于 (>)" },
-            { value: "GTE", label: "大于等于 (>=)" }, { value: "LT", label: "小于 (<)" }, { value: "LTE", label: "小于等于 (<=)" },
+            { value: "EQ", label: "=" }, { value: "NE", label: "≠" }, { value: "GT", label: ">" },
+            { value: "GTE", label: "≥" }, { value: "LT", label: "<" }, { value: "LTE", label: "≤" },
             { value: "CONTAINS", label: "包含" }, { value: "NOT_CONTAINS", label: "不包含" }, { value: "IN", label: "属于" }, { value: "NOT_IN", label: "不属于" },
         ], operator => change((0, validation_1.parseNode)({ ...node, operator }))), parameterField(ctx, `${node.id}:right`, "右值（IN 使用 JSON 数组）", node.right, workflow, node.id, right => change({ ...node, right })));
     if (node.type === "logic")
-        content.push(choose(ctx, `${node.id}:logic`, "逻辑运算", node.operator, [{ value: "AND", label: "与 AND" }, { value: "OR", label: "或 OR" }], operator => change((0, validation_1.parseNode)({ ...node, operator }))), UI.Text({ text: "对输入连线中成功完成的布尔结果运算。", style: "bodySmall" }));
+        content.push(choose(ctx, `${node.id}:logic`, "逻辑运算", node.operator, [{ value: "AND", label: "且" }, { value: "OR", label: "或" }], operator => change((0, validation_1.parseNode)({ ...node, operator }))), UI.Text({ text: "对输入连线中成功完成的布尔结果运算。", style: "bodySmall" }));
     if (node.type === "extract") {
         content.push(choose(ctx, `${node.id}:mode`, "运算模式", node.mode, [
             { value: "REGEX", label: "正则提取" }, { value: "JSON", label: "JSON 提取" }, { value: "SUB", label: "截取字符串" },

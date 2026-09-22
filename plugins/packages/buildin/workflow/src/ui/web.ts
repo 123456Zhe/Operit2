@@ -4,7 +4,7 @@ import type {
   ComposeThemeSnapshot,
 } from "../../../../../types/compose-dsl";
 import type { Request } from "../service";
-import type { Snapshot } from "../model";
+import type { Run, Snapshot } from "../model";
 
 /** Embeds the bundled editor and exposes durable workflow operations through the shared host. */
 export default function screen(ctx: ComposeDslContext): ComposeNode {
@@ -23,6 +23,14 @@ export default function screen(ctx: ComposeDslContext): ComposeNode {
   async function initialize(): Promise<void> {
     try {
       ctx.Theme.subscribe(applyTheme);
+      ToolPkg.ipc.on<Run, boolean>("workflow.progress", async progress => {
+        if (pageReady.current) {
+          await controller.evaluateJavascript(
+            `window.receiveWorkflowProgress(${JSON.stringify(progress)});`,
+          );
+        }
+        return true;
+      });
       controller.addJavascriptInterface("WorkflowHost", {
         /** Marks the page ready and returns the current public theme snapshot. */
         currentTheme: () => {

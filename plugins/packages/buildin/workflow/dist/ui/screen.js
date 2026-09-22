@@ -38,8 +38,8 @@ function status(run) {
 function screen(ctx) {
     const UI = ctx.UI;
     const [state, setState] = ctx.useState("workflow-ui", {
-        width: 0,
-        snapshot: { workflows: [], runs: [] }, workflow: null, ready: false, busy: false, saving: false, error: "",
+        width: 0, tools: [],
+        snapshot: { workflows: [], runs: [], manifestTemplates: [] }, workflow: null, ready: false, busy: false, saving: false, error: "",
         menu: false, selectionMode: false, marked: [], modal: "", name: "", description: "", enabled: true, text: "", path: "",
         selected: null, nodeDraft: null, adding: false, schedule: null, edgeId: null, conditionMode: "default",
         viewport: { x: 0, y: 0, zoom: 1, width: 0, height: 0 }, fitted: false, latest: null, logId: null, logNode: null,
@@ -76,9 +76,10 @@ function screen(ctx) {
         const result = await ToolPkg.ipc.call("workflow.service", message, { targetRuntime: "main" });
         const selected = live.current.workflow;
         const workflow = selected === null ? null : result.workflows.find(item => item.id === selected.id);
-        update({ snapshot: result, ready: true, workflow: workflow === undefined ? null : workflow,
+        const tools = result.tools === undefined ? live.current.tools : result.tools;
+        update({ snapshot: { ...result, tools }, tools, ready: true, workflow: workflow === undefined ? null : workflow,
             marked: live.current.marked.filter(value => result.workflows.some(item => item.id === value)) });
-        return result;
+        return { ...result, tools };
     }
     /** Saves one completed edit, keeping the modal available when validation fails. */
     async function commit(workflow) {
@@ -192,7 +193,7 @@ function screen(ctx) {
             update({ latest: progress });
             return true;
         });
-        await request({ action: "list" });
+        await request({ action: "tool_catalog" });
     }
     /** Renders the original execution result strip inside a workflow card. */
     function executionStatus(workflow) {
@@ -445,10 +446,22 @@ function screen(ctx) {
                     (0, forms_1.field)(ctx, "create-name", "工作流名称", state.name, name => update({ name })),
                     (0, forms_1.field)(ctx, "create-description", "工作流描述", state.description, description => update({ description }), true),
                 ], [close, button("创建", async () => openCreated(await request({ action: "create", name: live.current.name, description: live.current.description })), state.name.trim().length > 0)], 212)];
-            case "templates": return [dialog("templates", "选择模板", (0, templates_1.templates)().map(template => UI.Card({
-                    fillMaxWidth: true, elevation: 0, containerColor: "surfaceVariant",
-                    modifier: ctx.Modifier.clickable(() => perform(async () => openCreated(await request({ action: "import", json: JSON.stringify(template) })))),
-                }, UI.Column({ padding: 16, spacing: 8 }, [UI.Text({ text: template.name, style: "titleMedium" }), UI.Text({ text: template.description, style: "bodySmall", color: "onSurfaceVariant" })]))), [close], 320)];
+            case "templates": {
+                const options = [
+                    ...(0, templates_1.templates)().map(template => ({ key: `builtin:${template.id}`, name: template.name, description: template.description, builtin: template })),
+                    ...state.snapshot.manifestTemplates.map(template => ({ key: `${template.sourceToolPkgId}:${template.templateId}`, name: template.displayName, description: template.description, manifest: template })),
+                ];
+                return [dialog("templates", "选择模板", options.map(option => UI.Card({
+                        key: option.key,
+                        fillMaxWidth: true, elevation: 0, containerColor: "surfaceVariant",
+                        modifier: ctx.Modifier.clickable(() => perform(async () => {
+                            const result = "builtin" in option
+                                ? await request({ action: "import", json: JSON.stringify(option.builtin) })
+                                : await request({ action: "import_manifest_template", sourceToolPkgId: option.manifest.sourceToolPkgId, templateId: option.manifest.templateId });
+                            openCreated(result);
+                        })),
+                    }, UI.Column({ padding: 16, spacing: 8 }, [UI.Text({ text: option.name, style: "titleMedium" }), UI.Text({ text: option.description, style: "bodySmall", color: "onSurfaceVariant" })]))), [close], 320)];
+            }
             case "meta": return [dialog("meta", "编辑工作流", [
                     (0, forms_1.field)(ctx, "workflow-name", "工作流名称", state.name, name => update({ name })),
                     (0, forms_1.field)(ctx, "workflow-description", "工作流描述", state.description, description => update({ description }), true),
@@ -467,7 +480,7 @@ function screen(ctx) {
                                 const next = (0, model_1.newNode)(value);
                                 update({ nodeDraft: { ...next, id: draft.id, position: draft.position } });
                             })] : []),
-                        ...(0, forms_1.nodeForm)(ctx, workflow, draft, nodeDraft => update({ nodeDraft }), () => update({ schedule: (0, model_1.copy)(live.current.nodeDraft) })),
+                        ...(0, forms_1.nodeForm)(ctx, workflow, draft, state.tools, nodeDraft => update({ nodeDraft }), () => update({ schedule: (0, model_1.copy)(live.current.nodeDraft) })),
                     ], [cancel, button(state.adding ? "添加" : "保存", saveNode, !state.busy)], 440)];
                 const schedule = state.schedule;
                 if (schedule !== null && schedule.type === "trigger")

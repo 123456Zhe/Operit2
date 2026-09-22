@@ -8,8 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use operit_host_api::{
     AppListData, AppOperationData, AppUsageTimeEntry, AppUsageTimeResultData, DeviceInfoData,
     HostError, HostResult, LocationData, NotificationData, OCRLanguage, OCRQuality,
-    SystemNotificationActivation, SystemNotificationRequest, SystemOperationHost,
-    SystemSettingData,
+    SystemNotificationRequest, SystemOperationHost, SystemSettingData,
 };
 use uuid::Uuid;
 
@@ -53,17 +52,6 @@ impl SystemOperationHost for AppleSystemOperationHost {
         }
         Ok(value)
         }
-    }
-
-    fn toast(&self, message: &str) -> HostResult<()> {
-        if message.trim().is_empty() {
-            return Err(HostError::new("message parameter is required"));
-        }
-        self.sendNotification(&SystemNotificationRequest {
-            title: "Operit".to_string(),
-            message: message.to_string(),
-            activation: SystemNotificationActivation::OpenApplication,
-        })
     }
 
     fn sendNotification(&self, request: &SystemNotificationRequest) -> HostResult<()> {

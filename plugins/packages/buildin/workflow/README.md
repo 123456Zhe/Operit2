@@ -70,7 +70,8 @@ drag-to-pinch gesture transitions.
 
 This is not yet a pixel-perfect port. Canvas text is host-measured rather than
 Compose Text, and execution indicators do not reproduce all Kotlin animations.
-The template catalog currently contains two examples. Tool selection uses a
+The template catalog includes notification, condition, web extraction, data
+processing, logic and scheduled proactive-AI examples. Tool selection uses a
 common-tool list and manual parameter fields, not the original complete tool
 catalog UI. Schedule fields use milliseconds / textual timestamps rather than
 the original unit and date/time selectors. Trigger availability follows the

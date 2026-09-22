@@ -49,6 +49,7 @@ class ToolPkgUiLauncherScreen extends StatefulWidget {
     required this.plugin,
     this.initialRouteId,
     this.showLauncherChrome = true,
+    this.showLoadingIndicator = true,
     this.initialState = const <String, Object?>{},
     this.initialMemo = const <String, Object?>{},
     this.initialModuleSpec,
@@ -58,6 +59,7 @@ class ToolPkgUiLauncherScreen extends StatefulWidget {
   final core_proxy.ToolPkgContainerRuntime plugin;
   final String? initialRouteId;
   final bool showLauncherChrome;
+  final bool showLoadingIndicator;
   final Map<String, Object?> initialState;
   final Map<String, Object?> initialMemo;
   final Map<String, Object?>? initialModuleSpec;
@@ -648,6 +650,7 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
             loading: _loading,
             error: _error,
             renderResult: _renderResult,
+            showLoadingIndicator: widget.showLoadingIndicator,
             onAction: _dispatchAction,
             webViewHostContext: webViewHostContext,
             splitMarkdownContent: (content) => widget

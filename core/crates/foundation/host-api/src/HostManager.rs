@@ -7,7 +7,8 @@ use crate::{
     HostRuntimeEventSchedulerHost, HostRuntimeTaskSchedulerHost, HostSecretStore, HttpHost,
     LocalInferenceHost, ManagedRuntimeHost, PluginSdkIpc::PluginSdkIpcHost, RobotFaceHost,
     RuntimeSqliteHost, RuntimeStorageHost, RuntimeStorageWriteHost, SystemOperationHost,
-    TerminalHost, TtsPlaybackHost, TtsSynthesisHost, WebSocketHost, WebVisitHost, SerialPortHost,
+    TerminalHost, ToastHost, TtsPlaybackHost, TtsSynthesisHost, WebSocketHost, WebVisitHost,
+    SerialPortHost,
 };
 
 static DEFAULT_HTTP_HOST: OnceLock<Arc<dyn HttpHost>> = OnceLock::new();
@@ -104,6 +105,7 @@ pub struct HostManager {
     pub httpHost: Option<Arc<dyn HttpHost>>,
     pub webSocketHost: Option<Arc<dyn WebSocketHost>>,
     pub systemOperationHost: Option<Arc<dyn SystemOperationHost>>,
+    pub toastHost: Option<Arc<dyn ToastHost>>,
     pub audioPlaybackHost: Option<Arc<dyn AudioPlaybackHost>>,
     pub bluetoothHost: Option<Arc<dyn BluetoothHost>>,
     pub deviceIoHost: Option<Arc<dyn DeviceIoHost>>,
@@ -140,6 +142,7 @@ impl HostManager {
             webSocketHost: None,
             serialPortHost: None,
             systemOperationHost: None,
+            toastHost: None,
             audioPlaybackHost: None,
             bluetoothHost: None,
             deviceIoHost: None,
@@ -178,6 +181,7 @@ impl HostManager {
             webSocketHost: None,
             serialPortHost: None,
             systemOperationHost: None,
+            toastHost: None,
             audioPlaybackHost: None,
             bluetoothHost: None,
             deviceIoHost: None,
@@ -219,6 +223,7 @@ impl HostManager {
             webSocketHost: None,
             serialPortHost: None,
             systemOperationHost: None,
+            toastHost: None,
             audioPlaybackHost: None,
             bluetoothHost: None,
             deviceIoHost: None,
@@ -261,6 +266,7 @@ impl HostManager {
             webSocketHost: None,
             serialPortHost: None,
             systemOperationHost: Some(systemOperationHost),
+            toastHost: None,
             audioPlaybackHost: None,
             bluetoothHost: None,
             deviceIoHost: None,
@@ -307,6 +313,7 @@ impl HostManager {
             webSocketHost: None,
             serialPortHost: None,
             systemOperationHost: Some(systemOperationHost),
+            toastHost: None,
             audioPlaybackHost: None,
             bluetoothHost: None,
             deviceIoHost: None,
@@ -335,6 +342,13 @@ impl HostManager {
     #[allow(non_snake_case)]
     pub fn withCoreCommandExecutor(mut self, executor: CoreCommandExecutor) -> Self {
         self.coreCommandExecutor = Some(executor);
+        self
+    }
+
+    /// Adds frontend-owned transient toast presentation.
+    #[allow(non_snake_case)]
+    pub fn withToastHost(mut self, toastHost: Arc<dyn ToastHost>) -> Self {
+        self.toastHost = Some(toastHost);
         self
     }
 

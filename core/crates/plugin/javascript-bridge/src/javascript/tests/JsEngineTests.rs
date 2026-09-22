@@ -67,7 +67,7 @@ pub(super) fn newTestJsEngineState(
     let runtime = testJavaScriptRuntimeHost()
         .createHostJavaScriptRuntime()
         .expect("test JavaScript runtime must start");
-    JsEngineState::newWithRuntime(runtime, executionHost, None)
+    JsEngineState::newWithRuntime(runtime, executionHost, None, Arc::new(Mutex::new(None)))
         .expect("test JavaScript state must initialize")
 }
 
@@ -101,6 +101,11 @@ impl ToolPkgTextResourceHost for StaticToolPkgTextResourceHost {
 crate::impl_rejecting_js_tools_host!(TestPluginConfigExecutionHost);
 
 impl JsExecutionHost for TestPluginConfigExecutionHost {
+    /// Returns an empty catalog for tests that do not install runtime tools.
+    fn get_tool_catalog(&self) -> Result<Value, String> {
+        Ok(serde_json::json!({ "tools": [] }))
+    }
+
     /// Executes the System sleep call used by the JavaScript worker regression test.
     fn execute_tool_call(&self, request: JsToolCallRequest) -> JsToolCallResult {
         if request.tool_name == "get_device_location" {
@@ -421,6 +426,28 @@ fn async_tool_call_yields_to_ready_javascript_promise() {
         started.elapsed() < Duration::from_millis(100),
         "tool execution must not block the QuickJS worker"
     );
+    engine.destroy();
+}
+
+/// Verifies the host tool catalog bridge returns structured schemas to package JavaScript.
+#[test]
+fn tool_catalog_bridge_returns_structured_response() {
+    ensure_test_runtime_root();
+    let engine = newTestJsEngine(Arc::new(TestPluginConfigExecutionHost::default()));
+    let output = engine
+        .execute_script_function(
+            "exports.catalog = function() { return getToolCatalog(); };",
+            "catalog",
+            &testParams(),
+            &BTreeMap::new(),
+            None,
+            true,
+            2,
+            None,
+        )
+        .expect("tool catalog bridge must complete");
+
+    assert_eq!(output.as_deref(), Some(r#"{"tools":[]}"#));
     engine.destroy();
 }
 

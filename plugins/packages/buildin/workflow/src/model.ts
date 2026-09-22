@@ -29,7 +29,36 @@ export interface Run {
   status: RunStatus; startedAt: number; finishedAt: number | null;
   nodes: Record<string, NodeResult>; logs: LogEntry[];
 }
-export interface Snapshot { workflows: Workflow[]; runs: Run[] }
+export interface ToolParameterSchema {
+  name: string;
+  type: string;
+  description: string;
+  required: boolean;
+  default: string | null;
+}
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: ToolParameterSchema[];
+  category: string;
+  source: "builtin" | "package";
+  packageName?: string;
+}
+export interface ManifestWorkflowTemplate {
+  sourceToolPkgId: string;
+  sourceVersion: string;
+  templateId: string;
+  displayName: string;
+  description: string;
+  resourceKey: string;
+  workflow: Workflow;
+}
+export interface Snapshot {
+  workflows: Workflow[];
+  runs: Run[];
+  manifestTemplates: ManifestWorkflowTemplate[];
+  tools?: ToolDefinition[];
+}
 export const STYLES: Record<NodeKind, { label: string; color: string; tint: string; border: string }> = {
   trigger: { label: "触发", color: "#4CAF50", tint: "#E8F5E9", border: "#81C784" },
   execute: { label: "执行", color: "#2196F3", tint: "#E3F2FD", border: "#64B5F6" },

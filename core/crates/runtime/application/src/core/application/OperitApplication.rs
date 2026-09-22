@@ -6,6 +6,7 @@ use crate::data::preferences::ModelConfigManager::ModelConfigManager;
 use crate::plugins::toolpkg::ToolPkgAppLifecycleHookBridge::ToolPkgAppLifecycleHookBridge;
 use crate::plugins::toolpkg::ToolPkgHookBridgeSupport::ToolPkgBridgeRuntime;
 use crate::plugins::toolpkg::ToolPkgInputMenuToggleBridge::ToolPkgInputMenuToggleBridge;
+use crate::plugins::toolpkg::ToolPkgChatComposerSlotBridge::ToolPkgChatComposerSlotBridge;
 use crate::plugins::PluginRegistry::PluginRegistry;
 use crate::services::ProviderRuntimeSupportService::ProviderRuntimeSupportService;
 use crate::services::ToolRuntimeSupportService::ToolRuntimeSupportService;
@@ -429,6 +430,12 @@ impl OperitApplication {
     #[allow(non_snake_case)]
     pub fn inputMenuToggleBridge(&self) -> ToolPkgInputMenuToggleBridge {
         ToolPkgInputMenuToggleBridge::new(self.toolPkgBridgeRuntime.clone())
+    }
+
+    /// Creates a host-composed chat composer slot bridge.
+    #[allow(non_snake_case)]
+    pub fn chatComposerSlotBridge(&self) -> ToolPkgChatComposerSlotBridge {
+        ToolPkgChatComposerSlotBridge::new(self.toolPkgBridgeRuntime.clone())
     }
 
     /// Returns the shared package manager owned by the initialized tool handler.

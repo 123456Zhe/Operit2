@@ -69,6 +69,8 @@ import {
   type Snapshot,
   type Value,
   type Run,
+  type ToolDefinition,
+  type ManifestWorkflowTemplate,
 } from "../../src/model";
 import { validateGraph, parseNode } from "../../src/validation";
 import { templates } from "../../src/templates";
@@ -81,7 +83,24 @@ declare global {
       exportFile(path: string, content: string): Promise<void>;
       currentTheme(): Promise<import("../../../../../types/compose-dsl").ComposeThemeSnapshot>;
     };
+    receiveWorkflowProgress?: (run: Run) => void;
   }
+}
+
+interface TemplateOption {
+  key: string;
+  name: string;
+  description: string;
+  builtin?: Workflow;
+  manifest?: ManifestWorkflowTemplate;
+}
+
+/** Combines the built-in and manifest-provided workflow template catalogs. */
+function templateOptions(snapshot: Snapshot): TemplateOption[] {
+  return [
+    ...templates().map((template) => ({ key: `builtin:${template.id}`, name: template.name, description: template.description, builtin: template })),
+    ...snapshot.manifestTemplates.map((template) => ({ key: `${template.sourceToolPkgId}:${template.templateId}`, name: template.displayName, description: template.description, manifest: template })),
+  ];
 }
 import {
   fitOptions,
@@ -148,7 +167,9 @@ function App() {
   const [snapshot, setSnapshot] = useState<Snapshot>({
     workflows: [],
     runs: [],
+    manifestTemplates: [],
   });
+  const [tools, setTools] = useState<ToolDefinition[]>([]);
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [ready, setReady] = useState(false),
@@ -164,6 +185,7 @@ function App() {
     [description, setDescription] = useState(""),
     [text, setText] = useState("");
   const [run, setRun] = useState<Run | null>(null);
+  const [liveRuns, setLiveRuns] = useState<Record<string, Run>>({});
   const [selected, setSelected] = useState<string | null>(null);
   const [exportPath, setExportPath] = useState("");
   const [nodePicker, setNodePicker] = useState(false);
@@ -180,8 +202,51 @@ function App() {
   async function request(message: Request) {
     const result = await window.WorkflowHost.request(message);
     setSnapshot(result);
+    if (result.tools !== undefined) setTools(result.tools);
+    setLiveRuns((current) => {
+      const next = { ...current };
+      for (const item of result.runs) {
+        const known = next[item.workflowId];
+        if (known === undefined || known.startedAt <= item.startedAt)
+          next[item.workflowId] = item;
+      }
+      return next;
+    });
     return result;
   }
+  const workflowRef = React.useRef<Workflow | null>(null);
+  React.useEffect(() => {
+    workflowRef.current = workflow;
+  }, [workflow]);
+  /** Applies main-runtime node transitions to the open graph without polling. */
+  React.useEffect(() => {
+    window.receiveWorkflowProgress = (progress) => {
+      setLiveRuns((current) => ({ ...current, [progress.workflowId]: progress }));
+      setSnapshot((current) => ({
+        workflows: current.workflows.map((item) =>
+          item.id === progress.workflowId
+            ? { ...item, lastExecutionStatus: progress.status }
+            : item,
+        ),
+        runs: [
+          progress,
+          ...current.runs.filter((item) => item.id !== progress.id),
+        ],
+        manifestTemplates: current.manifestTemplates,
+      }));
+      if (workflowRef.current?.id !== progress.workflowId) return;
+      setRun(progress);
+      setNodes((current) =>
+        current.map((item) => ({
+          ...item,
+          data: { ...item.data, result: progress.nodes[item.id]?.status },
+        })),
+      );
+    };
+    return () => {
+      delete window.receiveWorkflowProgress;
+    };
+  }, []);
   React.useEffect(() => {
     void perform(async () => {
       /** Waits for the host bridge to finish installing page interfaces. */
@@ -199,7 +264,7 @@ function App() {
       }
       await waitForWorkflowHost();
       window.applyWorkflowTheme(await window.WorkflowHost.currentTheme());
-      await request({ action: "list" });
+      await request({ action: "tool_catalog" });
       setReady(true);
     });
   }, []);
@@ -207,14 +272,15 @@ function App() {
   function open(value: Workflow) {
     setWorkflow(copy(value));
     setDirty(false);
-    setRun(null);
+    const latest = liveRuns[value.id] ?? null;
+    setRun(latest);
     setSelected(null);
     setNodes(
       value.nodes.map((node) => ({
         id: node.id,
         type: "workflow",
         position: node.position,
-        data: { node },
+        data: { node, result: latest?.nodes[node.id]?.status },
       })),
     );
   }
@@ -289,6 +355,8 @@ function App() {
     );
     setNodePicker(false);
   }
+  const workflowRunning = run?.status === "RUNNING";
+  const editorLocked = busy || workflowRunning;
   const edges = React.useMemo(
     () =>
       workflow?.connections.map((edge) => ({
@@ -297,9 +365,10 @@ function App() {
         target: edge.targetNodeId,
         label: edge.condition === null ? "" : edge.condition,
         type: "smoothstep",
-        animated: busy,
+        animated: run?.nodes[edge.targetNodeId]?.status === "running",
+        className: "workflow-edge edge-" + (run?.nodes[edge.targetNodeId]?.status ?? "idle"),
       })) ?? [],
-    [workflow?.connections, busy],
+    [workflow?.connections, run],
   );
   if (!theme || !hostTheme) return null;
   return (
@@ -318,7 +387,6 @@ function App() {
                 className="toolbar-back"
                 aria-label="返回列表"
                 startIcon={<ArrowBackIcon />}
-                disabled={busy}
                 onClick={back}
               >
                 <span className="action-label">返回列表</span>
@@ -340,10 +408,10 @@ function App() {
               <Stack className="toolbar-actions" direction="row" spacing={0.5}>
                 {!compact && (
                   <Button
-                    className="toolbar-secondary"
-                    aria-label="添加节点"
-                    startIcon={<AddIcon />}
-                    disabled={busy}
+                  className="toolbar-secondary"
+                  aria-label="添加节点"
+                  startIcon={<AddIcon />}
+                    disabled={editorLocked}
                     onClick={() => setNodePicker(true)}
                   >
                     <span className="action-label">添加节点</span>
@@ -353,7 +421,7 @@ function App() {
                   className="toolbar-secondary"
                   aria-label="设置"
                   startIcon={<SettingsOutlinedIcon />}
-                  disabled={busy}
+                  disabled={editorLocked}
                   onClick={() => {
                     setName(workflow.name);
                     setDescription(workflow.description);
@@ -378,7 +446,7 @@ function App() {
                   className="toolbar-secondary"
                   aria-label="保存"
                   startIcon={<SaveOutlinedIcon />}
-                  disabled={busy || !dirty}
+                  disabled={editorLocked || !dirty}
                   onClick={() =>
                     operation(async () => {
                       await save();
@@ -391,34 +459,37 @@ function App() {
                   className="run-action"
                   variant="contained"
                   startIcon={<PlayArrowIcon />}
-                  disabled={busy || !workflow.enabled}
+                  disabled={editorLocked || !workflow.enabled}
                   onClick={() =>
                     operation(async () => {
                       const saved = dirty ? await save() : workflow;
-                      const result = await request({
-                        action: "run",
+                      setRun({
+                        id: "",
+                        workflowId: saved.id,
+                        workflowName: saved.name,
+                        triggerId: null,
+                        status: "RUNNING",
+                        startedAt: Date.now(),
+                        finishedAt: null,
+                        nodes: {},
+                        logs: [],
+                      });
+                      setNodes((current) =>
+                        current.map((item) => ({
+                          ...item,
+                          data: { ...item.data, result: "pending" },
+                        })),
+                      );
+                      await request({
+                        action: "start",
                         id: saved.id,
                         triggerId: null,
                         extras: {},
                       });
-                      const latest = result.runs
-                        .filter((item) => item.workflowId === saved.id)
-                        .sort((a, b) => b.startedAt - a.startedAt)[0];
-                      setRun(latest);
-                      setDialog("logs");
-                      setNodes((current) =>
-                        current.map((node) => ({
-                          ...node,
-                          data: {
-                            ...node.data,
-                            result: latest.nodes[node.id]?.status,
-                          },
-                        })),
-                      );
                     })
                   }
                 >
-                  {busy ? "执行中…" : "运行"}
+                  {workflowRunning ? "执行中…" : "运行"}
                 </Button>
               </Stack>
             ) : (
@@ -580,8 +651,8 @@ function App() {
                 minZoom={0.2}
                 maxZoom={1.6}
                 proOptions={flowOptions}
-                nodesDraggable={!busy}
-                nodesConnectable={!busy}
+                nodesDraggable={!editorLocked}
+                nodesConnectable={!editorLocked}
                 deleteKeyCode={null}
                 onNodeDragStop={(_, moved) =>
                   edit({
@@ -596,10 +667,10 @@ function App() {
                 onNodeClick={(_, node) => setSelected(node.id)}
                 onPaneClick={() => setSelected(null)}
                 onNodeDoubleClick={(_, node) => {
-                  if (!busy) setDraft(copy(node.data.node));
+                  if (!editorLocked) setDraft(copy(node.data.node));
                 }}
                 onEdgeClick={(_, edge) => {
-                  if (!busy) {
+                  if (!editorLocked) {
                     setEdgeId(edge.id);
                     setText(
                       workflow.connections.find((item) => item.id === edge.id)!
@@ -610,6 +681,7 @@ function App() {
                 }}
                 onConnect={(connection) =>
                   perform(() => {
+                    if (editorLocked) return;
                     const next = {
                       ...workflow,
                       connections: [
@@ -650,7 +722,7 @@ function App() {
           <Button
             className="edit-selected"
             variant="contained"
-            disabled={busy}
+            disabled={editorLocked}
             onClick={() => {
               const node = workflow.nodes.find((item) => item.id === selected);
               if (node) setDraft(copy(node));
@@ -665,7 +737,7 @@ function App() {
               <Button
                 variant="outlined"
                 startIcon={<EditOutlinedIcon />}
-                disabled={busy}
+                disabled={editorLocked}
                 onClick={() => {
                   const node = workflow.nodes.find(
                     (item) => item.id === selected,
@@ -679,7 +751,7 @@ function App() {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              disabled={busy}
+              disabled={editorLocked}
               onClick={() => setNodePicker(true)}
             >
               添加节点
@@ -729,6 +801,7 @@ function App() {
                 key={draft.id}
                 node={draft}
                 workflow={workflow}
+                tools={tools}
                 change={setDraft}
               />
             )}
@@ -859,21 +932,27 @@ function App() {
             )}
             {dialog === "templates" && (
               <Stack spacing={1}>
-                {templates().map((template) => (
+                {templateOptions(snapshot).map((template) => (
                   <Button
-                    key={template.name}
+                    key={template.key}
+                    className="template-option"
+                    variant="outlined"
                     onClick={() =>
                       perform(async () => {
-                        const result = await request({
-                          action: "import",
-                          json: JSON.stringify(template),
-                        });
+                        const result = template.builtin !== undefined
+                          ? await request({ action: "import", json: JSON.stringify(template.builtin) })
+                          : await request({ action: "import_manifest_template", sourceToolPkgId: template.manifest!.sourceToolPkgId, templateId: template.manifest!.templateId });
                         open(result.workflows[result.workflows.length - 1]);
                         setDialog("");
                       })
                     }
                   >
-                    {template.name}
+                    <Stack spacing={0.5} alignItems="flex-start">
+                      <Typography variant="subtitle2">{template.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {template.description}
+                      </Typography>
+                    </Stack>
                   </Button>
                 ))}
               </Stack>

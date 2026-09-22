@@ -9,6 +9,7 @@ class _ComposeHost extends StatefulWidget {
     required this.loading,
     required this.error,
     required this.renderResult,
+    required this.showLoadingIndicator,
     required this.onAction,
     required this.webViewHostContext,
     required this.splitMarkdownContent,
@@ -17,6 +18,7 @@ class _ComposeHost extends StatefulWidget {
   final bool loading;
   final String? error;
   final _ComposeDslRenderResult? renderResult;
+  final bool showLoadingIndicator;
 
   /// Resolves function for the Compose DSL renderer.
   final Future<Object?> Function(String actionId, [Object? payload]) onAction;
@@ -47,8 +49,11 @@ class _ComposeHostState extends State<_ComposeHost> {
     if (!widget.loading && widget.error == null && tree != null) {
       _dispatchRootOnLoad();
     }
-    if (widget.loading) {
+    if (widget.loading && widget.showLoadingIndicator) {
       return const M3LoadingPane();
+    }
+    if (widget.loading) {
+      return const SizedBox.shrink();
     }
     if (widget.error != null) {
       return Center(

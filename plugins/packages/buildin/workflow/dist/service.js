@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.replaceManifestTemplates = replaceManifestTemplates;
 exports.dispatch = dispatch;
 exports.receive = receive;
 exports.trigger = trigger;
@@ -10,6 +11,7 @@ const validation_1 = require("./validation");
 let database = null;
 let writes = Promise.resolve();
 const active = new Map();
+const launching = new Set();
 /** Loads plugin-owned storage exactly once in the main runtime. */
 async function load() {
     if (database === null)
@@ -18,8 +20,13 @@ async function load() {
 }
 /** Marks unfinished records as interrupted after a runtime restart. */
 async function initialize() {
-    const db = await PluginConfig.use("workflows", { version: 1, workflows: [], runs: [], fired: {} });
-    if (db.version !== 1)
+    const db = await PluginConfig.use("workflows", { version: 2, workflows: [], runs: [], fired: {}, manifestTemplates: [] });
+    if (db.version === 1) {
+        db.version = 2;
+        db.manifestTemplates = [];
+        await PluginConfig.flush(db);
+    }
+    if (db.version !== 2)
         throw new Error(`不支持的数据版本：${db.version}`);
     const runs = (0, model_1.copy)(db.runs);
     let changed = false;
@@ -57,7 +64,20 @@ async function persist(db) {
 /** Returns detached state so UI edits cannot mutate stored definitions. */
 async function snapshot() {
     const db = await load();
-    return (0, model_1.copy)({ workflows: db.workflows, runs: db.runs });
+    return (0, model_1.copy)({ workflows: db.workflows, runs: db.runs, manifestTemplates: db.manifestTemplates });
+}
+/** Returns the persisted workflow snapshot together with host-owned tool schemas. */
+async function toolCatalogSnapshot() {
+    const result = await snapshot();
+    result.tools = getToolCatalog().tools;
+    return result;
+}
+/** Replaces one source package in the persisted manifest-template registry. */
+async function replaceManifestTemplates(sourceToolPkgId, templates) {
+    const db = await load();
+    const retained = db.manifestTemplates.filter(item => item.sourceToolPkgId !== sourceToolPkgId);
+    db.manifestTemplates = [...retained, ...(0, model_1.copy)(templates)];
+    await persist(db);
 }
 /** Looks up an existing workflow by exact identity. */
 function find(db, workflowId) {
@@ -104,9 +124,10 @@ async function record(db, run) {
     await persist(db);
 }
 /** Executes a saved workflow independently of its UI route lifetime. */
-async function runWorkflow(workflowId, triggerId, extras, observer) {
+async function runWorkflow(workflowId, triggerId, extras, observer, reserved = false) {
     const db = await load();
-    editable(workflowId);
+    if (!reserved)
+        editable(workflowId);
     const workflow = (0, model_1.copy)(find(db, workflowId));
     if (!workflow.enabled)
         throw new Error("工作流已停用");
@@ -135,11 +156,22 @@ async function runWorkflow(workflowId, triggerId, extras, observer) {
         active.delete(workflowId);
     }
 }
+/** Starts a workflow without holding the caller context open for its full execution. */
+async function startWorkflow(workflowId, triggerId, extras, observer) {
+    if (active.has(workflowId) || launching.has(workflowId))
+        throw new Error("工作流正在执行，结束后才能再次触发");
+    launching.add(workflowId);
+    void runWorkflow(workflowId, triggerId, extras, observer, true)
+        .catch(error => console.error(`[workflow] Background execution failed for ${workflowId}: ${(0, engine_1.errorText)(error)}`))
+        .finally(() => launching.delete(workflowId));
+    return snapshot();
+}
 /** Owns all UI and tool mutations, with optimistic revisions for saved graphs. */
 async function dispatch(request, observer) {
     const db = await load();
     switch (request.action) {
         case "list": return snapshot();
+        case "tool_catalog": return toolCatalogSnapshot();
         case "create": {
             if (!request.name.trim())
                 throw new Error("工作流名称不能为空");
@@ -181,9 +213,21 @@ async function dispatch(request, observer) {
             db.workflows = [...db.workflows, next];
             break;
         }
+        case "import_manifest_template": {
+            const template = db.manifestTemplates.find(item => item.sourceToolPkgId === request.sourceToolPkgId && item.templateId === request.templateId);
+            if (template === undefined)
+                throw new Error(`工作流模板不存在：${request.sourceToolPkgId}/${request.templateId}`);
+            const next = (0, model_1.duplicate)(template.workflow);
+            next.name = template.displayName;
+            next.description = template.description;
+            next.enabled = false;
+            db.workflows = [...db.workflows, next];
+            break;
+        }
         case "run":
             await runWorkflow(request.id, request.triggerId, request.extras, observer);
             return snapshot();
+        case "start": return startWorkflow(request.id, request.triggerId, request.extras, observer);
         case "cancel": {
             const control = active.get(request.id);
             if (!control)
@@ -198,14 +242,19 @@ async function dispatch(request, observer) {
 /** Routes cross-runtime requests and keeps progress observers outside execution semantics. */
 async function receive(request, meta) {
     const context = meta.callerContextKey;
-    if (request.action !== "run" || context === undefined)
+    if (request.action !== "run" && request.action !== "start")
         return dispatch(request);
-    return dispatch(request, async (run) => {
+    if (context === undefined)
+        return dispatch(request);
+    const observer = async (run) => {
         // The UI context is awaiting this service call and cannot acknowledge progress yet.
         // Detach a snapshot so notification delivery never holds the execution lock.
         void ToolPkg.ipc.call("workflow.progress", (0, model_1.copy)(run), { targetRuntime: "ui", targetContextKey: context })
             .catch(error => { console.error("[workflow] Progress delivery failed", error); });
-    });
+    };
+    return request.action === "start"
+        ? startWorkflow(request.id, request.triggerId, request.extras, observer)
+        : dispatch(request, observer);
 }
 /** Creates a stable schedule identity including its exact configuration. */
 function scheduleKey(workflow, node) {

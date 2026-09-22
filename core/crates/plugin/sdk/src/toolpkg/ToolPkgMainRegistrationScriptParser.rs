@@ -10,10 +10,11 @@ use crate::toolpkg::ToolPkgCommonPluginConstants::*;
 use crate::toolpkg::ToolPkgParser::{
     ToolPkgMainRegistration, ToolPkgMainRegistrationParseResult, ToolPkgMarketOrigin,
     ToolPkgRegisteredAiProvider, ToolPkgRegisteredAppLifecycleHook,
+    ToolPkgRegisteredChatComposerSlot,
     ToolPkgRegisteredChatMessageMenuItem, ToolPkgRegisteredCoreCommand,
     ToolPkgRegisteredDesktopWidget, ToolPkgRegisteredFunctionHook, ToolPkgRegisteredHostEventHook,
     ToolPkgRegisteredNavigationEntry, ToolPkgRegisteredTagFunctionHook, ToolPkgRegisteredUiModule,
-    ToolPkgRegisteredUiRoute,
+    ToolPkgRegisteredUiRoute, ToolPkgRegisteredManifestExtension,
 };
 
 /// Executes and validates the `registerToolPkg` declaration exported by a main script.
@@ -125,6 +126,11 @@ fn parseCapturedRegistration(
         uiRoutes: parseRegisteredItems(
             &captured.uiRoutes,
             TOOLPKG_REGISTRATION_UI_ROUTE,
+            toolPkgId,
+        )?,
+        chatComposerSlots: parseRegisteredItems(
+            &captured.chatComposerSlots,
+            TOOLPKG_REGISTRATION_CHAT_COMPOSER_SLOT,
             toolPkgId,
         )?,
         navigationEntries: parseRegisteredItems(
@@ -240,6 +246,11 @@ fn parseCapturedRegistration(
         aiProviders: parseRegisteredItems(
             &captured.aiProviders,
             TOOLPKG_REGISTRATION_AI_PROVIDER,
+            toolPkgId,
+        )?,
+        manifestExtensions: parseRegisteredItems(
+            &captured.manifestExtensions,
+            TOOLPKG_REGISTRATION_MANIFEST_EXTENSION,
             toolPkgId,
         )?,
     })
@@ -366,6 +377,18 @@ impl ValidateToolPkgRegistration for ToolPkgRegisteredUiRoute {
     }
 }
 
+impl ValidateToolPkgRegistration for ToolPkgRegisteredChatComposerSlot {
+    /// Preserves explicitly declared chat composer slot metadata.
+    fn normalize(&mut self, _registryName: &str, _index: usize, _toolPkgId: &str) {}
+
+    /// Validates one chat composer slot contribution.
+    fn validate(&self, registryName: &str, index: usize) -> Result<(), String> {
+        requireNotBlank(&self.id, "id", registryName, index)?;
+        requireNotBlank(&self.slot, "slot", registryName, index)?;
+        requireNotBlank(&self.screen, "screen", registryName, index)
+    }
+}
+
 impl ValidateToolPkgRegistration for ToolPkgRegisteredNavigationEntry {
     /// Generates a title from the navigation entry identifier when omitted.
     fn normalize(&mut self, _registryName: &str, _index: usize, _toolPkgId: &str) {
@@ -489,6 +512,19 @@ impl ValidateToolPkgRegistration for ToolPkgRegisteredTagFunctionHook {
     fn validate(&self, registryName: &str, index: usize) -> Result<(), String> {
         requireNotBlank(&self.id, "id", registryName, index)?;
         requireNotBlank(&self.tag, "tag", registryName, index)?;
+        requireNotBlank(&self.function, "function", registryName, index)
+    }
+}
+
+impl ValidateToolPkgRegistration for ToolPkgRegisteredManifestExtension {
+    /// Normalizes manifest extension keys before validation.
+    fn normalize(&mut self, _registryName: &str, _index: usize, _toolPkgId: &str) {
+        self.key = self.key.trim().to_string();
+    }
+
+    /// Validates one manifest extension handler registration.
+    fn validate(&self, registryName: &str, index: usize) -> Result<(), String> {
+        requireNotBlank(&self.key, "key", registryName, index)?;
         requireNotBlank(&self.function, "function", registryName, index)
     }
 }

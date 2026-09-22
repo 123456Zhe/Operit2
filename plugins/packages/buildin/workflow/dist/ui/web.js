@@ -17,6 +17,12 @@ function screen(ctx) {
     async function initialize() {
         try {
             ctx.Theme.subscribe(applyTheme);
+            ToolPkg.ipc.on("workflow.progress", async (progress) => {
+                if (pageReady.current) {
+                    await controller.evaluateJavascript(`window.receiveWorkflowProgress(${JSON.stringify(progress)});`);
+                }
+                return true;
+            });
             controller.addJavascriptInterface("WorkflowHost", {
                 /** Marks the page ready and returns the current public theme snapshot. */
                 currentTheme: () => {

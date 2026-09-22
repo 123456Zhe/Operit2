@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import {
   Button,
   FormControlLabel,
@@ -8,7 +8,48 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import type { Value, Workflow, WorkflowNode } from "../../src/model";
+import type {
+  Comparison,
+  ExtractMode,
+  ToolDefinition,
+  ToolParameterSchema,
+  Value,
+  Workflow,
+  WorkflowNode,
+} from "../../src/model";
+
+const comparisonOptions: { value: Comparison; label: string }[] = [
+  { value: "EQ", label: "=" },
+  { value: "NE", label: "≠" },
+  { value: "GT", label: ">" },
+  { value: "GTE", label: "≥" },
+  { value: "LT", label: "<" },
+  { value: "LTE", label: "≤" },
+  { value: "CONTAINS", label: "包含" },
+  { value: "NOT_CONTAINS", label: "不包含" },
+  { value: "IN", label: "属于" },
+  { value: "NOT_IN", label: "不属于" },
+];
+
+const logicOptions = [
+  { value: "AND", label: "且" },
+  { value: "OR", label: "或" },
+];
+
+const extractModeOptions: { value: ExtractMode; label: string }[] = [
+  { value: "REGEX", label: "正则提取" },
+  { value: "JSON", label: "JSON 取值" },
+  { value: "SUB", label: "截取文本" },
+  { value: "CONCAT", label: "拼接文本" },
+  { value: "RANDOM_INT", label: "随机整数" },
+  { value: "RANDOM_STRING", label: "随机文本" },
+];
+
+const scheduleTypeOptions = [
+  { value: "interval", label: "按间隔执行" },
+  { value: "specific_time", label: "指定时间执行" },
+  { value: "cron", label: "Cron 表达式" },
+];
 
 /** Edits literals and upstream references using the persisted parameter contract. */
 function Parameter({
@@ -16,15 +57,30 @@ function Parameter({
   value,
   nodes,
   change,
+  schema,
 }: {
   label: string;
   value: Value;
   nodes: WorkflowNode[];
   change(value: Value): void;
+  schema?: ToolParameterSchema;
 }) {
+  const type = schema?.type.trim().toLowerCase() ?? "string";
+  const booleanTypes = new Set(["bool", "boolean"]);
+  const numericTypes = new Set(["int", "integer", "number", "float", "double"]);
+  const jsonTypes = new Set(["array", "object", "json"]);
+  const literalValue = "value" in value ? value.value : "";
   return (
     <Stack spacing={1}>
-      <Typography variant="body2">{label}</Typography>
+      <Typography variant="body2">
+        {label}
+        {schema?.required ? " · 必填" : " · 可选"}
+      </Typography>
+      {schema?.description && (
+        <Typography variant="caption" color="text.secondary">
+          {schema.description}
+        </Typography>
+      )}
       <TextField
         select
         size="small"
@@ -41,13 +97,28 @@ function Parameter({
         </MenuItem>
       </TextField>
       {"value" in value ? (
-        <TextField
-          size="small"
-          multiline
-          label={label}
-          value={value.value}
-          onChange={(event) => change({ value: event.target.value })}
-        />
+        booleanTypes.has(type) ? (
+          <FormControlLabel
+            label={literalValue === "true" ? "开启" : "关闭"}
+            control={
+              <Switch
+                checked={literalValue === "true"}
+                onChange={(_, checked) => change({ value: String(checked) })}
+              />
+            }
+          />
+        ) : (
+          <TextField
+            size="small"
+            multiline={jsonTypes.has(type)}
+            minRows={jsonTypes.has(type) ? 3 : undefined}
+            label={label}
+            type={numericTypes.has(type) ? "number" : "text"}
+            value={literalValue}
+            onChange={(event) => change({ value: event.target.value })}
+            helperText={schema?.description || undefined}
+          />
+        )
       ) : (
         <TextField
           select
@@ -71,14 +142,19 @@ function Parameter({
 export function NodeForm({
   node,
   workflow,
+  tools,
   change,
 }: {
   node: WorkflowNode;
   workflow: Workflow;
+  tools: ToolDefinition[];
   change(node: WorkflowNode): void;
 }) {
-  const [key, setKey] = useState("");
   const sources = workflow.nodes.filter((item) => item.id !== node.id);
+  const orderedTools = useMemo(
+    () => [...tools].sort((left, right) => left.name.localeCompare(right.name)),
+    [tools],
+  );
   /** Updates a typed field on the current node draft. */
   function set(field: string, value: unknown) {
     change({ ...node, [field]: value } as WorkflowNode);
@@ -108,7 +184,7 @@ export function NodeForm({
     label: string,
     name: string,
     value: string,
-    options: string[],
+    options: { value: string; label: string }[],
   ) {
     return (
       <TextField
@@ -119,8 +195,8 @@ export function NodeForm({
         onChange={(event) => set(name, event.target.value)}
       >
         {options.map((item) => (
-          <MenuItem key={item} value={item}>
-            {item}
+          <MenuItem key={item.value} value={item.value}>
+            {item.label}
           </MenuItem>
         ))}
       </TextField>
@@ -133,6 +209,25 @@ export function NodeForm({
         ...node,
         triggerConfig: { ...node.triggerConfig, [name]: value },
       });
+  }
+  const selectedTool =
+    node.type === "execute"
+      ? orderedTools.find((tool) => tool.name === node.actionType)
+      : undefined;
+  /** Applies a selected tool schema and initializes its declared parameters. */
+  function selectTool(actionType: string) {
+    if (node.type !== "execute") return;
+    const tool = orderedTools.find((item) => item.name === actionType);
+    if (!tool) throw new Error(`工具元数据不存在：${actionType}`);
+    const actionConfig = Object.fromEntries(
+      tool.parameters.map((parameter) => [
+        parameter.name,
+        node.actionConfig[parameter.name] ?? {
+          value: parameter.default ?? "",
+        },
+      ]),
+    );
+    change({ ...node, actionType, actionConfig });
   }
   return (
     <Stack spacing={2} sx={{ pt: 1 }}>
@@ -206,9 +301,9 @@ export function NodeForm({
                   })
                 }
               >
-                {["interval", "specific_time", "cron"].map((value) => (
-                  <MenuItem key={value} value={value}>
-                    {value}
+                {scheduleTypeOptions.map((item) => (
+                  <MenuItem key={item.value} value={item.value}>
+                    {item.label}
                   </MenuItem>
                 ))}
               </TextField>
@@ -244,51 +339,56 @@ export function NodeForm({
       )}
       {node.type === "execute" && (
         <>
-          {field("工具名称（包名:工具名）", "actionType", node.actionType)}
-          {Object.entries(node.actionConfig).map(([name, value]) => (
-            <Stack key={name} spacing={1}>
-              <Parameter
-                label={name}
-                value={value}
-                nodes={sources}
-                change={(next) =>
-                  set("actionConfig", { ...node.actionConfig, [name]: next })
-                }
-              />
-              <Button
-                color="error"
-                onClick={() => {
-                  const next = { ...node.actionConfig };
-                  delete next[name];
-                  set("actionConfig", next);
-                }}
-              >
-                移除参数
-              </Button>
-            </Stack>
-          ))}
-          <Stack direction="row" spacing={1}>
-            <TextField
-              label="参数名称"
-              size="small"
-              value={key}
-              onChange={(event) => setKey(event.target.value)}
-            />
-            <Button
-              disabled={
-                !key.trim() || Object.hasOwn(node.actionConfig, key.trim())
-              }
-              onClick={() => {
-                set("actionConfig", {
-                  ...node.actionConfig,
-                  [key.trim()]: { value: "" },
-                });
-                setKey("");
-              }}
-            >
-              添加参数
-            </Button>
-          </Stack>
+          <TextField
+            select
+            size="small"
+            label="执行工具"
+            value={node.actionType}
+            onChange={(event) => selectTool(event.target.value)}
+            helperText={
+              selectedTool
+                ? `${selectedTool.source === "package" ? "工具包" : "内置工具"} · ${selectedTool.category}`
+                : "请选择运行时提供的工具"
+            }
+          >
+            {orderedTools.map((tool) => (
+              <MenuItem key={tool.name} value={tool.name}>
+                {tool.name}
+              </MenuItem>
+            ))}
+          </TextField>
+          {selectedTool?.description && (
+            <Typography variant="body2" color="text.secondary">
+              {selectedTool.description}
+            </Typography>
+          )}
+          {selectedTool ? (
+            selectedTool.parameters.length ? (
+              selectedTool.parameters.map((schema) => (
+                <Parameter
+                  key={schema.name}
+                  label={schema.name}
+                  schema={schema}
+                  value={
+                    node.actionConfig[schema.name] ?? {
+                      value: schema.default ?? "",
+                    }
+                  }
+                  nodes={sources}
+                  change={(next) =>
+                    set("actionConfig", {
+                      ...node.actionConfig,
+                      [schema.name]: next,
+                    })
+                  }
+                />
+              ))
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                此工具不需要参数
+              </Typography>
+            )
+          ) : null}
           <FormControlLabel
             label="JavaScript 执行"
             control={
@@ -319,18 +419,7 @@ export function NodeForm({
             nodes={sources}
             change={(value) => set("left", value)}
           />
-          {select("比较方式", "operator", node.operator, [
-            "EQ",
-            "NE",
-            "GT",
-            "GTE",
-            "LT",
-            "LTE",
-            "CONTAINS",
-            "NOT_CONTAINS",
-            "IN",
-            "NOT_IN",
-          ])}
+          {select("比较方式", "operator", node.operator, comparisonOptions)}
           <Parameter
             label="右值"
             value={node.right}
@@ -340,17 +429,10 @@ export function NodeForm({
         </>
       )}
       {node.type === "logic" &&
-        select("逻辑运算", "operator", node.operator, ["AND", "OR"])}
+        select("逻辑运算", "operator", node.operator, logicOptions)}
       {node.type === "extract" && (
         <>
-          {select("运算方式", "mode", node.mode, [
-            "REGEX",
-            "JSON",
-            "SUB",
-            "CONCAT",
-            "RANDOM_INT",
-            "RANDOM_STRING",
-          ])}
+          {select("运算方式", "mode", node.mode, extractModeOptions)}
           <Parameter
             label="输入值"
             value={node.source}

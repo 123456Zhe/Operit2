@@ -15,6 +15,7 @@ import '../../core/proxy/generated/CoreProxyModels.g.dart' as core_proxy;
 import '../../core/runtime/RuntimeBootstrapManager.dart';
 import '../../data/preferences/UserPreferencesManager.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../common/AppToastHost.dart';
 import '../common/RuntimeBootstrapScreen.dart';
 import '../features/chat/tts/TtsFloatingPanel.dart';
 import '../features/startup/PluginLoadingOverlay.dart';
@@ -297,18 +298,20 @@ class _OperitMaterialApp extends StatelessWidget {
       home: RuntimeBrowserOwnerHost(
         enabled: hostInteractionHostsEnabled,
         child: WorkspaceWebVisitHost(
-          child: ToolApprovalHost(
-            enabled: hostInteractionHostsEnabled,
-            child: Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                Positioned.fill(child: child),
-                const TtsFloatingPanel(),
-                PluginLoadingOverlay(
-                  key: const ValueKey<String>('plugin-loading-overlay'),
-                  enabled: hostInteractionHostsEnabled,
-                ),
-              ],
+          child: AppToastHost(
+            child: ToolApprovalHost(
+              enabled: hostInteractionHostsEnabled,
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  Positioned.fill(child: child),
+                  const TtsFloatingPanel(),
+                  PluginLoadingOverlay(
+                    key: const ValueKey<String>('plugin-loading-overlay'),
+                    enabled: hostInteractionHostsEnabled,
+                  ),
+                ],
+              ),
             ),
           ),
         ),

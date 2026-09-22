@@ -275,8 +275,8 @@ pub fn buildRuntimeBootstrapScript() -> String {
                     }} catch (_deleteTimerError) {{
                         window[timerId] = undefined;
                     }}
-                    if (typeof __operitUnregisterCallTimer === 'function') {{
-                        __operitUnregisterCallTimer(timerCallId, timerId);
+                    if (typeof __operitActivateCall === 'function') {{
+                        __operitActivateCall(timerCallId);
                     }}
                     try {{
                         handler.apply(window, timerArguments);
@@ -289,6 +289,12 @@ pub fn buildRuntimeBootstrapScript() -> String {
                         ) {{
                             activeRuntime.fail(error);
                         }}
+                    }} finally {{
+                        Promise.resolve().then(function() {{
+                            if (typeof __operitUnregisterCallTimer === 'function') {{
+                                __operitUnregisterCallTimer(timerCallId, timerId);
+                            }}
+                        }});
                     }}
                 }};
                 var normalizedDelay = Number(delayMs);
@@ -425,6 +431,10 @@ pub fn buildRuntimeBootstrapScript() -> String {
             }},
             listImportedPackagesJson: function() {{
                 return __operitNativeListImportedPackagesJson();
+            }},
+            /** Returns host-owned executable tool schemas as JSON. */
+            getToolCatalogJson: function() {{
+                return __operitNativeGetToolCatalogJson();
             }},
             resolveToolName: function(packageName, subpackageId, toolName, preferImported) {{
                 return __operitNativeResolveToolName(
@@ -588,6 +598,22 @@ pub fn buildRuntimeBootstrapScript() -> String {
                 parsed = raw;
             }}
             return __operitParseToolResult(parsed, false);
+        }}
+
+        /** Returns the host-owned executable tool catalog for workflow editors. */
+        function getToolCatalog() {{
+            var raw = NativeInterface.getToolCatalogJson();
+            var catalog = JSON.parse(raw);
+            if (!catalog) {{
+                throw new Error('Tool catalog request returned no response');
+            }}
+            if (catalog.success === false) {{
+                throw new Error(String(catalog.message || 'Tool catalog request failed'));
+            }}
+            if (!Array.isArray(catalog.tools)) {{
+                throw new Error('Tool catalog response must contain a tools array');
+            }}
+            return catalog;
         }}
 
         globalThis.__operitCompleteCalled = false;
@@ -925,7 +951,12 @@ pub fn buildRuntimeBootstrapScript() -> String {
                         delete globalThis.__operit_call_runtime_ref;
                     }}
                 }}
-                if (typeof globalThis.__operitCleanupCallSession === 'function') {{
+                if (callState.pendingReferences > 0) {{
+                    callState.detached = true;
+                    if (typeof globalThis.__operitNotifyDetachedCall === 'function') {{
+                        globalThis.__operitNotifyDetachedCall(callId);
+                    }}
+                }} else if (typeof globalThis.__operitCleanupCallSession === 'function') {{
                     globalThis.__operitCleanupCallSession(callId);
                 }}
             }}
@@ -1411,7 +1442,14 @@ pub fn buildRuntimeBootstrapScript() -> String {
                                 Date.now() +
                                 '_' +
                                 Math.random().toString(36).slice(2, 10);
+                            var ownerCallId = String(globalThis.__operitCurrentCallId || '');
+                            if (typeof globalThis.__operitRetainCallReference === 'function') {{
+                                globalThis.__operitRetainCallReference(ownerCallId);
+                            }}
                             globalThis[callbackId] = function(resultJson, isError) {{
+                                if (typeof globalThis.__operitActivateCall === 'function') {{
+                                    globalThis.__operitActivateCall(ownerCallId);
+                                }}
                                 try {{
                                     delete globalThis[callbackId];
                                 }} catch (_deleteCallbackError) {{
@@ -1419,6 +1457,11 @@ pub fn buildRuntimeBootstrapScript() -> String {
                                 }}
                                 if (isError) {{
                                     reject(new Error(__operitText(resultJson).trim() || 'ToolPkg.ipc call failed'));
+                                    Promise.resolve().then(function() {{
+                                        if (typeof globalThis.__operitReleaseCallReference === 'function') {{
+                                            globalThis.__operitReleaseCallReference(ownerCallId);
+                                        }}
+                                    }});
                                     return;
                                 }}
                                 var parsed;
@@ -1445,22 +1488,32 @@ pub fn buildRuntimeBootstrapScript() -> String {
                                     reject(
                                         new Error(
                                             'ToolPkg.ipc returned invalid JSON: ' +
-                                                __operitText(error && error.message ? error.message : error)
+                                            __operitText(error && error.message ? error.message : error)
                                         )
                                     );
+                                    Promise.resolve().then(function() {{
+                                        if (typeof globalThis.__operitReleaseCallReference === 'function') {{
+                                            globalThis.__operitReleaseCallReference(ownerCallId);
+                                        }}
+                                    }});
                                     return;
                                 }}
                                 if (parsed && parsed.success === true) {{
                                     resolve(parsed.value);
-                                    return;
+                                }} else {{
+                                    reject(
+                                        new Error(
+                                            parsed && typeof parsed.message === 'string' && parsed.message.trim().length > 0
+                                                ? parsed.message.trim()
+                                                : 'ToolPkg.ipc call failed'
+                                        )
+                                    );
                                 }}
-                                reject(
-                                    new Error(
-                                        parsed && typeof parsed.message === 'string' && parsed.message.trim().length > 0
-                                            ? parsed.message.trim()
-                                            : 'ToolPkg.ipc call failed'
-                                    )
-                                );
+                                Promise.resolve().then(function() {{
+                                    if (typeof globalThis.__operitReleaseCallReference === 'function') {{
+                                        globalThis.__operitReleaseCallReference(ownerCallId);
+                                    }}
+                                }});
                             }};
                             try {{
                                 NativeInterface.invokeToolPkgIpcAsync(
@@ -1479,6 +1532,11 @@ pub fn buildRuntimeBootstrapScript() -> String {
                                     globalThis[callbackId] = undefined;
                                 }}
                                 reject(error);
+                                Promise.resolve().then(function() {{
+                                    if (typeof globalThis.__operitReleaseCallReference === 'function') {{
+                                        globalThis.__operitReleaseCallReference(ownerCallId);
+                                    }}
+                                }});
                             }}
                         }});
                     }};

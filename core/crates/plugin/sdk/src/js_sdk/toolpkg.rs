@@ -43,6 +43,13 @@ pub enum ToolPkgHookEventNameVariant7 {
     #[serde(rename = "navigation_entry_action")]
     NavigationEntryAction,
 }
+/// Carries the manifest-extension hook discriminator.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum ToolPkgHookEventNameVariant20 {
+    /// Identifies a manifest extension delivered by a required ToolPkg package.
+    #[serde(rename = "manifest_extension")]
+    ManifestExtension,
+}
 /// Enumerates values to which an asynchronous generic hook may resolve.
 pub enum ToolPkgHookReturnVariant3Output {
     Variant1(ToolPkgJsonValue),
@@ -519,6 +526,7 @@ pub enum ToolPkgHookEventName {
     Variant14(ToolPkgSummaryGenerateEventName),
     Variant19(ToolPkgCoreCommandEventName),
     Variant15(ToolPkgHostEventName),
+    Variant20(ToolPkgHookEventNameVariant20),
 }
 /// Accepts a JSON result, no result, or asynchronous completion from a generic hook.
 pub enum ToolPkgHookReturn {
@@ -1190,6 +1198,9 @@ pub type ToolPkgSummaryGenerateHookHandler =
 /// Callback invoked when the host executes a registered Core command.
 pub type ToolPkgCoreCommandHandler =
     Arc<dyn Fn(ToolPkgCoreCommandHookEvent) -> ToolPkgCoreCommandHandlerOutput + Send + Sync>;
+/// Callback invoked when a dependent ToolPkg manifest extension is delivered.
+pub type ToolPkgManifestExtensionHookHandler =
+    Arc<dyn Fn(ToolPkgManifestExtensionHookEvent) -> ToolPkgHookReturn + Send + Sync>;
 /// Carries a hook discriminator, typed payload, package identity, and dispatch metadata.
 pub struct ToolPkgHookEventBase<TEventName, TPayload> {
     /// Identifies the hook event being dispatched.
@@ -1249,6 +1260,19 @@ pub struct ToolPkgXmlRenderEventPayload {
     pub tagName: Option<String>,
     /// Identifies the conversation that owns the rendered XML block.
     pub chatId: Option<String>,
+}
+/// Carries data from one manifest extension declared by a dependent ToolPkg.
+pub struct ToolPkgManifestExtensionEventPayload {
+    /// Identifies the manifest extension key selected for dispatch.
+    pub extensionKey: String,
+    /// Identifies the ToolPkg that declared the extension.
+    pub sourceToolPkgId: String,
+    /// Contains the source ToolPkg version.
+    pub sourceVersion: String,
+    /// Contains the selected manifest extension value.
+    pub extension: ToolPkgJsonValue,
+    /// Contains every extension field declared by the source manifest.
+    pub manifestExtensions: ToolPkgJsonObject,
 }
 /// Carries input menu toggle data supplied when the event is dispatched.
 pub struct ToolPkgInputMenuToggleEventPayload {
@@ -1855,6 +1879,34 @@ pub struct ToolPkgUiRouteRegistration {
     /// Provides primary text displayed by the host UI.
     pub title: Option<ToolPkgLocalizedText>,
     /// Controls whether the host retains the UI instance between visits.
+    pub keepAlive: Option<bool>,
+}
+/// Combines shared dispatch metadata with one manifest extension payload.
+pub struct ToolPkgManifestExtensionHookEvent {
+    /// Carries shared dispatch metadata and the manifest extension payload.
+    pub base_hook_event_base: ToolPkgHookEventBase<
+        ToolPkgHookEventNameVariant20,
+        ToolPkgManifestExtensionEventPayload,
+    >,
+}
+/// Identifies a host-owned chat composer extension location.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum ToolPkgChatComposerSlotName {
+    /// Renders immediately above the message input surface.
+    #[serde(rename = "above_input")]
+    AboveInput,
+}
+/// Describes a Compose DSL screen contributed to a chat composer slot.
+pub struct ToolPkgChatComposerSlotRegistration {
+    /// Uniquely identifies this slot contribution within the package.
+    pub id: String,
+    /// Selects the host-owned location that renders this contribution.
+    pub slot: ToolPkgChatComposerSlotName,
+    /// Contains the Compose DSL screen rendered by the host.
+    pub screen: ComposeDslScreen,
+    /// Controls relative placement among contributions to the same slot.
+    pub order: Option<f64>,
+    /// Controls whether the host retains the screen while its chat remains open.
     pub keepAlive: Option<bool>,
 }
 /// Enumerates supported navigation surface values.
@@ -2672,6 +2724,13 @@ pub struct ToolPkgIpcCallOptions {
     ///Exact target context key, required for non-main runtime calls.
     pub targetContextKey: Option<String>,
 }
+/// Registers a handler for a named manifest extension field.
+pub struct ToolPkgManifestExtensionRegistration {
+    /// Identifies the manifest extension key accepted by this handler.
+    pub key: String,
+    /// Provides the callback invoked for matching dependent manifests.
+    pub function: ToolPkgManifestExtensionHookHandler,
+}
 /// Represents the IPC API exposed on a ToolPkg registry.
 pub struct ToolPkgIpcApi;
 
@@ -2731,6 +2790,8 @@ pub trait ToolPkgRegistryMethods: Send + Sync {
     fn registerToolboxUiModule(&self, definition: ToolPkgToolboxUiModuleRegistration) -> ();
     /// Registers a routable Compose DSL screen for the current plugin.
     fn registerUiRoute(&self, definition: ToolPkgUiRouteRegistration) -> ();
+    /// Registers a Compose DSL contribution for a host-owned chat composer slot.
+    fn registerChatComposerSlot(&self, definition: ToolPkgChatComposerSlotRegistration) -> ();
     /// Adds a plugin action to a host navigation surface.
     fn registerNavigationEntry(&self, definition: ToolPkgNavigationEntryRegistration) -> ();
     /// Registers a plugin widget on the desktop surface.
@@ -2812,9 +2873,19 @@ pub trait ToolPkgRegistryMethods: Send + Sync {
     fn registerCoreCommand(&self, definition: ToolPkgCoreCommandRegistration) -> ();
     /// Registers an AI provider and its required operation callbacks.
     fn registerAiProvider(&self, definition: ToolPkgAiProviderRegistration) -> ();
+    /// Registers a handler for one manifest extension declared by dependent ToolPkg packages.
+    fn registerManifestExtension(&self, definition: ToolPkgManifestExtensionRegistration) -> ();
     /// Extracts a packaged plugin resource and resolves to its readable path.
     fn readResource(
         &self,
+        key: String,
+        outputFileName: Option<String>,
+        internal: Option<bool>,
+    ) -> JsFuture<String>;
+    /// Extracts a resource owned by another ToolPkg container and resolves to its readable path.
+    fn readResourceFromPackage(
+        &self,
+        packageNameOrSubpackageId: String,
         key: String,
         outputFileName: Option<String>,
         internal: Option<bool>,
@@ -2828,6 +2899,11 @@ pub trait GlobalHost: Send + Sync {
     fn registerToolPkgToolboxUiModule(&self, definition: ToolPkgToolboxUiModuleRegistration) -> ();
     /// Registers a routable Compose DSL screen for the current plugin. The global binding delegates to the active ToolPkg registry.
     fn registerToolPkgUiRoute(&self, definition: ToolPkgUiRouteRegistration) -> ();
+    /// Registers a Compose DSL contribution for a host-owned chat composer slot. The global binding delegates to the active ToolPkg registry.
+    fn registerToolPkgChatComposerSlot(
+        &self,
+        definition: ToolPkgChatComposerSlotRegistration,
+    ) -> ();
     /// Adds a plugin action to a host navigation surface. The global binding delegates to the active ToolPkg registry.
     fn registerToolPkgNavigationEntry(&self, definition: ToolPkgNavigationEntryRegistration) -> ();
     /// Registers a plugin widget on the desktop surface. The global binding delegates to the active ToolPkg registry.
@@ -2925,6 +3001,11 @@ pub trait GlobalHost: Send + Sync {
     fn registerToolPkgCoreCommand(&self, definition: ToolPkgCoreCommandRegistration) -> ();
     /// Registers an AI provider and its required operation callbacks. The global binding delegates to the active ToolPkg registry.
     fn registerToolPkgAiProvider(&self, definition: ToolPkgAiProviderRegistration) -> ();
+    /// Registers a handler for one dependent ToolPkg manifest extension. The global binding delegates to the active ToolPkg registry.
+    fn registerToolPkgManifestExtension(
+        &self,
+        definition: ToolPkgManifestExtensionRegistration,
+    ) -> ();
 }
 /// Binds the complete registry API to the JavaScript `ToolPkg` global.
 pub struct ToolPkgGlobalBinding;
