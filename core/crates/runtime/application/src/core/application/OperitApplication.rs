@@ -372,7 +372,7 @@ impl OperitApplication {
             .clone()
             .expect("runtime task scheduler host must be configured for plugin startup");
         let startup = move || {
-            showPluginLoading();
+            let loadingGeneration = showPluginLoading();
             packageManager
                 .lock()
                 .expect("package manager mutex poisoned")
@@ -382,7 +382,7 @@ impl OperitApplication {
                 .getMcpStartupTimeoutSeconds()
                 .expect("api preferences must provide mcp startup timeout seconds");
             let _ = starter.startAllDeployedPluginsWithTimeout(timeoutSeconds);
-            completePluginLoadingSession();
+            completePluginLoadingSession(loadingGeneration);
         };
         taskScheduler
             .scheduleHostRuntimeTask("operit-plugin-startup", Box::new(startup))
