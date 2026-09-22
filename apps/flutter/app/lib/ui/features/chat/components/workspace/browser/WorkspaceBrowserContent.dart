@@ -300,8 +300,10 @@ class _WorkspaceBrowserContentState extends State<WorkspaceBrowserContent> {
                     builder: (context, child) => OperitGlassSurface(
                       color: Theme.of(
                         context,
-                      ).colorScheme.surfaceContainer.withValues(alpha: 0.62),
+                      ).colorScheme.surfaceContainer,
                       layer: OperitGlassSurfaceLayer.card,
+                      transparentAlpha: 1,
+                      enableBackdropFilter: false,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: Theme.of(
