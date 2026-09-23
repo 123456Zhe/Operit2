@@ -77,6 +77,7 @@ protected:
   struct FrameReadbackRequest {
     winrt::com_ptr<ID3D11Texture2D> texture;
     FrameCopyCallback callback;
+    std::function<void()> release_readback;
   };
   std::mutex frame_readback_mutex_;
   std::condition_variable frame_readback_condition_;
@@ -95,6 +96,14 @@ protected:
   EventRegistrationToken on_frame_arrived_token_ = {};
 
   virtual void StopInternal();
+
+  /// Copies one capture-pool texture into bridge-owned storage.
+  /// The caller releases the pool texture as soon as this returns.
+  virtual bool PublishCapturedTexture(ID3D11Texture2D *texture) = 0;
+
+  /// Holds the published texture until a CPU readback finishes copying it.
+  virtual std::function<void()> RetainReadback();
+
   void OnFrameArrived();
   bool ShouldDropFrame();
 
@@ -108,6 +117,10 @@ protected:
   // corresponds to DXGI_FORMAT_B8G8R8A8_UNORM
   static constexpr auto kPixelFormat = ABI::Windows::Graphics::DirectX::
       DirectXPixelFormat::DirectXPixelFormat_B8G8R8A8UIntNormalized;
+
+  // Two pool buffers let capture produce the next frame while Flutter still
+  // holds the previous one.
+  static constexpr int kNumBuffers = 2;
 };
 
 } // namespace webview_all_windows

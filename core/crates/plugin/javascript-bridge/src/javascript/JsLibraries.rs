@@ -247,6 +247,7 @@ pub fn buildRuntimeBootstrapScript() -> String {
             warn: function() {{ NativeInterface.logWarningForCall('', Array.prototype.slice.call(arguments).join(' ')); }},
             error: function() {{ NativeInterface.logErrorForCall('', Array.prototype.slice.call(arguments).join(' ')); }}
         }};
+        var intervalStates = {{}};
         var NativeInterface = {{
             callTool: function(toolType, toolName, paramsJson) {{
                 return __operitNativeCallTool(String(toolType || 'default'), String(toolName || ''), String(paramsJson || '{{}}'));
@@ -297,6 +298,7 @@ pub fn buildRuntimeBootstrapScript() -> String {
                         }});
                     }}
                 }};
+                window[timerId].__operitTimerCallId = timerCallId;
                 var normalizedDelay = Number(delayMs);
                 if (!isFinite(normalizedDelay) || normalizedDelay < 0) {{
                     throw new RangeError('setTimeout delay must be a finite non-negative number');
@@ -318,18 +320,50 @@ pub fn buildRuntimeBootstrapScript() -> String {
             clearTimeout: function(timerId) {{
                 var normalizedTimerId = String(timerId || '');
                 if (normalizedTimerId) {{
+                    var timerCallback = window[normalizedTimerId];
+                    var timerCallId;
+                    if (timerCallback && typeof timerCallback.__operitTimerCallId === 'string') {{
+                        timerCallId = timerCallback.__operitTimerCallId;
+                    }}
                     try {{
                         delete window[normalizedTimerId];
                     }} catch (_deleteTimerError) {{
                         window[normalizedTimerId] = undefined;
                     }}
-                    if (typeof __operitUnregisterCallTimer === 'function') {{
-                        __operitUnregisterCallTimer(
-                            String(globalThis.__operitCurrentCallId || ''),
-                            normalizedTimerId
-                        );
+                    if (timerCallId && typeof __operitUnregisterCallTimer === 'function') {{
+                        __operitUnregisterCallTimer(timerCallId, normalizedTimerId);
                     }}
                 }}
+            }},
+            setInterval: function(handler, delayMs) {{
+                if (typeof handler !== 'function') {{
+                    throw new TypeError('setInterval handler must be a function');
+                }}
+                var intervalId = '__operit_interval_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+                var timerArguments = Array.prototype.slice.call(arguments, 2);
+                var state = {{ active: true, timerId: null }};
+                intervalStates[intervalId] = state;
+                var scheduleNext = function() {{
+                    if (!state.active) return;
+                    state.timerId = NativeInterface.setTimeout(function() {{
+                        if (!state.active) return;
+                        try {{
+                            handler.apply(window, timerArguments);
+                        }} finally {{
+                            scheduleNext();
+                        }}
+                    }}, delayMs);
+                }};
+                scheduleNext();
+                return intervalId;
+            }},
+            clearInterval: function(intervalId) {{
+                var normalizedIntervalId = String(intervalId || '');
+                var state = intervalStates[normalizedIntervalId];
+                if (!state) return;
+                state.active = false;
+                if (state.timerId) NativeInterface.clearTimeout(state.timerId);
+                delete intervalStates[normalizedIntervalId];
             }},
             /// Forwards plugin informational output to the shared application logger.
             logInfoForCall: function(callId, message) {{
@@ -529,6 +563,8 @@ pub fn buildRuntimeBootstrapScript() -> String {
 
         var setTimeout = NativeInterface.setTimeout;
         var clearTimeout = NativeInterface.clearTimeout;
+        var setInterval = NativeInterface.setInterval;
+        var clearInterval = NativeInterface.clearInterval;
 
         {}
 
@@ -962,7 +998,7 @@ pub fn buildRuntimeBootstrapScript() -> String {
             }}
             function isActive() {{
                 var state = getCallState();
-                return !!(state && !state.completed);
+                return !!(state && (!state.completed || state.detached));
             }}
             function readCallValue(key, defaultValue) {{
                 var state = getCallState();
@@ -1011,10 +1047,11 @@ pub fn buildRuntimeBootstrapScript() -> String {
             }}
             function completeCall(resultText) {{
                 var state = getCallState();
-                if (!state || state.completed) {{
+                if (!state || state.resultCompleted) {{
                     return;
                 }}
-                state.completed = true;
+                state.resultCompleted = true;
+                state.completed = Number(state.pendingReferences || 0) <= 0;
                 try {{
                     NativeInterface.logJsExecutionTrace(callId, 'complete ' + __operitText(resultText).slice(0, 240));
                     NativeInterface.setCallResult(callId, resultText);
@@ -1024,10 +1061,11 @@ pub fn buildRuntimeBootstrapScript() -> String {
             }}
             function emitError(message) {{
                 var state = getCallState();
-                if (!state || state.completed) {{
+                if (!state || state.resultCompleted) {{
                     return;
                 }}
-                state.completed = true;
+                state.resultCompleted = true;
+                state.completed = Number(state.pendingReferences || 0) <= 0;
                 try {{
                     NativeInterface.logJsExecutionTrace(callId, 'error ' + __operitText(message).slice(0, 240));
                     NativeInterface.setCallError(callId, JSON.stringify({{

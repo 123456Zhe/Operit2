@@ -185,11 +185,14 @@ pub fn buildComposeDslRuntimeWrappedScript(script: &str) -> String {
 
                 /// Serializes after the render callback stack unwinds.
                 function __operit_send_intermediate_result(__value) {{
-                    if (typeof sendIntermediateResult !== 'function') {{
+                    if (
+                        !__composeActionCallRuntime ||
+                        typeof __composeActionCallRuntime.sendIntermediateResult !== 'function'
+                    ) {{
                         return;
                     }}
                     return Promise.resolve().then(function() {{
-                        sendIntermediateResult(__value);
+                        __composeActionCallRuntime.sendIntermediateResult(__value);
                     }});
                 }}
 
@@ -197,9 +200,16 @@ pub fn buildComposeDslRuntimeWrappedScript(script: &str) -> String {
                 var __intermediateRenderQueued = false;
                 var __intermediateRenderInFlight = false;
                 var __unsubscribeStateChange = null;
+                var __composeActionCallRuntime =
+                    typeof __root.__operit_call_runtime_ref === 'object' &&
+                    __root.__operit_call_runtime_ref
+                        ? __root.__operit_call_runtime_ref
+                        : null;
+                var __composeActionCallId = String(
+                    typeof __operitCurrentCallId === 'string' ? __operitCurrentCallId : ''
+                );
 
-                function __operit_finalize_action() {{
-                    __actionSettled = true;
+                function __operit_finalize_detached_state_listener() {{
                     if (typeof __unsubscribeStateChange === 'function') {{
                         try {{
                             __unsubscribeStateChange();
@@ -209,15 +219,43 @@ pub fn buildComposeDslRuntimeWrappedScript(script: &str) -> String {
                     }}
                 }}
 
+                function __operit_can_render_intermediate() {{
+                    if (!__actionSettled) {{
+                        return true;
+                    }}
+                    var __callId = __composeActionCallId;
+                    var __callState =
+                        typeof __operitGetCallState === 'function'
+                            ? __operitGetCallState(__callId)
+                            : null;
+                    return !!(__callState && __callState.detached);
+                }}
+
+                function __operit_finalize_action() {{
+                    __actionSettled = true;
+                    var __callId = String(
+                        typeof __operitCurrentCallId === 'string' ? __operitCurrentCallId : ''
+                    );
+                    var __callState =
+                        typeof __operitGetCallState === 'function'
+                            ? __operitGetCallState(__callId)
+                            : null;
+                    if (__callState && Number(__callState.pendingReferences || 0) > 0) {{
+                        __callState.detachedCleanup = __operit_finalize_detached_state_listener;
+                    }} else {{
+                        __operit_finalize_detached_state_listener();
+                    }}
+                }}
+
                 function __operit_render_and_send_intermediate() {{
-                    if (__actionSettled) {{
+                    if (!__operit_can_render_intermediate()) {{
                         return null;
                     }}
                     try {{
                         var __intermediateResponse = __operit_build_compose_response(__bundle, __entry, undefined, false);
                         if (__operit_is_promise(__intermediateResponse)) {{
                             return __intermediateResponse.then(function(__resolvedIntermediate) {{
-                                if (!__actionSettled) {{
+                                if (__operit_can_render_intermediate()) {{
                                     return __operit_send_intermediate_result(__resolvedIntermediate);
                                 }}
                             }});
@@ -233,7 +271,7 @@ pub fn buildComposeDslRuntimeWrappedScript(script: &str) -> String {
                 }}
 
                 function __operit_process_intermediate_queue() {{
-                    if (__actionSettled || __intermediateRenderInFlight || !__intermediateRenderQueued) {{
+                    if (!__operit_can_render_intermediate() || __intermediateRenderInFlight || !__intermediateRenderQueued) {{
                         return;
                     }}
                     __intermediateRenderQueued = false;
@@ -245,20 +283,20 @@ pub fn buildComposeDslRuntimeWrappedScript(script: &str) -> String {
                             function() {{}}
                         ).then(function() {{
                             __intermediateRenderInFlight = false;
-                            if (__intermediateRenderQueued && !__actionSettled) {{
+                            if (__intermediateRenderQueued && __operit_can_render_intermediate()) {{
                                 __operit_process_intermediate_queue();
                             }}
                         }});
                         return;
                     }}
                     __intermediateRenderInFlight = false;
-                    if (__intermediateRenderQueued && !__actionSettled) {{
+                    if (__intermediateRenderQueued && __operit_can_render_intermediate()) {{
                         __operit_process_intermediate_queue();
                     }}
                 }}
 
                 function __operit_schedule_intermediate_render() {{
-                    if (__actionSettled) {{
+                    if (!__operit_can_render_intermediate()) {{
                         return;
                     }}
                     __intermediateRenderQueued = true;

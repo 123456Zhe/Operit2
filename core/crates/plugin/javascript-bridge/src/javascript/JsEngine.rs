@@ -58,6 +58,8 @@ thread_local! {
     static CURRENT_EXECUTION_HOST: RefCell<Option<Arc<dyn JsExecutionHost>>> = RefCell::new(None);
     static CURRENT_INTERMEDIATE_CALLBACK: RefCell<Option<Arc<dyn Fn(String) + Send + Sync>>> = RefCell::new(None);
     static CURRENT_EXECUTION_LISTENER: RefCell<Option<JsExecutionListenerRef>> = RefCell::new(None);
+    static CURRENT_DETACHED_INTERMEDIATE_CALLBACKS: RefCell<BTreeMap<String, Arc<dyn Fn(String) + Send + Sync>>> =
+        RefCell::new(BTreeMap::new());
     static CURRENT_ENV_OVERRIDES: RefCell<BTreeMap<String, String>> = RefCell::new(BTreeMap::new());
     static CURRENT_CALL_RESULTS: RefCell<BTreeMap<String, String>> = RefCell::new(BTreeMap::new());
     static CURRENT_TOOLPKG_TEXT_RESOURCES: RefCell<Option<Arc<ToolPkgTextResources>>> = RefCell::new(None);
@@ -83,6 +85,7 @@ pub struct JsComposeDslActionEventStream {
 struct JsEngineWorker {
     runtimeHost: Arc<dyn HostJavaScriptRuntimeHost>,
     stateHandle: HostJavaScriptRuntimeStateHandle,
+    alive: Arc<AtomicBool>,
 }
 
 struct JsAsyncCallback {
@@ -131,6 +134,7 @@ struct JsEngineState {
     executionHost: Option<Arc<dyn JsExecutionHost>>,
     toolPkgContext: Option<ToolPkgExecutionContext>,
     composeDslTextResources: Option<Arc<ToolPkgTextResources>>,
+    detachedCallContexts: BTreeMap<String, JsCallContext>,
     jsEnvironmentInitialized: bool,
 }
 
@@ -162,10 +166,15 @@ impl JsEngineWorker {
             .expect("JavaScript runtime state must be created by the Host");
         let scheduled = Arc::new(AtomicBool::new(false));
         let requested = Arc::new(AtomicBool::new(false));
+        let alive = Arc::new(AtomicBool::new(true));
         let wakeRuntimeHost = runtimeHost.clone();
         let wakeScheduler = defaultHostRuntimeTaskSchedulerHost();
         let wakeSlot = backgroundWake.clone();
+        let wakeAlive = alive.clone();
         let wake: JsBackgroundWake = Arc::new(move || {
+            if !wakeAlive.load(Ordering::Acquire) {
+                return;
+            }
             requested.store(true, Ordering::Release);
             if scheduled.swap(true, Ordering::AcqRel) {
                 return;
@@ -175,7 +184,11 @@ impl JsEngineWorker {
             let taskScheduled = scheduled.clone();
             let taskRequested = requested.clone();
             let taskWakeSlot = wakeSlot.clone();
+            let taskAlive = wakeAlive.clone();
             let task: operit_host_api::HostRuntimeAsyncTask = Box::new(move || Box::pin(async move {
+                if !taskAlive.load(Ordering::Acquire) {
+                    return;
+                }
                 taskRequested.store(false, Ordering::Release);
                 let result = taskRuntimeHost
                     .executeHostJavaScriptRuntimeStateAsyncTask(
@@ -191,6 +204,9 @@ impl JsEngineWorker {
                     )
                     .await;
                 if let Err(error) = result {
+                    if !taskAlive.load(Ordering::Acquire) {
+                        return;
+                    }
                     AppLogger::e(TAG, &format!("detached JavaScript execution failed: {error}"));
                 }
                 taskScheduled.store(false, Ordering::Release);
@@ -206,7 +222,7 @@ impl JsEngineWorker {
             }
         });
         *backgroundWake.lock().expect("background wake mutex poisoned") = Some(wake);
-        Self { runtimeHost, stateHandle }
+        Self { runtimeHost, stateHandle, alive }
     }
 
     /// Executes one JavaScript request through the host-owned state executor.
@@ -412,6 +428,9 @@ impl JsEngineWorker {
 
     /// Destroys the host-owned JavaScript runtime state.
     fn destroy(&self) {
+        if !self.alive.swap(false, Ordering::AcqRel) {
+            return;
+        }
         self.runtimeHost
             .destroyHostJavaScriptRuntimeState(self.stateHandle)
             .expect("JavaScript runtime state must be destroyed by the Host");
@@ -969,6 +988,7 @@ impl JsEngineState {
             executionHost,
             toolPkgContext,
             composeDslTextResources: None,
+            detachedCallContexts: BTreeMap::new(),
             jsEnvironmentInitialized: false,
         };
         state.registerNativeInterface()?;
@@ -1163,6 +1183,8 @@ impl JsEngineState {
                     if let Some(message) = extractJsExecutionErrorMessage(output.as_deref()) {
                         return Err(JsExecutionError::runtime(message));
                     }
+                    self.rememberDetachedCallContext(&pending)
+                        .map_err(JsExecutionError::runtime)?;
                     return Ok(output);
                 }
                 JsScriptExecutionPoll::Pending => {}
@@ -1476,6 +1498,21 @@ impl JsEngineState {
 
     /// Advances detached JavaScript calls after their original request has returned.
     fn advanceDetachedJavaScriptExecution(&mut self) -> Result<(), String> {
+        let ids = self
+            .evalJavaScriptString("JSON.stringify(typeof __operitGetDetachedCallIds === 'function' ? __operitGetDetachedCallIds() : [])")?;
+        let ids: Vec<String> = serde_json::from_str(&ids).map_err(|error| error.to_string())?;
+        let callbacks = ids
+            .iter()
+            .filter_map(|callId| {
+                self.detachedCallContexts
+                    .get(callId)
+                    .and_then(|context| context.intermediateCallback.clone())
+                    .map(|callback| (callId.clone(), callback))
+            })
+            .collect::<BTreeMap<_, _>>();
+        CURRENT_DETACHED_INTERMEDIATE_CALLBACKS.with(|current| {
+            *current.borrow_mut() = callbacks;
+        });
         self.runJavaScriptJobs()?;
         loop {
             match self.asyncCallbackReceiver.try_recv() {
@@ -1487,17 +1524,64 @@ impl JsEngineState {
                 Err(mpsc::TryRecvError::Disconnected) => return Err("JavaScript asynchronous callback queue disconnected".to_string()),
             }
         }
-        let ids = self
-            .evalJavaScriptString("JSON.stringify(typeof __operitGetDetachedCallIds === 'function' ? __operitGetDetachedCallIds() : [])")?;
-        let ids: Vec<String> = serde_json::from_str(&ids).map_err(|error| error.to_string())?;
         for callId in ids {
             let callIdJson = serde_json::to_string(&callId).map_err(|error| error.to_string())?;
             let prepared = self.evalJavaScriptString(&format!(
-                "typeof __operitPrepareDetachedCall === 'function' && __operitPrepareDetachedCall({callIdJson})"
+                "JSON.stringify(typeof __operitPrepareDetachedCall === 'function' && __operitPrepareDetachedCall({callIdJson}))"
             ))?;
             if prepared == "true" {
                 self.runJavaScriptJobs()?;
             }
+        }
+        loop {
+            match self.asyncCallbackReceiver.try_recv() {
+                Ok(callback) => {
+                    self.deliverAsyncCallback(callback)?;
+                    self.runJavaScriptJobs()?;
+                }
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    return Err(
+                        "JavaScript asynchronous callback queue disconnected".to_string(),
+                    )
+                }
+            }
+        }
+        let activeIds = self
+            .evalJavaScriptString("JSON.stringify(typeof __operitGetDetachedCallIds === 'function' ? __operitGetDetachedCallIds() : [])")?;
+        let activeIds: Vec<String> = serde_json::from_str(&activeIds).map_err(|error| error.to_string())?;
+        let completedCallIds = self
+            .detachedCallContexts
+            .keys()
+            .filter(|callId| !activeIds.iter().any(|activeId| activeId == *callId))
+            .cloned()
+            .collect::<Vec<_>>();
+        for callId in completedCallIds {
+            let callIdJson = serde_json::to_string(&callId).map_err(|error| error.to_string())?;
+            self.evalJavaScriptVoid(&format!(
+                "if (typeof __operitFinalizeDetachedCall === 'function') {{ __operitFinalizeDetachedCall({callIdJson}); }}"
+            ))?;
+        }
+        self.detachedCallContexts
+            .retain(|callId, _| activeIds.iter().any(|activeId| activeId == callId));
+        CURRENT_DETACHED_INTERMEDIATE_CALLBACKS.with(|current| {
+            current.borrow_mut().clear();
+        });
+        Ok(())
+    }
+
+    /// Retains the callback context while a JavaScript call owns detached timers.
+    fn rememberDetachedCallContext(
+        &mut self,
+        pending: &JsPendingScriptExecution,
+    ) -> Result<(), String> {
+        let callIdJson = serde_json::to_string(&pending.callId).map_err(|error| error.to_string())?;
+        let detached = self.evalJavaScriptString(&format!(
+            "JSON.stringify((typeof __operitGetCallState === 'function' && __operitGetCallState({callIdJson}))?.detached === true)"
+        ))?;
+        if detached == "true" {
+            self.detachedCallContexts
+                .insert(pending.callId.clone(), pending.context.clone());
         }
         Ok(())
     }
@@ -2242,6 +2326,9 @@ fn clearThreadLocalCallState() {
     CURRENT_EXECUTION_LISTENER.with(|listener| {
         *listener.borrow_mut() = None;
     });
+    CURRENT_DETACHED_INTERMEDIATE_CALLBACKS.with(|callbacks| {
+        callbacks.borrow_mut().clear();
+    });
     CURRENT_ENV_OVERRIDES.with(|overrides| {
         overrides.borrow_mut().clear();
     });
@@ -2577,6 +2664,9 @@ fn nativeCallToolStrings(toolType: String, toolName: String, paramsJson: String)
 
 #[allow(non_snake_case)]
 fn nativeSendIntermediateResultString(callId: String, result: String) {
+    let detachedCallback = CURRENT_DETACHED_INTERMEDIATE_CALLBACKS.with(|callbacks| {
+        callbacks.borrow().get(&callId).cloned()
+    });
     CURRENT_EXECUTION_LISTENER.with(|listener| {
         if let Some(listener) = listener.borrow().as_ref() {
             listener.on_intermediate_result(&callId, &result);
@@ -2584,6 +2674,10 @@ fn nativeSendIntermediateResultString(callId: String, result: String) {
     });
     CURRENT_INTERMEDIATE_CALLBACK.with(|callback| {
         if let Some(callback) = callback.borrow().as_ref() {
+            callback(result);
+            return;
+        }
+        if let Some(callback) = detachedCallback {
             callback(result);
         }
     });

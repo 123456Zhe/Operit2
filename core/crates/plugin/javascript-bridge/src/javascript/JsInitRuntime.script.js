@@ -48,7 +48,9 @@
         callState.callId = resolvedCallId;
         callState.params = params && typeof params === 'object' ? params : {};
         callState.completed = false;
+        callState.resultCompleted = false;
         callState.detached = false;
+        callState.detachedCleanup = null;
         callState.pendingReferences = 0;
         callState.safetyTimeout = null;
         callState.safetyTimeoutFinal = null;
@@ -99,7 +101,23 @@
         var callState = getCallState(callId);
         if (!callState) return;
         callState.pendingReferences = Math.max(0, Number(callState.pendingReferences || 0) - 1);
-        if (callState.detached && callState.pendingReferences === 0) cleanupCallSession(callId);
+    }
+
+    /** Finalizes one detached call after its queued JavaScript jobs are delivered. */
+    function finalizeDetachedCall(callId) {
+        var callState = getCallState(callId);
+        if (!callState || !callState.detached || Number(callState.pendingReferences || 0) > 0) {
+            return false;
+        }
+        if (typeof callState.detachedCleanup === 'function') {
+            try {
+                callState.detachedCleanup();
+            } catch (_cleanupError) {
+            }
+            callState.detachedCleanup = null;
+        }
+        cleanupCallSession(callId);
+        return true;
     }
 
     function detachedCallIds() {
@@ -118,6 +136,15 @@
         root.__operitCurrentCallId = callId;
         root.__operit_call_runtime_ref = state.callRuntime;
         return true;
+    }
+
+    /** Activates one detached call before its queued JavaScript jobs are resumed. */
+    function prepareDetachedCall(callId) {
+        var state = getCallState(callId);
+        if (!state || state.completed || !state.detached || Number(state.pendingReferences || 0) <= 0) {
+            return false;
+        }
+        return activateCall(callId);
     }
 
     function clearCallTimers(callState) {
@@ -199,6 +226,8 @@
     expose('__operitReleaseCallReference', releaseCallReference);
     expose('__operitGetDetachedCallIds', detachedCallIds);
     expose('__operitActivateCall', activateCall);
+    expose('__operitPrepareDetachedCall', prepareDetachedCall);
+    expose('__operitFinalizeDetachedCall', finalizeDetachedCall);
     expose('__operitNotifyDetachedCall', function(callId) {
         if (typeof root.__operitNativeNotifyDetachedCall === 'function') {
             root.__operitNativeNotifyDetachedCall(normalizeCallId(callId));

@@ -36,6 +36,7 @@ const TEXT_EN: DialogText = {
   empty: "This message has no text to translate.",
 };
 
+/** Wraps a Compose state tuple for asynchronous translation updates. */
 function useStateCell<T>(
   ctx: ComposeDslContext,
   key: string,
@@ -45,10 +46,12 @@ function useStateCell<T>(
   return { value: pair[0], set: pair[1] };
 }
 
+/** Selects the dialog labels for the application language. */
 function resolveText(locale: string): DialogText {
   return locale.toLowerCase().startsWith("zh") ? TEXT_ZH : TEXT_EN;
 }
 
+/** Requires the message snapshot supplied by the menu invocation. */
 function requireMessage(
   message: ToolPkg.ChatMessageSnapshot | null
 ): ToolPkg.ChatMessageSnapshot {
@@ -58,10 +61,12 @@ function requireMessage(
   return message;
 }
 
+/** Selects the translation language from the application locale. */
 function resolveTargetLanguage(locale: string): string {
   return locale.toLowerCase().startsWith("zh") ? "Chinese" : "English";
 }
 
+/** Calls the configured translation model and updates the dialog state. */
 async function translateMessage(
   originalText: string,
   targetLanguage: string,
@@ -101,13 +106,14 @@ async function translateMessage(
   } catch (error) {
     console.error("message_translation translate failed:", error);
     errorMessage.set(
-      error instanceof Error ? error.message : "Tools.Chat.call failed"
+      error instanceof Error ? error.message : String(error)
     );
   } finally {
     loading.set(false);
   }
 }
 
+/** Renders the selected message and its independently requested translation. */
 export default function Screen(ctx: ComposeDslContext): ComposeNode {
   const message = useStateCell<ToolPkg.ChatMessageSnapshot | null>(
     ctx,
@@ -208,6 +214,7 @@ export default function Screen(ctx: ComposeDslContext): ComposeNode {
     title: text.title,
     text: ctx.UI.LazyColumn(
       {
+        width: 560,
         spacing: 12,
         modifier: ctx.Modifier.heightIn({ max: 420 }),
       },

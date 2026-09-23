@@ -72,12 +72,13 @@ class SettingsActivePill extends StatelessWidget {
       width: SettingsControlStyles.activePillSize.width,
       height: SettingsControlStyles.activePillSize.height,
       decoration: ShapeDecoration(
-        color: isDark
-            ? colorScheme.primary.withValues(alpha: 0.18)
-            : colorScheme.primaryContainer.withValues(alpha: 0.65),
+        color: Color.alphaBlend(
+          colorScheme.primary.withValues(alpha: isDark ? 0.16 : 0.08),
+          colorScheme.surfaceContainerHigh,
+        ),
         shape: StadiumBorder(
           side: BorderSide(
-            color: colorScheme.primary.withValues(alpha: isDark ? 0.35 : 0.4),
+            color: colorScheme.primary.withValues(alpha: isDark ? 0.30 : 0.32),
             width: 0.8,
           ),
         ),
@@ -91,7 +92,7 @@ class SettingsActivePill extends StatelessWidget {
             width: 6,
             height: 6,
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A),
+              color: colorScheme.primary,
               shape: BoxShape.circle,
             ),
           ),
@@ -100,9 +101,7 @@ class SettingsActivePill extends StatelessWidget {
             child: Text(
               label,
               style: SettingsControlStyles.activeTextStyle(context).copyWith(
-                color: isDark
-                    ? colorScheme.onSurface
-                    : colorScheme.onPrimaryContainer,
+                color: colorScheme.onSurface,
                 fontWeight: FontWeight.w600,
                 fontSize: 11,
               ),

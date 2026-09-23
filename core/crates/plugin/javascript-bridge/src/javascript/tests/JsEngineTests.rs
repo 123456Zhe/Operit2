@@ -488,6 +488,60 @@ fn javascript_timer_can_win_race_against_async_tool_call() {
     engine.destroy();
 }
 
+/// Verifies a detached-call preparation predicate is serialized before Rust reads it as text.
+#[test]
+fn detached_call_preparation_accepts_boolean_result() {
+    testJavaScriptRuntimeHost();
+    register_test_runtime_storage("js-engine-tests");
+    let mut state = newTestJsEngineState(None);
+    state
+        .initJavaScriptEnvironment()
+        .expect("JavaScript test environment must initialize");
+    state
+        .evalJavaScriptVoid(
+            "var call = __operitRegisterCallSession('detached-call', {}); call.detached = true; call.pendingReferences = 1;",
+        )
+        .expect("detached JavaScript call must initialize");
+
+    state
+        .advanceDetachedJavaScriptExecution()
+        .expect("detached JavaScript call preparation must accept a boolean predicate");
+}
+
+/// Verifies clearing a timer from another call releases the timer owner's reference.
+#[test]
+fn clearing_timer_from_another_call_releases_timer_owner_reference() {
+    testJavaScriptRuntimeHost();
+    register_test_runtime_storage("js-engine-tests");
+    let mut state = newTestJsEngineState(None);
+    state
+        .initJavaScriptEnvironment()
+        .expect("JavaScript test environment must initialize");
+    let result = state
+        .evalJavaScriptString(
+            r#"(function() {
+                globalThis.__operitNativeScheduleJavaScriptTimer = function() {};
+                var owner = __operitRegisterCallSession('timer-owner', {});
+                globalThis.__operitCurrentCallId = 'timer-owner';
+                var timerId = setInterval(function() {}, 60000);
+                var ownerPendingBeforeClear = owner.pendingReferences;
+                var clearer = __operitRegisterCallSession('timer-clearer', {});
+                globalThis.__operitCurrentCallId = 'timer-clearer';
+                clearInterval(timerId);
+                return JSON.stringify({
+                    ownerPendingBeforeClear: ownerPendingBeforeClear,
+                    ownerPendingAfterClear: owner.pendingReferences,
+                    clearerPendingAfterClear: clearer.pendingReferences
+                });
+            })()"#,
+        )
+        .expect("cross-call timer cleanup must return reference counts");
+    let counts: Value = serde_json::from_str(&result).expect("timer reference count JSON");
+    assert_eq!(counts["ownerPendingBeforeClear"], 1);
+    assert_eq!(counts["ownerPendingAfterClear"], 0);
+    assert_eq!(counts["clearerPendingAfterClear"], 0);
+}
+
 /// Verifies an asynchronous callback failure cleans its call state before the next request.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
@@ -1729,6 +1783,90 @@ fn render_planask_through_async_compose_host() {
     for raw in intermediate.iter() {
         let result: Value = serde_json::from_str(raw).unwrap();
         assert!(result["tree"].is_object(), "Unexpected intermediate result: {raw}");
+    }
+    engine.destroy();
+}
+
+/// Verifies a detached Compose timer can publish a render after its action settles.
+#[test]
+fn compose_timer_state_change_reaches_intermediate_render_after_action_completion() {
+    ensure_test_runtime_root();
+    let script = r#"
+        function Screen(ctx) {
+            const [count, setCount] = ctx.useState('count', 0);
+            const timer = ctx.useRef('timer', null);
+            const start = function() {
+                timer.current = setInterval(function() {
+                    setCount(1);
+                    clearInterval(timer.current);
+                }, 5);
+            };
+            return ctx.UI.Column({ onLoad: start }, [
+                ctx.UI.Text({ text: String(count) })
+            ]);
+        }
+        exports.default = Screen;
+    "#;
+    let engine = newTestJsEngine(Arc::new(TestPluginConfigExecutionHost::default()));
+    let runtime =
+        tokio::runtime::Runtime::new().expect("JavaScript async test runtime must start");
+    let params = testParams();
+    let renderedRaw = expect_js_output(
+        runtime.block_on(engine.execute_compose_dsl_script_async(
+            script.to_string(),
+            params.clone(),
+            BTreeMap::new(),
+            Arc::new(BTreeMap::new()),
+        )),
+        "Compose timer initial render",
+    );
+    let rendered: Value = serde_json::from_str(&renderedRaw).expect("initial render JSON");
+    let actionId = rendered["tree"]["props"]["onLoad"]["__actionId"]
+        .as_str()
+        .expect("Compose onLoad action id")
+        .to_string();
+    let mut actionParams = params;
+    actionParams.insert("state".to_string(), rendered["state"].clone());
+    actionParams.insert("memo".to_string(), rendered["memo"].clone());
+    let intermediate = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let intermediateForCallback = intermediate.clone();
+    let finalRaw = expect_js_output(
+        runtime.block_on(engine.dispatch_compose_dsl_action_result_async(
+            actionId,
+            None,
+            actionParams,
+            BTreeMap::new(),
+            Some(Arc::new(move |value| {
+                intermediateForCallback
+                    .lock()
+                    .expect("Compose timer intermediate mutex poisoned")
+                    .push(value);
+            })),
+        )),
+        "Compose timer action",
+    );
+    let finalResult: Value = serde_json::from_str(&finalRaw).expect("final action JSON");
+    assert_eq!(finalResult["state"]["count"], 0);
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        if intermediate
+            .lock()
+            .expect("Compose timer intermediate mutex poisoned")
+            .iter()
+            .any(|raw| {
+                serde_json::from_str::<Value>(raw)
+                    .ok()
+                    .and_then(|value| value["state"]["count"].as_i64())
+                    == Some(1)
+            })
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "detached timer render was not delivered"
+        );
+        std::thread::sleep(Duration::from_millis(10));
     }
     engine.destroy();
 }

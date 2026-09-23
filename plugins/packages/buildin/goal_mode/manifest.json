@@ -12,19 +12,5 @@
     "zh": "为当前聊天持续维护目标、监督任务完成，并在输入框上方显示目标状态。",
     "en": "Tracks a persistent chat goal, supervises task completion, and displays its status above the composer."
   },
-  "enabled_by_default": true,
-  "subpackages": [
-    {
-      "id": "goal_mode_tools",
-      "entry": "dist/packages/goal_mode_tools.js",
-      "display_name": {
-        "zh": "目标模式工具",
-        "en": "Goal Mode Tools"
-      },
-      "description": {
-        "zh": "在任务确实完成后更新当前目标状态。",
-        "en": "Updates the current goal after the task is truly complete."
-      }
-    }
-  ]
+  "enabled_by_default": true
 }

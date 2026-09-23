@@ -46,7 +46,6 @@ class WorkspaceBrowserViewStore extends ChangeNotifier {
   static const String _desktopUserAgent =
       'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-  static const String _localTextureTransport = 'localTexture';
   static const String _encodedStreamTransport = 'encodedStream';
   static const String _logTag = 'WorkspaceBrowserSurface';
 
@@ -566,7 +565,7 @@ class WorkspaceBrowserViewStore extends ChangeNotifier {
     }
     final descriptor = WorkspaceBrowserSurfaceDescriptor.fromJson(decoded);
     ClientLogger.i(
-      'descriptor session=${tab.id} transport=${descriptor.transport} platform=${descriptor.platform} textureId=${descriptor.textureId} streamId=${descriptor.streamId}',
+      'descriptor session=${tab.id} transport=${descriptor.transport} platform=${descriptor.platform} streamId=${descriptor.streamId}',
       tag: _logTag,
     );
     tab.updateSurfaceDescriptor(descriptor);
@@ -575,13 +574,7 @@ class WorkspaceBrowserViewStore extends ChangeNotifier {
   /// Builds the compositor transport requested by the current viewer.
   Map<String, Object?> _surfaceDisplayIntent() {
     final platform = defaultTargetPlatform;
-    final sameProcessWindows =
-        !kIsWeb &&
-        platform == TargetPlatform.windows &&
-        WidgetsBinding.instance.platformDispatcher.views.isNotEmpty;
-    final transport = sameProcessWindows
-        ? _localTextureTransport
-        : _encodedStreamTransport;
+    final transport = _encodedStreamTransport;
     ClientLogger.i(
       'displayIntent platform=${platform.name} transport=$transport',
       tag: _logTag,

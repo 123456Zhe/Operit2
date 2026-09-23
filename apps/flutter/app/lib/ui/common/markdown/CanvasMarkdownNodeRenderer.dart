@@ -176,6 +176,7 @@ class _MarkdownTextState extends State<_MarkdownText>
     final lines = widget.text.split('\n');
     var index = 0;
     var textBlockIndex = 0;
+    var paragraphBreakIndex = 0;
     var typewriterOffset = 0;
     var pendingParagraphBreak = false;
     final enableTypewriter = _enableTypewriter;
@@ -344,8 +345,10 @@ class _MarkdownTextState extends State<_MarkdownText>
         return;
       }
       widgets.add(
-        const SizedBox(
-          key: ValueKey<String>('markdown-paragraph-break'),
+        SizedBox(
+          key: ValueKey<String>(
+            'markdown-paragraph-break-${paragraphBreakIndex++}',
+          ),
           height: _markdownParagraphBreakHeight,
         ),
       );

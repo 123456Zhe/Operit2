@@ -391,6 +391,10 @@ impl RuntimePackageManager {
     ) -> ToolPkgComposeDslActionEventStream {
         let eventStream = MutableSharedStreamImpl::new(usize::MAX);
         let eventStreamForTask = eventStream.clone();
+        let keep_event_stream_open = runtimeOptions
+            .get("__operit_keep_compose_event_stream")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
         let engine = self.getToolPkgExecutionEngine(&contextKey, &containerPackageName);
         let scheduler = self
             .context
@@ -436,7 +440,9 @@ impl RuntimePackageManager {
                             }
                         }
                         eventStreamForTask.emit(buildComposeDslActionEvent("complete", None, None));
-                        eventStreamForTask.close();
+                        if !keep_event_stream_open {
+                            eventStreamForTask.close();
+                        }
                     })
                 }),
             )
@@ -989,8 +995,12 @@ impl RuntimePackageManager {
     /// Returns package names enabled in preferences after applying disabled package records.
     #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn getEnabledPackageNames(&self) -> Vec<String> {
-        let mut enabledPackageNames =
-            BTreeSet::from_iter(self.decodeEnabledPackageNamesFromPrefs());
+        let availablePackages = self.availablePackages();
+        let mut enabledPackageNames = self
+            .decodeEnabledPackageNamesFromPrefs()
+            .into_iter()
+            .filter(|packageName| availablePackages.contains_key(packageName))
+            .collect::<BTreeSet<_>>();
         let disabledPackageNames = BTreeSet::from_iter(self.decodeDisabledPackageNamesFromPrefs());
         for toolPackage in self.availablePackages().values() {
             if toolPackage.is_built_in

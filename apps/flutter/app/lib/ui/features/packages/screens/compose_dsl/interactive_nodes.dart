@@ -250,6 +250,7 @@ extension _ComposeInteractiveNodes on _ComposeDslRenderer {
   /// Presents a controlled modal node without occupying its parent's layout.
   Widget _dialog(BuildContext context, bool alert) {
     return _ComposeDialogHost(
+      embedded: embedDialog,
       properties: _stringMap(node.props['properties']),
       onDismissRequest: () async {
         final action = _actionId(node.props['onDismissRequest']);
@@ -314,27 +315,31 @@ extension _ComposeInteractiveNodes on _ComposeDslRenderer {
           contentTextStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: _color(context, node.props['textContentColor']),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              if (_hasSlot('text')) _slotColumn('text'),
-              if (node.props['text'] is String)
-                Text(node.props['text'] as String),
-              if (node.props['markdown'] is String)
-                _ComposeDslRenderer(
-                  node: _ComposeDslNode(
-                    type: 'Markdown',
-                    props: <String, Object?>{'text': node.props['markdown']},
-                    children: const [],
-                    slots: const {},
+          content: SizedBox(
+            width: _number(node.props['width']) ?? 560,
+            height: _number(node.props['height']) ?? 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                if (_hasSlot('text')) _slotColumn('text'),
+                if (node.props['text'] is String)
+                  Text(node.props['text'] as String),
+                if (node.props['markdown'] is String)
+                  _ComposeDslRenderer(
+                    node: _ComposeDslNode(
+                      type: 'Markdown',
+                      props: <String, Object?>{'text': node.props['markdown']},
+                      children: const [],
+                      slots: const {},
+                    ),
+                    onAction: onAction,
+                    webViewHostContext: webViewHostContext,
+                    splitMarkdownContent: splitMarkdownContent,
                   ),
-                  onAction: onAction,
-                  webViewHostContext: webViewHostContext,
-                  splitMarkdownContent: splitMarkdownContent,
-                ),
-              ..._slotChildren('content', useChildren: true),
-            ],
+                ..._slotChildren('content', useChildren: true),
+              ],
+            ),
           ),
           actions: <Widget>[
             if (_hasSlot('dismissButton'))

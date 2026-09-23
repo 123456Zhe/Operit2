@@ -50,6 +50,7 @@ class ToolPkgUiLauncherScreen extends StatefulWidget {
     this.initialRouteId,
     this.showLauncherChrome = true,
     this.showLoadingIndicator = true,
+    this.dialogTitle,
     this.initialState = const <String, Object?>{},
     this.initialMemo = const <String, Object?>{},
     this.initialModuleSpec,
@@ -60,6 +61,9 @@ class ToolPkgUiLauncherScreen extends StatefulWidget {
   final String? initialRouteId;
   final bool showLauncherChrome;
   final bool showLoadingIndicator;
+
+  /// Embeds the screen in the modal route owned by its caller.
+  final String? dialogTitle;
   final Map<String, Object?> initialState;
   final Map<String, Object?> initialMemo;
   final Map<String, Object?>? initialModuleSpec;
@@ -85,6 +89,7 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
   ColorScheme? _themeScheme;
   String? _error;
   Future<Object?> _actionTail = Future<Object?>.value();
+  final Set<StreamSubscription<String>> _detachedComposeEventSubscriptions = {};
 
   GeneratedApplicationPackageManagerCoreProxy get _packageManager =>
       widget.clients.application.packageManager();
@@ -345,6 +350,10 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
   @override
   void dispose() {
     PluginHotReload.revision.removeListener(_reloadDevelopmentPackage);
+    for (final subscription in _detachedComposeEventSubscriptions) {
+      unawaited(subscription.cancel());
+    }
+    _detachedComposeEventSubscriptions.clear();
     _routeLoadGeneration += 1;
     final executionContext = _activeExecutionContext;
     _activeExecutionContext = null;
@@ -398,54 +407,88 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
     final navigationCommands =
         <({String routeId, Map<String, Object?> args})>[];
     try {
-      await for (final event
-          in _packageManager.dispatchToolPkgComposeDslActionEvents(
-            contextKey: executionContextKey,
-            containerPackageName: widget.plugin.packageName,
-            actionId: actionId,
-            payload: payload,
-            runtimeOptions: _runtimeOptions(
-              uiModuleId: uiModuleId,
-              routeInstanceId: routeInstanceId,
-              executionContextKey: executionContextKey,
-            ),
-            envOverrides: const <String, String>{},
-          )) {
-        if (!mounted) {
-          return latestActionResult;
-        }
-        final parsedEvent = _ParsedComposeDslActionEvent.parse(event);
-        final phase = parsedEvent.phase;
-        if (phase == 'intermediate' || phase == 'final') {
-          latestActionResult = parsedEvent.actionResult;
-          navigationCommands.addAll(parsedEvent.navigationCommands);
-          final result = parsedEvent.renderResult;
-          if (result == null) {
-            continue;
-          }
+      final rootActionId = _actionId(_renderResult?.tree.props['onLoad']);
+      final keepDetachedEvents =
+          widget.initialModuleSpec?['slot'] == 'above_input' &&
+          rootActionId == actionId;
+      final runtimeOptions = _runtimeOptions(
+        uiModuleId: uiModuleId,
+        routeInstanceId: routeInstanceId,
+        executionContextKey: executionContextKey,
+      )..['__operit_keep_compose_event_stream'] = keepDetachedEvents;
+      final eventStream = _packageManager.dispatchToolPkgComposeDslActionEvents(
+        contextKey: executionContextKey,
+        containerPackageName: widget.plugin.packageName,
+        actionId: actionId,
+        payload: payload,
+        runtimeOptions: runtimeOptions,
+        envOverrides: const <String, String>{},
+      );
+      final completion = Completer<void>();
+      late final StreamSubscription<String> subscription;
+      subscription = eventStream.listen(
+        (event) {
           if (!mounted) {
-            return latestActionResult;
+            if (!completion.isCompleted) {
+              completion.complete();
+            }
+            unawaited(subscription.cancel());
+            return;
           }
-          setState(() {
-            _renderResult = result;
-            _error = null;
-          });
-        } else if (phase == 'error') {
-          final errorText = parsedEvent.errorText;
-          if (errorText == null) {
-            throw StateError('compose_dsl action error event missing error');
+          final parsedEvent = _ParsedComposeDslActionEvent.parse(event);
+          final phase = parsedEvent.phase;
+          if (phase == 'intermediate' || phase == 'final') {
+            latestActionResult = parsedEvent.actionResult;
+            navigationCommands.addAll(parsedEvent.navigationCommands);
+            final result = parsedEvent.renderResult;
+            if (result == null) {
+              return;
+            }
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _renderResult = result;
+              _error = null;
+            });
+          } else if (phase == 'error') {
+            final errorText = parsedEvent.errorText;
+            if (errorText == null) {
+              if (!completion.isCompleted) {
+                completion.completeError(
+                  StateError('compose_dsl action error event missing error'),
+                );
+              }
+              return;
+            }
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _error = errorText;
+            });
+            if (!completion.isCompleted) {
+              completion.completeError(StateError(errorText));
+            }
+          } else if (phase == 'complete') {
+            if (!completion.isCompleted) {
+              completion.complete();
+            }
+            if (!keepDetachedEvents) {
+              unawaited(subscription.cancel());
+            }
           }
-          if (!mounted) {
-            return latestActionResult;
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          if (!completion.isCompleted) {
+            completion.completeError(error, stackTrace);
           }
-          setState(() {
-            _error = errorText;
-          });
-          throw StateError(errorText);
-        } else if (phase == 'complete') {
-          break;
-        }
+        },
+      );
+      if (keepDetachedEvents) {
+        _detachedComposeEventSubscriptions.add(subscription);
       }
+      await completion.future;
       _navigateCommands(navigationCommands);
       return latestActionResult;
     } catch (error, stackTrace) {
@@ -651,6 +694,7 @@ class _ToolPkgUiLauncherScreenState extends State<ToolPkgUiLauncherScreen> {
             error: _error,
             renderResult: _renderResult,
             showLoadingIndicator: widget.showLoadingIndicator,
+            dialogTitle: widget.dialogTitle,
             onAction: _dispatchAction,
             webViewHostContext: webViewHostContext,
             splitMarkdownContent: (content) => widget

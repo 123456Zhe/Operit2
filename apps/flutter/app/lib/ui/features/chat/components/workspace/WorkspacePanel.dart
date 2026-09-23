@@ -84,8 +84,14 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
       icon: Icons.home_outlined,
       closable: false,
     ),
+    const WorkspaceTab(
+      kind: WorkspaceTabKind.browser,
+      title: 'Frame rate test',
+      icon: Icons.public,
+      url: 'http://127.0.0.1:18765/',
+    ),
   ];
-  int _selectedIndex = 0;
+  int _selectedIndex = 1;
   final List<WorkspaceTab> _secondaryTabs = <WorkspaceTab>[];
   final GlobalKey _primaryPaneKey = GlobalKey();
   final GlobalKey _secondaryPaneKey = GlobalKey();

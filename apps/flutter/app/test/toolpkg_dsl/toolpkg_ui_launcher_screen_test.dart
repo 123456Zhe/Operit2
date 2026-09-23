@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:desktop_widgets/desktop_widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,11 +14,111 @@ import 'package:operit2/core/proxy/generated/CoreProxyClients.g.dart';
 import 'package:operit2/core/proxy/generated/CoreProxyModels.g.dart'
     as core_proxy;
 import 'package:operit2/ui/features/packages/screens/ToolPkgUiLauncherScreen.dart';
+import 'package:operit2/ui/features/chat/components/MessageContextMenu.dart';
 import 'package:operit2/ui/main/navigation/AppNavigationModels.dart';
 
+/// Verifies plugin rendering and message-menu integration through the Core bridge.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(ClientLogger.initialize);
+
+  for (final sender in ['user', 'ai']) {
+    testWidgets('opens and closes translation from the $sender message menu', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = sender == 'user'
+          ? const Size(390, 844)
+          : const Size(1280, 720);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final bridge = _ToolPkgDslTestBridge(
+        renderResult: (_) => jsonEncode({
+          'success': true,
+          'tree': _node(
+            'AlertDialog',
+            props: {
+              'title': 'Translation dialog',
+              'confirmText': 'Translate',
+              'dismissText': 'Close',
+              'closeOnConfirm': false,
+              'onConfirm': {'__actionId': 'translate'},
+            },
+            slots: {
+              'text': [
+                _node(
+                  'LazyColumn',
+                  props: {'width': 560, 'height': 200},
+                  children: [
+                    _node('Text', props: {'text': 'Selected message'}),
+                  ],
+                ),
+              ],
+            },
+          ),
+        }),
+      );
+      final clients = GeneratedCoreProxyClients(bridge);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MessageContextMenu(
+              message: _translationMessage(sender),
+              chatId: 'translation-chat',
+              messageIndex: 3,
+              clients: clients,
+              packageManager: clients.application.packageManager(),
+              onToggleFavoriteMessage: (timestamp, isFavorite) async {},
+              child: const Text('Message bubble'),
+            ),
+          ),
+        ),
+      );
+      if (sender == 'user') {
+        await tester.longPress(find.text('Message bubble'));
+      } else {
+        await tester.tap(
+          find.text('Message bubble'),
+          buttons: kSecondaryButton,
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.translate), findsOneWidget);
+      await tester.tap(find.text('Translate message'));
+      await tester.pumpAndSettle();
+      final invocation =
+          bridge.calls
+                  .singleWhere(
+                    (call) =>
+                        call.methodName == 'invokeToolPkgChatMessageMenuItem',
+                  )
+                  .args
+              as Map;
+      expect(invocation['chatId'], 'translation-chat');
+      expect(invocation['messageIndex'], 3);
+      expect((invocation['message'] as Map)['content'], 'Selected message');
+      expect((invocation['message'] as Map)['sender'], sender);
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Selected message'), findsOneWidget);
+      final bounds = tester.getRect(find.byType(AlertDialog));
+      expect(bounds.left, greaterThanOrEqualTo(0));
+      expect(bounds.right, lessThanOrEqualTo(tester.view.physicalSize.width));
+      await tester.tap(find.text('Translate'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(bridge.calls.last.args, containsPair('actionId', 'translate'));
+      if (sender == 'user') {
+        await tester.tap(find.text('Close'));
+      } else {
+        await tester.tapAt(const Offset(4, 4));
+      }
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(ToolPkgUiLauncherScreen), findsNothing);
+      expect(find.text('Message bubble'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets(
     'publishes color-only theme changes without reloading the UI context',
@@ -658,7 +759,10 @@ void main() {
     final scriptCall = bridge.calls.singleWhere(
       (request) => request.methodName == 'getToolPkgComposeDslScript',
     );
-    expect(scriptCall.targetObjectId, 4);
+    final packageManagerId = GeneratedCoreProxyClients(
+      bridge,
+    ).application.packageManager().objectId;
+    expect(scriptCall.targetObjectId, packageManagerId);
     expect(scriptCall.args, isA<Map<String, Object?>>());
     final args = scriptCall.args as Map<String, Object?>;
     expect(args['containerPackageName'], 'demo_toolpkg');
@@ -667,7 +771,7 @@ void main() {
     final renderCall = bridge.calls.singleWhere(
       (request) => request.methodName == 'executeToolPkgComposeDslScript',
     );
-    expect(renderCall.targetObjectId, 4);
+    expect(renderCall.targetObjectId, packageManagerId);
     final renderArgs = renderCall.args as Map<String, Object?>;
     expect(
       renderArgs['contextKey'],
@@ -786,7 +890,10 @@ void main() {
     final args = actionCall.args as Map<String, Object?>;
     expect(args['actionId'], 'increment');
     expect(args['payload'], isNull);
-    expect(actionCall.targetObjectId, 4);
+    expect(
+      actionCall.targetObjectId,
+      GeneratedCoreProxyClients(bridge).application.packageManager().objectId,
+    );
     expect(
       args['contextKey'],
       startsWith(
@@ -1406,6 +1513,121 @@ void main() {
     expect(args['payload'], false);
   });
 
+  for (final contentLocation in ['children', 'slot']) {
+    testWidgets('renders icon button custom content from $contentLocation', (
+      tester,
+    ) async {
+      final icon = _node('Icon', props: {'name': 'delete', 'size': 16});
+      final bridge = _ToolPkgDslTestBridge(
+        renderResult: (_) => jsonEncode({
+          'success': true,
+          'tree': _node(
+            'Row',
+            children: [
+              _node(
+                'IconButton',
+                props: {
+                  'width': 32,
+                  'height': 32,
+                  'onClick': {'__actionId': 'delete'},
+                },
+                children: contentLocation == 'children' ? [icon] : [],
+                slots: contentLocation == 'slot'
+                    ? {
+                        'content': [icon],
+                      }
+                    : {},
+              ),
+            ],
+          ),
+        }),
+      );
+      await tester.pumpWidget(_screen(bridge));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(ErrorWidget), findsNothing);
+      final iconFinder = find.byIcon(Icons.delete);
+      final buttonFinder = find.byType(IconButton);
+      expect(tester.widget<Icon>(iconFinder).size, 16);
+      expect(tester.getSize(buttonFinder), const Size(32, 32));
+      expect(tester.getCenter(iconFinder), tester.getCenter(buttonFinder));
+      await tester.tap(buttonFinder);
+      await tester.pumpAndSettle();
+      final action = bridge.calls.lastWhere(
+        (call) => call.methodName == 'dispatchToolPkgComposeDslActionEvents',
+      );
+      expect((action.args as Map<String, Object?>)['actionId'], 'delete');
+    });
+  }
+
+  for (final invalidType in ['Icon', 'IconButton']) {
+    testWidgets(
+      'contains invalid plugin $invalidType without breaking sibling actions',
+      (tester) async {
+        final bridge = _ToolPkgDslTestBridge(
+          renderResult: (count) => jsonEncode({
+            'success': true,
+            'tree': _node(
+              'Row',
+              children: [
+                _node('Text', props: {'text': 'Healthy sibling $count'}),
+                _node(
+                  invalidType,
+                  props: {
+                    'name': 'not_a_material_icon',
+                    'icon': 'not_a_material_icon',
+                    'width': 32,
+                    'height': 32,
+                  },
+                ),
+                _node(
+                  'IconButton',
+                  props: {
+                    'icon': 'add',
+                    'onClick': {'__actionId': 'increment'},
+                  },
+                ),
+              ],
+            ),
+          }),
+        );
+        await tester.pumpWidget(_screen(bridge));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(find.byType(ErrorWidget), findsNothing);
+        expect(find.text('Healthy sibling 0'), findsOneWidget);
+        await tester.tap(find.byIcon(Icons.add));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(find.byType(ErrorWidget), findsNothing);
+        expect(find.text('Healthy sibling 1'), findsOneWidget);
+      },
+    );
+  }
+
+  testWidgets('applies explicit size to a plain icon button', (tester) async {
+    final bridge = _ToolPkgDslTestBridge(
+      renderResult: _plainIconButtonRenderResult,
+    );
+    await tester.pumpWidget(_screen(bridge));
+    await tester.pumpAndSettle();
+
+    final finder = find.byType(IconButton);
+    expect(finder, findsOneWidget);
+    expect(tester.getSize(finder), const Size(32, 32));
+
+    final button = tester.widget<IconButton>(finder);
+    expect(button.style?.minimumSize?.resolve(<WidgetState>{}), Size.zero);
+    expect(button.style?.padding?.resolve(<WidgetState>{}), EdgeInsets.zero);
+    expect(button.style?.tapTargetSize, MaterialTapTargetSize.shrinkWrap);
+    final iconFinder = find.descendant(
+      of: finder,
+      matching: find.byIcon(Icons.close),
+    );
+    expect(iconFinder, findsOneWidget);
+    expect(tester.getCenter(iconFinder), tester.getCenter(finder));
+  });
+
   testWidgets('renders navigation item slots and dispatches item actions', (
     tester,
   ) async {
@@ -1687,6 +1909,45 @@ core_proxy.ToolPkgContainerRuntime _moduleOnlyPluginRuntime() {
   );
 }
 
+/// Creates a selected message whose tool and thinking parts must stay out of translation.
+core_proxy.ChatMessage _translationMessage(String sender) {
+  return core_proxy.ChatMessage(
+    sender: sender,
+    parts: [
+      for (final entry in [
+        (core_proxy.MessagePartKind.thinking, 'Private reasoning'),
+        (core_proxy.MessagePartKind.toolResult, 'Tool output'),
+        (core_proxy.MessagePartKind.markdown, 'Selected message'),
+      ].indexed)
+        core_proxy.MessagePart(
+          partId: 'part-${entry.$1}',
+          sequence: entry.$1,
+          kind: entry.$2.$1,
+          content: entry.$2.$2,
+          toolCallId: null,
+          toolName: null,
+          attributes: const {},
+        ),
+    ],
+    timestamp: 100,
+    roleName: '',
+    selectedVariantIndex: 0,
+    variantCount: 1,
+    provider: '',
+    modelName: '',
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    sentAt: 100,
+    outputDurationMs: 0,
+    waitDurationMs: 0,
+    completedAt: 101,
+    displayMode: core_proxy.ChatMessageDisplayMode.normal,
+    isFavorite: false,
+    contentStream: null,
+  );
+}
+
 class _ToolPkgDslTestBridge extends OperitRuntimeBridge {
   _ToolPkgDslTestBridge({
     String Function(int count)? renderResult,
@@ -1712,6 +1973,26 @@ class _ToolPkgDslTestBridge extends OperitRuntimeBridge {
   Future<Object?> call(CoreCallRequest request) async {
     calls.add(request);
     switch (request.methodName) {
+      case 'getToolPkgChatMessageMenuItems':
+        return [
+          const core_proxy.ToolPkgChatMessageMenuItem(
+            containerPackageName: 'demo_toolpkg',
+            itemId: 'translate_message',
+            title: 'Translate message',
+            icon: 'translate',
+            order: 20,
+            dialog: core_proxy.ToolPkgChatMessageMenuDialog(
+              screen: 'ui/translate.js',
+              title: 'Translation dialog',
+            ),
+          ).toJson(),
+        ];
+      case 'invokeToolPkgChatMessageMenuItem':
+        return jsonEncode({
+          'dialog': {'state': {}, 'moduleSpec': {}},
+        });
+      case 'getToolPkgContainerRuntime':
+        return _pluginRuntime().toJson();
       case 'renderToolPkgDesktopWidget':
         return jsonEncode({
           'widget': const core_proxy.ToolPkgDesktopWidget(
@@ -2655,6 +2936,28 @@ String _iconToggleRenderResult(int count) {
                 props: <String, Object?>{'text': 'Selected toggle'},
               ),
             ],
+          },
+        ),
+      ],
+    ),
+    'state': <String, Object?>{'count': count},
+    'memo': <String, Object?>{'route': 'main'},
+  });
+}
+
+String _plainIconButtonRenderResult(int count) {
+  return jsonEncode(<String, Object?>{
+    'success': true,
+    'tree': _node(
+      'Row',
+      children: <Map<String, Object?>>[
+        _node(
+          'IconButton',
+          props: <String, Object?>{
+            'icon': 'close',
+            'width': 32,
+            'height': 32,
+            'onClick': <String, Object?>{'__actionId': 'close'},
           },
         ),
       ],

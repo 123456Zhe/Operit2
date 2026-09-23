@@ -6,6 +6,7 @@ use crate::plugins::toolpkg::ToolPkgChatInputHookBridge::{
     CHAT_INPUT_SUBMIT_ACTION_ALLOW, CHAT_INPUT_SUBMIT_ACTION_BLOCK,
     CHAT_INPUT_SUBMIT_ACTION_CONSUME, CHAT_INPUT_SUBMIT_ACTION_REPLACE,
 };
+use crate::plugins::toolpkg::ToolPkgInputMenuToggleBridge::ToolPkgInputMenuToggleBridge;
 use crate::plugins::toolpkg::ToolPkgXmlRenderBridge::ToolPkgXmlRenderBridge;
 use crate::services::core::ChatHistoryDelegate::{ChatHistoryDelegate, ChatSelectionMode};
 use crate::services::core::MessageCoordinationDelegate::MessageCoordinationDelegate;
@@ -503,6 +504,7 @@ impl ChatServiceCore {
                 CHAT_INPUT_EVENT_SUBMITTED,
             ),
         );
+        ToolPkgInputMenuToggleBridge::invalidateToggleDefinitions();
         if self.enhancedAiService.is_some() && self.messageCoordinationDelegate.is_some() {
             self.markPendingQueueBlocked(&hookChatId);
         }

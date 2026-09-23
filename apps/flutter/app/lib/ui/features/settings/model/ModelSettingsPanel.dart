@@ -2695,18 +2695,30 @@ class _AvailableModelDialog extends StatefulWidget {
 enum _AvailableModelListScope { fetched, all }
 
 // Lucide SVG Icons (MIT License)
-const String _kSvgSearch = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
-const String _kSvgClose = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
-const String _kSvgLayers = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 12.5-8.58 3.91a2 2 0 0 1-1.66 0L2 12.5"/><path d="m22 17.5-8.58 3.91a2 2 0 0 1-1.66 0L2 17.5"/></svg>';
-const String _kSvgSparkles = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></svg>';
-const String _kSvgHistory = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>';
-const String _kSvgCheck = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-const String _kSvgCpu = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>';
-const String _kSvgChevronRight = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>';
-const String _kSvgChevronDown = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
-const String _kSvgCheckSquare = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>';
-const String _kSvgCloudOff = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 2 20 20"/><path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193"/><path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07"/></svg>';
-const String _kSvgSearchX = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13.5 8.5-5 5"/><path d="m8.5 8.5 5 5"/><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
+const String _kSvgSearch =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
+const String _kSvgClose =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+const String _kSvgLayers =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 12.5-8.58 3.91a2 2 0 0 1-1.66 0L2 12.5"/><path d="m22 17.5-8.58 3.91a2 2 0 0 1-1.66 0L2 17.5"/></svg>';
+const String _kSvgSparkles =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></svg>';
+const String _kSvgHistory =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>';
+const String _kSvgCheck =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+const String _kSvgCpu =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>';
+const String _kSvgChevronRight =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>';
+const String _kSvgChevronDown =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+const String _kSvgCheckSquare =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>';
+const String _kSvgCloudOff =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 2 20 20"/><path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193"/><path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07"/></svg>';
+const String _kSvgSearchX =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13.5 8.5-5 5"/><path d="m8.5 8.5 5 5"/><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
 
 class _LucideIcon extends StatelessWidget {
   const _LucideIcon(this.svg, {this.size = 18, this.color});
@@ -3027,8 +3039,9 @@ class _AvailableModelDialogState extends State<_AvailableModelDialog> {
     final query = _searchController.text.trim();
     final filteredModels = _filteredModels(l10n);
     final includeSource = _scope == _AvailableModelListScope.all;
-    final fetchedCount =
-        widget.models.where(_availableProviderModelIsFetched).length;
+    final fetchedCount = widget.models
+        .where(_availableProviderModelIsFetched)
+        .length;
     final allCount = widget.models.length;
     final allFilteredSelected = _areAllFilteredSelected(filteredModels);
 
@@ -3342,8 +3355,9 @@ class _AvailableModelDialogState extends State<_AvailableModelDialog> {
                   FilledButton(
                     onPressed: _selectedModelIds.isEmpty
                         ? null
-                        : () => Navigator.of(context).pop(
-                            _AvailableModelsPicked(_selectedModels())),
+                        : () => Navigator.of(
+                            context,
+                          ).pop(_AvailableModelsPicked(_selectedModels())),
                     style: FilledButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(
@@ -3447,7 +3461,8 @@ class _AvailableModelItemCard extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                _formatContextLength(contextLength) ?? '${contextLength.round()}K',
+                                _formatContextLength(contextLength) ??
+                                    '${contextLength.round()}K',
                                 style: textTheme.labelSmall?.copyWith(
                                   color: colorScheme.primary,
                                   fontWeight: FontWeight.w600,
@@ -3593,7 +3608,6 @@ class _CustomModelActionCard extends StatelessWidget {
     );
   }
 }
-
 
 class _TextInputDialog extends StatefulWidget {
   const _TextInputDialog({
@@ -4022,25 +4036,25 @@ class _CapsuleActionButton extends StatelessWidget {
     final isEnabled = onTap != null;
     final backgroundColor = primary
         ? (isEnabled
-            ? colorScheme.primaryContainer.withValues(alpha: 0.7)
-            : colorScheme.surfaceContainerHighest.withValues(alpha: 0.2))
+              ? colorScheme.primaryContainer.withValues(alpha: 0.7)
+              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.2))
         : (isEnabled
-            ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.45)
-            : colorScheme.surfaceContainerHighest.withValues(alpha: 0.2));
+              ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.45)
+              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.2));
     final foregroundColor = primary
         ? (isEnabled
-            ? colorScheme.onPrimaryContainer
-            : colorScheme.onSurface.withValues(alpha: 0.38))
+              ? colorScheme.onPrimaryContainer
+              : colorScheme.onSurface.withValues(alpha: 0.38))
         : (isEnabled
-            ? colorScheme.onSurface
-            : colorScheme.onSurface.withValues(alpha: 0.38));
+              ? colorScheme.onSurface
+              : colorScheme.onSurface.withValues(alpha: 0.38));
     final borderColor = primary
         ? (isEnabled
-            ? colorScheme.primary.withValues(alpha: 0.25)
-            : colorScheme.outlineVariant.withValues(alpha: 0.15))
+              ? colorScheme.primary.withValues(alpha: 0.25)
+              : colorScheme.outlineVariant.withValues(alpha: 0.15))
         : (isEnabled
-            ? colorScheme.outlineVariant.withValues(alpha: 0.35)
-            : colorScheme.outlineVariant.withValues(alpha: 0.15));
+              ? colorScheme.outlineVariant.withValues(alpha: 0.35)
+              : colorScheme.outlineVariant.withValues(alpha: 0.15));
 
     Widget button = Material(
       color: backgroundColor,
@@ -4190,6 +4204,7 @@ class _ProviderDetailScreenState extends State<_ProviderDetailScreen> {
       // Keep showing the last snapshot if a background refresh fails.
     }
   }
+
   Future<core_proxy.ModelConnectionTestReport?> _testModelConnection(
     core_proxy.ProviderProfile provider,
     core_proxy.ModelProfile model,
@@ -4222,7 +4237,10 @@ class _ProviderDetailScreenState extends State<_ProviderDetailScreen> {
             .updateCapabilitiesForModel(
               providerId: provider.id,
               modelId: model.id,
-              capabilities: capabilitiesFromConnectionTest(report, capabilities),
+              capabilities: capabilitiesFromConnectionTest(
+                report,
+                capabilities,
+              ),
             );
         if (mounted) {
           await _refresh();
@@ -4239,7 +4257,6 @@ class _ProviderDetailScreenState extends State<_ProviderDetailScreen> {
       return null;
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -4291,20 +4308,21 @@ class _ProviderDetailScreenState extends State<_ProviderDetailScreen> {
                   _CapsuleActionButton(
                     label: l10n.edit,
                     tooltip: l10n.settingsModelEditProvider,
-                    onTap: () =>
-                        _run(() => widget.onEditProvider(provider)),
+                    onTap: () => _run(() => widget.onEditProvider(provider)),
                   ),
                   const SizedBox(width: 4),
-IconButton(
+                  IconButton(
                     tooltip: MaterialLocalizations.of(
                       context,
                     ).closeButtonTooltip,
                     style: IconButton.styleFrom(
-                      hoverColor: colorScheme.surfaceContainerHighest.withValues(
-                        alpha: Theme.of(context).brightness == Brightness.dark
-                            ? 0.35
-                            : 0.5,
-                      ),
+                      hoverColor: colorScheme.surfaceContainerHighest
+                          .withValues(
+                            alpha:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? 0.35
+                                : 0.5,
+                          ),
                       shape: const CircleBorder(),
                     ),
                     icon: _LucideIcon(
@@ -4374,7 +4392,6 @@ IconButton(
     );
   }
 }
-
 
 core_proxy.ModelProfile? _displayedModelForProvider(
   core_proxy.ProviderProfile provider,
@@ -4546,20 +4563,18 @@ class _ProviderModelItem extends StatelessWidget {
 
     final cardBgColor = selected
         ? (isDark
-            ? Color.alphaBlend(
-                colorScheme.primaryContainer.withValues(alpha: 0.16),
-                colorScheme.surfaceContainerLow,
-              )
-            : Color.alphaBlend(
-                colorScheme.primaryContainer.withValues(alpha: 0.20),
-                colorScheme.surfaceContainerLowest,
-              ))
-        : (isDark
-            ? colorScheme.surfaceContainerLow
-            : colorScheme.surfaceContainerLowest);
+              ? Color.alphaBlend(
+                  colorScheme.primary.withValues(alpha: 0.10),
+                  colorScheme.surfaceContainerLow,
+                )
+              : Color.alphaBlend(
+                  colorScheme.primary.withValues(alpha: 0.06),
+                  colorScheme.surfaceContainerLow,
+                ))
+        : colorScheme.surfaceContainerLow;
 
     final borderColor = selected
-        ? colorScheme.primary.withValues(alpha: isDark ? 0.85 : 0.9)
+        ? colorScheme.primary.withValues(alpha: isDark ? 0.58 : 0.48)
         : colorScheme.outlineVariant.withValues(alpha: isDark ? 0.35 : 0.55);
 
     return AnimatedContainer(
@@ -4652,9 +4667,7 @@ class _ProviderModelTile extends StatelessWidget {
 
     return Material(
       color: selected
-          ? (isDark
-              ? colorScheme.primary.withValues(alpha: 0.08)
-              : colorScheme.primaryContainer.withValues(alpha: 0.22))
+          ? colorScheme.primary.withValues(alpha: isDark ? 0.08 : 0.05)
           : Colors.transparent,
       child: InkWell(
         onTap: onToggleSettings,
@@ -4675,7 +4688,10 @@ class _ProviderModelTile extends StatelessWidget {
                         color: colorScheme.onSurface,
                       ),
                     ),
-                    if (_hasModelCapabilities(summary.capabilities, contextLabel)) ...<Widget>[
+                    if (_hasModelCapabilities(
+                      summary.capabilities,
+                      contextLabel,
+                    )) ...<Widget>[
                       const SizedBox(height: 4),
                       _ModelCapabilityCapsules(
                         capabilities: summary.capabilities,
@@ -4752,7 +4768,8 @@ class _ModelInlineSettingsView extends StatefulWidget {
   final GeneratedCoreProxyClients clients;
   final Future<core_proxy.ModelConnectionTestReport?> Function(
     core_proxy.ModelCapabilities capabilities,
-  ) onTest;
+  )
+  onTest;
   final VoidCallback onDeleted;
   final VoidCallback onSaved;
 
@@ -4789,7 +4806,7 @@ class _ModelInlineSettingsViewState extends State<_ModelInlineSettingsView> {
       decoration: BoxDecoration(
         color: isDark
             ? Colors.black.withValues(alpha: 0.15)
-            : colorScheme.surfaceContainerLowest.withValues(alpha: 0.4),
+            : colorScheme.surfaceContainerLow,
       ),
       child: FutureBuilder<core_proxy.ResolvedModelConfig>(
         future: _configFuture,
@@ -4843,7 +4860,8 @@ class _ModelInlineSettingsForm extends StatefulWidget {
   final core_proxy.ResolvedModelConfig initialConfig;
   final Future<core_proxy.ModelConnectionTestReport?> Function(
     core_proxy.ModelCapabilities capabilities,
-  ) onTest;
+  )
+  onTest;
   final VoidCallback onDeleted;
   final VoidCallback onSaved;
 
@@ -4877,19 +4895,21 @@ class _ModelInlineSettingsFormState extends State<_ModelInlineSettingsForm> {
     final summary = widget.initialConfig.summary;
     _enableSummary = summary.enableSummary;
     final rawContext = widget.initialConfig.context.maxContextLength;
-    final normalizedContext = rawContext >= 10000 ? (rawContext / 1024).roundToDouble() : rawContext;
+    final normalizedContext = rawContext >= 10000
+        ? (rawContext / 1024).roundToDouble()
+        : rawContext;
     _maxContextLengthController = TextEditingController(
-      text: normalizedContext > 0 ? normalizedContext.toStringAsFixed(0) : '200',
+      text: normalizedContext > 0
+          ? normalizedContext.toStringAsFixed(0)
+          : '200',
     );
     final rawThresh = summary.summaryTokenThreshold;
     final threshPercent = rawThresh <= 0
         ? '70'
         : (rawThresh <= 1.0
-            ? (rawThresh * 100).round().toString()
-            : rawThresh.clamp(1, 100).round().toString());
-    _summaryThresholdController = TextEditingController(
-      text: threshPercent,
-    );
+              ? (rawThresh * 100).round().toString()
+              : rawThresh.clamp(1, 100).round().toString());
+    _summaryThresholdController = TextEditingController(text: threshPercent);
   }
 
   @override
@@ -4967,13 +4987,16 @@ class _ModelInlineSettingsFormState extends State<_ModelInlineSettingsForm> {
       await widget.clients.preferencesModelConfigManager.updateContextForModel(
         providerId: widget.provider.id,
         modelId: widget.model.id,
-        context: core_proxy.ModelContextSpec(maxContextLength: maxContextLength),
+        context: core_proxy.ModelContextSpec(
+          maxContextLength: maxContextLength,
+        ),
       );
       await widget.clients.preferencesModelConfigManager.updateSummaryForModel(
         providerId: widget.provider.id,
         modelId: widget.model.id,
         summary: () {
-          final rawThresh = double.tryParse(_summaryThresholdController.text.trim()) ?? 70.0;
+          final rawThresh =
+              double.tryParse(_summaryThresholdController.text.trim()) ?? 70.0;
           final ratioThreshold = rawThresh > 1.0
               ? (rawThresh / 100.0).clamp(0.01, 1.0)
               : rawThresh.clamp(0.01, 1.0);
@@ -5050,7 +5073,7 @@ class _ModelInlineSettingsFormState extends State<_ModelInlineSettingsForm> {
                     tooltip: l10n.settingsModelToolCallDescription,
                     checked: _toolCall,
                     icon: Icons.build_outlined,
-                    iconTint: _CapsuleTint.blue,
+                    iconTint: _CapsuleTint.primary,
                     onChanged: (v) => setState(() => _toolCall = v),
                   ),
                   _CheckableCapabilityChip(
@@ -5058,7 +5081,7 @@ class _ModelInlineSettingsFormState extends State<_ModelInlineSettingsForm> {
                     tooltip: l10n.settingsModelDirectImageDescription,
                     checked: _directImage,
                     icon: Icons.image_outlined,
-                    iconTint: _CapsuleTint.emerald,
+                    iconTint: _CapsuleTint.primary,
                     onChanged: (v) => setState(() => _directImage = v),
                   ),
                   _CheckableCapabilityChip(
@@ -5066,7 +5089,7 @@ class _ModelInlineSettingsFormState extends State<_ModelInlineSettingsForm> {
                     tooltip: l10n.settingsModelDirectAudioDescription,
                     checked: _directAudio,
                     icon: Icons.graphic_eq,
-                    iconTint: _CapsuleTint.purple,
+                    iconTint: _CapsuleTint.primary,
                     onChanged: (v) => setState(() => _directAudio = v),
                   ),
                   _CheckableCapabilityChip(
@@ -5074,7 +5097,7 @@ class _ModelInlineSettingsFormState extends State<_ModelInlineSettingsForm> {
                     tooltip: l10n.settingsModelDirectVideoDescription,
                     checked: _directVideo,
                     icon: Icons.videocam_outlined,
-                    iconTint: _CapsuleTint.amber,
+                    iconTint: _CapsuleTint.primary,
                     onChanged: (v) => setState(() => _directVideo = v),
                   ),
                 ],
@@ -5091,11 +5114,15 @@ class _ModelInlineSettingsFormState extends State<_ModelInlineSettingsForm> {
                     for (var index = 0; index < _builtinTools.length; index++)
                       _CheckableCapabilityChip(
                         title: _builtinTools[index].displayName,
-                        tooltip: _builtinToolSubtitle(l10n, _builtinTools[index]),
+                        tooltip: _builtinToolSubtitle(
+                          l10n,
+                          _builtinTools[index],
+                        ),
                         checked: _builtinTools[index].enabled,
                         icon: Icons.extension_outlined,
                         iconTint: _CapsuleTint.neutral,
-                        onChanged: (value) => _setBuiltinToolEnabled(index, value),
+                        onChanged: (value) =>
+                            _setBuiltinToolEnabled(index, value),
                       ),
                   ],
                 ),
@@ -5199,7 +5226,10 @@ class _ModelInlineSettingsFormState extends State<_ModelInlineSettingsForm> {
                     width: 0.8,
                   ),
                   shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   visualDensity: VisualDensity.compact,
                 ),
                 onPressed: widget.onDeleted,
@@ -5216,16 +5246,17 @@ class _ModelInlineSettingsFormState extends State<_ModelInlineSettingsForm> {
               FilledButton.icon(
                 style: FilledButton.styleFrom(
                   shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
                   visualDensity: VisualDensity.compact,
                 ),
                 onPressed: _saving ? null : _save,
                 icon: _saving
                     ? const SizedBox.square(
                         dimension: 13,
-                        child: Center(
-                          child: M3LoadingIndicator(size: 13),
-                        ),
+                        child: Center(child: M3LoadingIndicator(size: 13)),
                       )
                     : _LucideIcon(
                         _kSvgCheck,
@@ -5284,18 +5315,13 @@ class _SettingsGroupCard extends StatelessWidget {
                   letterSpacing: 0.2,
                 ),
               ),
-              if (trailing != null) ...<Widget>[
-                const Spacer(),
-                trailing!,
-              ],
+              if (trailing != null) ...<Widget>[const Spacer(), trailing!],
             ],
           ),
         ),
         Container(
           decoration: BoxDecoration(
-            color: isDark
-                ? colorScheme.surfaceContainerLowest
-                : Colors.white,
+            color: colorScheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(9),
             border: Border.all(
               color: colorScheme.outlineVariant.withValues(
@@ -5348,42 +5374,18 @@ class _CheckableCapabilityChip extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    final (Color activeBg, Color activeText, Color activeBorder) = switch (iconTint) {
-      _CapsuleTint.blue => (
-        isDark
-            ? const Color(0xFF1E3A8A).withValues(alpha: 0.40)
-            : const Color(0xFFEFF6FF),
-        isDark ? const Color(0xFFBFDBFE) : const Color(0xFF1D4ED8),
-        isDark
-            ? const Color(0xFF60A5FA).withValues(alpha: 0.6)
-            : const Color(0xFF93C5FD),
-      ),
-      _CapsuleTint.emerald => (
-        isDark
-            ? const Color(0xFF064E3B).withValues(alpha: 0.40)
-            : const Color(0xFFECFDF5),
-        isDark ? const Color(0xFFA7F3D0) : const Color(0xFF047857),
-        isDark
-            ? const Color(0xFF34D399).withValues(alpha: 0.6)
-            : const Color(0xFF6EE7B7),
-      ),
-      _CapsuleTint.purple => (
-        isDark
-            ? const Color(0xFF581C87).withValues(alpha: 0.40)
-            : const Color(0xFFFAF5FF),
-        isDark ? const Color(0xFFE9D5FF) : const Color(0xFF7E22CE),
-        isDark
-            ? const Color(0xFFC084FC).withValues(alpha: 0.6)
-            : const Color(0xFFD8B4FE),
-      ),
-      _CapsuleTint.amber => (
-        isDark
-            ? const Color(0xFF78350F).withValues(alpha: 0.40)
-            : const Color(0xFFFFFBEB),
-        isDark ? const Color(0xFFFDE68A) : const Color(0xFFB45309),
-        isDark
-            ? const Color(0xFFFBBF24).withValues(alpha: 0.6)
-            : const Color(0xFFFCD34D),
+    final (
+      Color activeBg,
+      Color activeText,
+      Color activeBorder,
+    ) = switch (iconTint) {
+      _CapsuleTint.primary => (
+        Color.alphaBlend(
+          colorScheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
+          colorScheme.surface,
+        ),
+        colorScheme.onSurface,
+        colorScheme.primary.withValues(alpha: isDark ? 0.34 : 0.24),
       ),
       _CapsuleTint.neutral => (
         isDark
@@ -5397,15 +5399,15 @@ class _CheckableCapabilityChip extends StatelessWidget {
     final bgColor = checked
         ? activeBg
         : (isDark
-            ? colorScheme.surfaceContainer.withValues(alpha: 0.25)
-            : colorScheme.surfaceContainerLow);
+              ? colorScheme.surfaceContainer.withValues(alpha: 0.25)
+              : colorScheme.surfaceContainerLow);
 
     final borderColor = checked
         ? activeBorder
         : colorScheme.outlineVariant.withValues(alpha: isDark ? 0.35 : 0.5);
 
     final textColor = checked
-        ? (isDark ? Colors.white : activeText)
+        ? activeText
         : colorScheme.onSurfaceVariant;
 
     return Tooltip(
@@ -5426,7 +5428,9 @@ class _CheckableCapabilityChip extends StatelessWidget {
               children: <Widget>[
                 _CustomCheckbox(
                   checked: checked,
-                  activeColor: activeBorder,
+                  activeColor: colorScheme.primary.withValues(
+                    alpha: isDark ? 0.78 : 0.68,
+                  ),
                   onTap: () => onChanged(!checked),
                 ),
                 const SizedBox(width: 5),
@@ -5455,11 +5459,7 @@ class _CheckableCapabilityChip extends StatelessWidget {
 }
 
 class _CustomCheckbox extends StatelessWidget {
-  const _CustomCheckbox({
-    required this.checked,
-    this.activeColor,
-    this.onTap,
-  });
+  const _CustomCheckbox({required this.checked, this.activeColor, this.onTap});
 
   final bool checked;
   final Color? activeColor;
@@ -5484,7 +5484,9 @@ class _CustomCheckbox extends StatelessWidget {
           border: Border.all(
             color: checked
                 ? effectiveActiveColor
-                : colorScheme.outlineVariant.withValues(alpha: isDark ? 0.55 : 0.65),
+                : colorScheme.outlineVariant.withValues(
+                    alpha: isDark ? 0.55 : 0.65,
+                  ),
             width: 1.0,
           ),
         ),
@@ -5493,7 +5495,7 @@ class _CustomCheckbox extends StatelessWidget {
                 child: _LucideIcon(
                   _kSvgCheck,
                   size: 8.5,
-                  color: isDark ? Colors.black : Colors.white,
+                  color: colorScheme.onPrimary,
                 ),
               )
             : null,
@@ -5522,35 +5524,16 @@ class _TileIconBox extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     final (Color bgColor, Color iconColor) = switch (tint) {
-      _CapsuleTint.blue => (
-        isDark
-            ? const Color(0xFF1E3A8A).withValues(alpha: 0.55)
-            : const Color(0xFFDBEAFE),
-        isDark ? const Color(0xFF93C5FD) : const Color(0xFF1D4ED8),
-      ),
-      _CapsuleTint.emerald => (
-        isDark
-            ? const Color(0xFF064E3B).withValues(alpha: 0.55)
-            : const Color(0xFFD1FAE5),
-        isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857),
-      ),
-      _CapsuleTint.purple => (
-        isDark
-            ? const Color(0xFF581C87).withValues(alpha: 0.55)
-            : const Color(0xFFF3E8FF),
-        isDark ? const Color(0xFFD8B4FE) : const Color(0xFF7E22CE),
-      ),
-      _CapsuleTint.amber => (
-        isDark
-            ? const Color(0xFF78350F).withValues(alpha: 0.55)
-            : const Color(0xFFFEF3C7),
-        isDark ? const Color(0xFFFCD34D) : const Color(0xFFB45309),
+      _CapsuleTint.primary => (
+        Color.alphaBlend(
+          colorScheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
+          colorScheme.surface,
+        ),
+        colorScheme.primary.withValues(alpha: isDark ? 0.76 : 0.64),
       ),
       _CapsuleTint.neutral => (
-        colorScheme.surfaceContainerHigh.withValues(
-          alpha: isDark ? 0.7 : 0.85,
-        ),
-        colorScheme.onSurface,
+        colorScheme.surfaceContainerHigh.withValues(alpha: isDark ? 0.7 : 0.85),
+        colorScheme.onSurfaceVariant,
       ),
     };
 
@@ -5609,11 +5592,13 @@ class _ModernNumberField extends StatelessWidget {
         filled: true,
         fillColor: enabled
             ? (isDark
-                ? colorScheme.surfaceContainer
-                : colorScheme.surfaceContainerLow)
+                  ? colorScheme.surfaceContainer
+                  : colorScheme.surfaceContainerLow)
             : (isDark
-                ? colorScheme.surfaceContainerLowest
-                : colorScheme.surfaceContainerHighest.withValues(alpha: 0.25)),
+                  ? colorScheme.surfaceContainerLowest
+                  : colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.25,
+                    )),
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         suffixText: suffix,
         suffixStyle: theme.textTheme.labelSmall?.copyWith(
@@ -5626,7 +5611,9 @@ class _ModernNumberField extends StatelessWidget {
         disabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(6),
           borderSide: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: isDark ? 0.2 : 0.35),
+            color: colorScheme.outlineVariant.withValues(
+              alpha: isDark ? 0.2 : 0.35,
+            ),
             width: 0.8,
           ),
         ),
@@ -5639,24 +5626,15 @@ class _ModernNumberField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(6),
-          borderSide: BorderSide(
-            color: colorScheme.primary,
-            width: 1.3,
-          ),
+          borderSide: BorderSide(color: colorScheme.primary, width: 1.3),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(6),
-          borderSide: BorderSide(
-            color: colorScheme.error,
-            width: 1.0,
-          ),
+          borderSide: BorderSide(color: colorScheme.error, width: 1.0),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(6),
-          borderSide: BorderSide(
-            color: colorScheme.error,
-            width: 1.3,
-          ),
+          borderSide: BorderSide(color: colorScheme.error, width: 1.3),
         ),
       ),
     );
@@ -5672,9 +5650,9 @@ class _GroupDivider extends StatelessWidget {
     return Divider(
       height: 1.0,
       thickness: 1.0,
-      color: Theme.of(context).colorScheme.outlineVariant.withValues(
-        alpha: isDark ? 0.35 : 0.55,
-      ),
+      color: Theme.of(
+        context,
+      ).colorScheme.outlineVariant.withValues(alpha: isDark ? 0.35 : 0.55),
     );
   }
 }
@@ -5696,10 +5674,10 @@ class _TestModelPillButton extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Material(
-      color: colorScheme.primary.withValues(alpha: isDark ? 0.16 : 0.1),
+      color: colorScheme.primary.withValues(alpha: isDark ? 0.12 : 0.06),
       shape: StadiumBorder(
         side: BorderSide(
-          color: colorScheme.primary.withValues(alpha: isDark ? 0.35 : 0.45),
+          color: colorScheme.primary.withValues(alpha: isDark ? 0.28 : 0.32),
           width: 0.8,
         ),
       ),
@@ -5750,7 +5728,7 @@ bool _hasModelCapabilities(
             capabilities.directAudio ||
             capabilities.directVideo));
 
-enum _CapsuleTint { neutral, blue, emerald, purple, amber }
+enum _CapsuleTint { neutral, primary }
 
 class _ModelCapabilityCapsules extends StatelessWidget {
   const _ModelCapabilityCapsules({
@@ -5781,25 +5759,25 @@ class _ModelCapabilityCapsules extends StatelessWidget {
         _CapabilityCapsule(
           label: isZh ? '工具调用' : 'Tools',
           tooltip: l10n.settingsModelToolCall,
-          tint: _CapsuleTint.blue,
+          tint: _CapsuleTint.primary,
         ),
       if (capabilities.directImage)
         _CapabilityCapsule(
           label: isZh ? '图片' : 'Image',
           tooltip: l10n.settingsModelDirectImage,
-          tint: _CapsuleTint.emerald,
+          tint: _CapsuleTint.primary,
         ),
       if (capabilities.directAudio)
         _CapabilityCapsule(
           label: isZh ? '音频' : 'Audio',
           tooltip: l10n.settingsModelDirectAudio,
-          tint: _CapsuleTint.purple,
+          tint: _CapsuleTint.primary,
         ),
       if (capabilities.directVideo)
         _CapabilityCapsule(
           label: isZh ? '视频' : 'Video',
           tooltip: l10n.settingsModelDirectVideo,
-          tint: _CapsuleTint.amber,
+          tint: _CapsuleTint.primary,
         ),
     ];
 
@@ -5809,11 +5787,7 @@ class _ModelCapabilityCapsules extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(top: 2),
-      child: Wrap(
-        spacing: 5,
-        runSpacing: 3,
-        children: capsules,
-      ),
+      child: Wrap(spacing: 5, runSpacing: 3, children: capsules),
     );
   }
 }
@@ -5836,47 +5810,19 @@ class _CapabilityCapsule extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     final (Color bgColor, Color textColor, Color borderColor) = switch (tint) {
-      _CapsuleTint.blue => (
-        isDark
-            ? const Color(0xFF1E3A8A).withValues(alpha: 0.45)
-            : const Color(0xFFEFF6FF),
-        isDark ? const Color(0xFFBFDBFE) : const Color(0xFF1D4ED8),
-        isDark
-            ? const Color(0xFF60A5FA).withValues(alpha: 0.5)
-            : const Color(0xFF93C5FD),
-      ),
-      _CapsuleTint.emerald => (
-        isDark
-            ? const Color(0xFF064E3B).withValues(alpha: 0.45)
-            : const Color(0xFFECFDF5),
-        isDark ? const Color(0xFFA7F3D0) : const Color(0xFF047857),
-        isDark
-            ? const Color(0xFF34D399).withValues(alpha: 0.5)
-            : const Color(0xFF6EE7B7),
-      ),
-      _CapsuleTint.purple => (
-        isDark
-            ? const Color(0xFF581C87).withValues(alpha: 0.45)
-            : const Color(0xFFFAF5FF),
-        isDark ? const Color(0xFFE9D5FF) : const Color(0xFF7E22CE),
-        isDark
-            ? const Color(0xFFC084FC).withValues(alpha: 0.5)
-            : const Color(0xFFD8B4FE),
-      ),
-      _CapsuleTint.amber => (
-        isDark
-            ? const Color(0xFF78350F).withValues(alpha: 0.45)
-            : const Color(0xFFFFFBEB),
-        isDark ? const Color(0xFFFDE68A) : const Color(0xFFB45309),
-        isDark
-            ? const Color(0xFFFBBF24).withValues(alpha: 0.5)
-            : const Color(0xFFFCD34D),
+      _CapsuleTint.primary => (
+        Color.alphaBlend(
+          colorScheme.primary.withValues(alpha: isDark ? 0.20 : 0.10),
+          colorScheme.surfaceContainerHigh,
+        ),
+        colorScheme.onSurfaceVariant,
+        colorScheme.primary.withValues(alpha: isDark ? 0.48 : 0.38),
       ),
       _CapsuleTint.neutral => (
         isDark
             ? colorScheme.surfaceContainerHigh
             : colorScheme.surfaceContainerHighest,
-        colorScheme.onSurface,
+        colorScheme.onSurfaceVariant,
         colorScheme.outlineVariant.withValues(alpha: isDark ? 0.6 : 0.8),
       ),
     };
@@ -6705,9 +6651,13 @@ class _ModelSettingsEditorDialogState
     _enableSummaryByMessageCount =
         widget.initialSummary.enableSummaryByMessageCount;
     final rawContext = widget.initialContext.maxContextLength;
-    final normalizedContext = rawContext >= 10000 ? (rawContext / 1024).roundToDouble() : rawContext;
+    final normalizedContext = rawContext >= 10000
+        ? (rawContext / 1024).roundToDouble()
+        : rawContext;
     _maxContextLengthController = TextEditingController(
-      text: normalizedContext > 0 ? normalizedContext.toStringAsFixed(0) : '200',
+      text: normalizedContext > 0
+          ? normalizedContext.toStringAsFixed(0)
+          : '200',
     );
     _summaryThresholdController = TextEditingController(
       text: widget.initialSummary.summaryTokenThreshold.toString(),
