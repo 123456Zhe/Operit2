@@ -90,7 +90,7 @@ fn print_core_usage(output: &mut CoreCommandOutput) {
         "operit2 character <init|list|show|create|update|delete|set-active|combine|reset-default>",
         "operit2 group <init|list|show|create|update|delete|set-active|duplicate>",
         "operit2 active-prompt <show|set-card|set-group|activate-for-chat|resolved-card>",
-        "operit2 model <provider-type-list|provider-list|provider-show|provider-create|provider-set-key|provider-set-endpoint|provider-model-available-list|provider-model-add|provider-model-create|list|show|use|params|parameters|context-show|context-set|summary-show|summary-set|function-list|function-show|function-set|function-reset>",
+        "operit2 model <codex-login|provider-type-list|provider-list|provider-show|provider-create|provider-set-key|provider-set-endpoint|provider-model-available-list|provider-model-add|provider-model-create|list|show|use|params|parameters|context-show|context-set|summary-show|summary-set|function-list|function-show|function-set|function-reset>",
         "operit2 chat <new|list|show|current|switch|delete|delete-message|clear|rollback|branch|branches|lock|pin|stats|bind-character|bind-group|set-group|send>",
         "operit2 workspace <default-path|create-default|bind-default|bind|unbind|list|chats|commands|commands-path|run|run-path>",
         "operit2 storage <paths|migrate>",

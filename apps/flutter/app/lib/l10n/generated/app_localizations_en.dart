@@ -1250,6 +1250,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsModelApiKey => 'API key';
 
   @override
+  String get settingsModelCodexLogin => 'ChatGPT login';
+
+  @override
+  String get settingsModelCodexLoginTitle => 'Sign in to ChatGPT Codex';
+
+  @override
+  String get settingsModelCodexLoginDescription =>
+      'OpenAI Codex uses a ChatGPT subscription sign-in instead of an API key.';
+
+  @override
+  String settingsModelCodexSignedIn(String account) {
+    return 'Signed in as $account';
+  }
+
+  @override
+  String get settingsModelCodexSignedOut => 'Not signed in to ChatGPT';
+
+  @override
+  String get settingsModelCodexBrowser => 'Browser sign-in';
+
+  @override
+  String get settingsModelCodexDevice => 'Device code';
+
+  @override
+  String get settingsModelCodexWaiting => 'Waiting for ChatGPT authorization…';
+
+  @override
+  String get settingsModelCodexDeviceInstructions =>
+      'Enter this code on the opened page, then return to Operit.';
+
+  @override
+  String get settingsModelCodexOpenPage => 'Open verification page';
+
+  @override
+  String get settingsModelCodexLogout => 'Sign out';
+
+  @override
+  String settingsModelCodexLoginFailed(String error) {
+    return 'ChatGPT sign-in failed: $error';
+  }
+
+  @override
   String get settingsModelApiKeyPool => 'API key pool';
 
   @override
