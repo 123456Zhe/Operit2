@@ -315,6 +315,8 @@ pub const ENV_PREFERENCES_PATH: &str =
     "runtime/config/preferences/env_preferences.preferences.json";
 pub const GITHUB_AUTH_PREFERENCES_PATH: &str =
     "runtime/config/preferences/github_auth_preferences.json";
+pub const CODEX_AUTH_PREFERENCES_PATH: &str =
+    "runtime/config/preferences/codex_auth_preferences.json";
 pub const CHARACTER_CARDS_PREFERENCES_PATH: &str =
     "runtime/config/preferences/character_cards.preferences.json";
 pub const CHARACTER_GROUPS_PREFERENCES_PATH: &str =

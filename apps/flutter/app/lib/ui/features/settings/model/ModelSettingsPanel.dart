@@ -1,5 +1,6 @@
 // ignore_for_file: file_names
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import '../../../common/components/M3LoadingIndicator.dart';
 import '../../../theme/OperitFormStyles.dart';
 import '../../../theme/OperitGlassSurface.dart';
 import '../components/SettingsControlStyles.dart';
+import 'CodexLoginDialog.dart';
 import 'ModelConnectionTestCapabilities.dart';
 import 'ProviderLogo.dart';
 
@@ -72,6 +74,9 @@ class ModelSettingsPanelState extends State<ModelSettingsPanel> {
   Future<ModelSettingsData> get loadFuture => _future!;
 
   void _reload() {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _future = load();
     });
@@ -154,6 +159,7 @@ class ModelSettingsPanelState extends State<ModelSettingsPanel> {
       context: context,
       catalogEntries: catalogEntries,
       occupiedProviderNames: _occupiedProviderNames(providers, null),
+      clients: widget.clients,
     );
     if (result == null || result is! _ProviderEditSaveResult) {
       return;
@@ -214,6 +220,7 @@ class ModelSettingsPanelState extends State<ModelSettingsPanel> {
       context: context,
       catalogEntries: catalogEntries,
       occupiedProviderNames: _occupiedProviderNames(providers, provider.id),
+      clients: widget.clients,
       provider: provider,
     );
     if (result == null) {
@@ -743,17 +750,20 @@ class _ProviderEditorDialog extends StatefulWidget {
   const _ProviderEditorDialog({
     required this.catalogEntries,
     required this.occupiedProviderNames,
+    required this.clients,
     this.provider,
   });
 
   final List<core_proxy.ProviderCatalogEntry> catalogEntries;
   final Set<String> occupiedProviderNames;
+  final GeneratedCoreProxyClients clients;
   final core_proxy.ProviderProfile? provider;
 
   static Future<_ProviderEditResult?> show({
     required BuildContext context,
     required List<core_proxy.ProviderCatalogEntry> catalogEntries,
     required Set<String> occupiedProviderNames,
+    required GeneratedCoreProxyClients clients,
     core_proxy.ProviderProfile? provider,
   }) {
     return showDialog<_ProviderEditResult>(
@@ -761,6 +771,7 @@ class _ProviderEditorDialog extends StatefulWidget {
       builder: (context) => _ProviderEditorDialog(
         catalogEntries: catalogEntries,
         occupiedProviderNames: occupiedProviderNames,
+        clients: clients,
         provider: provider,
       ),
     );
@@ -782,6 +793,7 @@ class _ProviderEditorDialogState extends State<_ProviderEditorDialog> {
   String? _thinkingConfigError;
   bool _thinkingRulesChanged = false;
   String? _selectedProviderTypeId;
+  core_proxy.CodexSessionStatus? _codexStatus;
 
   @override
   void initState() {
@@ -801,6 +813,11 @@ class _ProviderEditorDialogState extends State<_ProviderEditorDialog> {
     );
     if (provider != null) {
       _selectedProviderTypeId = provider.providerTypeId;
+      if (provider.providerTypeId == 'OPENAI_CODEX') {
+        _endpointController.text =
+            'https://chatgpt.com/backend-api/codex/responses';
+        unawaited(_refreshCodexStatus());
+      }
       try {
         _thinkingRules = _parseThinkingRuleEditors(
           provider.thinkingConfigurations,
@@ -877,6 +894,39 @@ class _ProviderEditorDialogState extends State<_ProviderEditorDialog> {
         _endpointController.text = catalog.defaultEndpoint;
       }
     });
+    if (providerTypeId == 'OPENAI_CODEX') {
+      unawaited(_refreshCodexStatus());
+    }
+  }
+
+  bool get _isCodexProvider => _selectedProviderTypeId == 'OPENAI_CODEX';
+
+  Future<void> _refreshCodexStatus() async {
+    try {
+      final status = await widget.clients.servicesCodexOAuthService
+          .sessionStatus();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _codexStatus = status;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _codexStatus = null;
+      });
+    }
+  }
+
+  Future<void> _openCodexLogin() async {
+    await showCodexLoginDialog(context: context, clients: widget.clients);
+    if (!mounted) {
+      return;
+    }
+    await _refreshCodexStatus();
   }
 
   /// Opens the endpoint selector for providers with declared options.
@@ -975,7 +1025,9 @@ class _ProviderEditorDialogState extends State<_ProviderEditorDialog> {
       _ProviderEditSaveResult(
         name: _nameController.text.trim(),
         providerTypeId: _selectedProviderTypeId!,
-        endpoint: _endpointController.text.trim(),
+        endpoint: _isCodexProvider
+            ? 'https://chatgpt.com/backend-api/codex/responses'
+            : _endpointController.text.trim(),
         apiKey: _apiKeyController.text,
         customHeaders: _customHeadersController.text,
         requestLimitPerMinute: int.parse(_requestLimitController.text),
@@ -1049,23 +1101,32 @@ class _ProviderEditorDialogState extends State<_ProviderEditorDialog> {
                   controller: _endpointController,
                   label: l10n.settingsModelApiEndpoint,
                   requiredField: true,
+                  readOnly: _isCodexProvider,
                   keyboardType: TextInputType.url,
                   inputFormatters: <TextInputFormatter>[
                     FilteringTextInputFormatter.deny(RegExp(r'\s')),
                   ],
-                  suffixIcon: endpointOptions.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: l10n.settingsModelApiEndpoint,
-                          icon: const Icon(Icons.arrow_drop_down_rounded),
-                          onPressed: _showEndpointOptionsDialog,
-                        ),
+                  suffixIcon: _isCodexProvider
+                      ? const Icon(Icons.lock_outline, size: 20)
+                      : (endpointOptions.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: l10n.settingsModelApiEndpoint,
+                              icon: const Icon(Icons.arrow_drop_down_rounded),
+                              onPressed: _showEndpointOptionsDialog,
+                            )),
                 ),
-                _DialogTextField(
-                  controller: _apiKeyController,
-                  label: l10n.settingsModelApiKey,
-                  obscureText: true,
-                ),
+                if (_isCodexProvider)
+                  _CodexLoginField(
+                    status: _codexStatus,
+                    onLogin: _openCodexLogin,
+                  )
+                else
+                  _DialogTextField(
+                    controller: _apiKeyController,
+                    label: l10n.settingsModelApiKey,
+                    obscureText: true,
+                  ),
                 Theme(
                   data: Theme.of(context).copyWith(
                     dividerColor: Colors.transparent,
@@ -2934,7 +2995,16 @@ class _SliderOptionItem extends StatelessWidget {
 class _AvailableModelDialogState extends State<_AvailableModelDialog> {
   final _searchController = TextEditingController();
   final Set<String> _selectedModelIds = <String>{};
-  _AvailableModelListScope _scope = _AvailableModelListScope.fetched;
+  late _AvailableModelListScope _scope;
+
+  @override
+  void initState() {
+    super.initState();
+    final hasFetched = widget.models.any(_availableProviderModelIsFetched);
+    _scope = hasFetched
+        ? _AvailableModelListScope.fetched
+        : _AvailableModelListScope.all;
+  }
 
   @override
   void dispose() {
@@ -7356,6 +7426,47 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
+class _CodexLoginField extends StatelessWidget {
+  const _CodexLoginField({required this.status, required this.onLogin});
+
+  final core_proxy.CodexSessionStatus? status;
+  final VoidCallback onLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final signedIn = status?.signedIn == true;
+    final account = status == null
+        ? ''
+        : (status!.email.trim().isEmpty ? status!.accountId : status!.email);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(l10n.settingsModelCodexLoginDescription),
+          const SizedBox(height: 8),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  signedIn
+                      ? l10n.settingsModelCodexSignedIn(account)
+                      : l10n.settingsModelCodexSignedOut,
+                ),
+              ),
+              FilledButton.tonal(
+                onPressed: onLogin,
+                child: Text(l10n.settingsModelCodexLogin),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DialogTextField extends StatelessWidget {
   const _DialogTextField({
     required this.controller,
@@ -7363,6 +7474,7 @@ class _DialogTextField extends StatelessWidget {
     this.requiredField = false,
     this.obscureText = false,
     this.numberOnly = false,
+    this.readOnly = false,
     this.maxLines = 1,
     this.keyboardType,
     this.inputFormatters,
@@ -7375,6 +7487,7 @@ class _DialogTextField extends StatelessWidget {
   final bool requiredField;
   final bool obscureText;
   final bool numberOnly;
+  final bool readOnly;
   final int maxLines;
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
@@ -7390,6 +7503,7 @@ class _DialogTextField extends StatelessWidget {
       child: TextFormField(
         controller: controller,
         style: textStyle,
+        readOnly: readOnly,
         obscureText: obscureText,
         maxLines: obscureText ? 1 : maxLines,
         keyboardType:
