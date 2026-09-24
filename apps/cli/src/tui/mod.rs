@@ -324,7 +324,7 @@ fn install_local_permission_requester(
     let handler = core.localApplicationMut().toolHandler.clone();
     handler
         .getToolPermissionSystem()
-        .setAsyncPermissionRequester(move |tool, description| {
+        .setAsyncPermissionRequester(move |tool, description, _chatId| {
             let approval_bridge = approval_bridge.clone();
             async move {
                 tokio::task::spawn_blocking(move || approval_bridge.request(&tool, &description))

@@ -42,9 +42,9 @@ use operit_util::GithubReleaseUtil::{
 use operit_util::MarkdownRenderStream::MarkdownStreamEvent;
 
 use super::approval::TuiApprovalBridge;
+use super::commands::TuiPluginCommandSpec;
 use super::config;
 use super::config::ConfigUi;
-use super::commands::TuiPluginCommandSpec;
 use super::helpers::{short_chat_label, split_command_line};
 use super::i18n::{TuiLanguage, TuiText};
 use super::link_proxy_rs::{TuiContentStreamEventInfo, TuiCore};
@@ -114,6 +114,7 @@ pub(super) struct OperitTui {
     pub(super) pending_queue_manual_send: Option<PendingQueueMessage>,
     pub(super) paste_attachment_counter: usize,
     pub(super) status_message: String,
+    route_permission_error: Option<String>,
     pub(super) status_message_expires_at: Option<Instant>,
     pub(super) transient_status_message: Option<String>,
     toast_receiver: mpsc::Receiver<String>,
@@ -374,16 +375,48 @@ impl OperitTui {
         let active_chat_id = current_chat_id_cache
             .clone()
             .ok_or_else(|| "no active chat in tui".to_string())?;
-        let current_messages_cache = core
+        let mut route_permission_error = None;
+        let current_messages_cache = match core
             .chat_runtime_holder_main()
             .chatMessagesFlowSnapshot(active_chat_id.clone())
             .await
-            .map_err(|error| error.to_string())?;
-        let current_chat_state_cache = core
+        {
+            Ok(messages) => messages,
+            Err(error) if error.isRoutePermissionDenied() => {
+                route_permission_error = Some(error.to_string());
+                Vec::new()
+            }
+            Err(error) => return Err(error.to_string()),
+        };
+        let current_chat_state_cache = match core
             .chat_runtime_holder_main()
             .chatStateFlowSnapshot(active_chat_id.clone())
             .await
-            .map_err(|error| error.to_string())?;
+        {
+            Ok(state) => state,
+            Err(error) if error.isRoutePermissionDenied() => {
+                route_permission_error = Some(error.to_string());
+                ChatState {
+                    currentChatId: active_chat_id.clone(),
+                    currentChatTitle: String::new(),
+                    currentCharacterCardName: None,
+                    currentCharacterCardAvatarUri: None,
+                    currentWorkspacePath: None,
+                    isLoading: false,
+                    inputProcessingState: InputProcessingState::Error {
+                        message: route_permission_error
+                            .clone()
+                            .expect("route permission error must be recorded"),
+                    },
+                    hasOlderDisplayHistory: false,
+                    hasNewerDisplayHistory: false,
+                    isLoadingDisplayWindow: false,
+                    pendingQueueMessages: Vec::new(),
+                    isPendingQueueExpanded: false,
+                }
+            }
+            Err(error) => return Err(error.to_string()),
+        };
         let current_chat_is_loading_cache = current_chat_state_cache.isLoading;
         let current_chat_input_processing_state_cache =
             current_chat_state_cache.inputProcessingState.clone();
@@ -392,15 +425,27 @@ impl OperitTui {
             .currentWindowSizeFlowSnapshot()
             .await
             .map_err(|error| error.to_string())?;
-        core.watchMainChatGeneratedStateFlows()
-            .await
-            .map_err(|error| error.to_string())?;
-        core.watchMainChatStateFlow(active_chat_id.clone())
-            .await
-            .map_err(|error| error.to_string())?;
-        core.watchMainChatMessagesFlow(active_chat_id)
-            .await
-            .map_err(|error| error.to_string())?;
+        if let Err(error) = core.watchMainChatGeneratedStateFlows().await {
+            if error.isRoutePermissionDenied() {
+                route_permission_error = Some(error.to_string());
+            } else {
+                return Err(error.to_string());
+            }
+        }
+        if let Err(error) = core.watchMainChatStateFlow(active_chat_id.clone()).await {
+            if error.isRoutePermissionDenied() {
+                route_permission_error = Some(error.to_string());
+            } else {
+                return Err(error.to_string());
+            }
+        }
+        if let Err(error) = core.watchMainChatMessagesFlow(active_chat_id).await {
+            if error.isRoutePermissionDenied() {
+                route_permission_error = Some(error.to_string());
+            } else {
+                return Err(error.to_string());
+            }
+        }
         core.syncMainChatContentStreams(&current_messages_cache)
             .await
             .map_err(|error| error.to_string())?;
@@ -447,7 +492,8 @@ impl OperitTui {
             pending_queue_auto_send_at: None,
             pending_queue_manual_send: None,
             paste_attachment_counter: 0,
-            status_message,
+            status_message: route_permission_error.clone().unwrap_or(status_message),
+            route_permission_error,
             status_message_expires_at: None,
             transient_status_message: None,
             toast_receiver,
@@ -547,26 +593,65 @@ impl OperitTui {
         result.and(cleanup_result).and(compose_cleanup)
     }
 
+    /// Applies a route permission failure to the visible TUI state.
+    fn apply_route_permission_error(&mut self, error: String) {
+        self.current_chat_is_loading_cache = false;
+        self.last_current_chat_loading = false;
+        self.awaiting_runtime_loading = false;
+        self.current_chat_input_processing_state_cache = InputProcessingState::Error {
+            message: error.clone(),
+        };
+        self.route_permission_error = Some(error.clone());
+        self.set_status_message(error);
+    }
+
+    /// Returns whether a rendered error is a route permission failure.
+    fn is_route_permission_error_message(error: &str) -> bool {
+        error.strip_prefix("ROUTE_PERMISSION_DENIED:").is_some()
+    }
+
     async fn run_loop(
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     ) -> Result<(), String> {
         while !self.should_quit {
             self.ensure_pending_queue_chat_id();
-            self.apply_pushed_events().await?;
+            if let Err(error) = self.apply_pushed_events().await {
+                if Self::is_route_permission_error_message(&error) {
+                    self.apply_route_permission_error(error);
+                } else {
+                    return Err(error);
+                }
+            }
             self.apply_toast_messages();
             if let Err(error) = self.sync_compose_surfaces().await {
-                self.status_message = error;
+                if Self::is_route_permission_error_message(&error) {
+                    self.apply_route_permission_error(error);
+                } else {
+                    self.status_message = error;
+                }
             }
             self.ensure_pending_queue_chat_id();
             self.refresh_runtime_status_if_due().await;
-            self.advance_pending_message_queue().await?;
+            if let Err(error) = self.advance_pending_message_queue().await {
+                if Self::is_route_permission_error_message(&error) {
+                    self.apply_route_permission_error(error);
+                } else {
+                    return Err(error);
+                }
+            }
             self.clear_expired_status_message();
             terminal
                 .draw(|frame| self.render(frame))
                 .map_err(|error| error.to_string())?;
 
-            self.handle_terminal_events(EVENT_POLL_INTERVAL).await?;
+            if let Err(error) = self.handle_terminal_events(EVENT_POLL_INTERVAL).await {
+                if Self::is_route_permission_error_message(&error) {
+                    self.apply_route_permission_error(error);
+                } else {
+                    return Err(error);
+                }
+            }
         }
         Ok(())
     }
@@ -622,8 +707,12 @@ impl OperitTui {
             Event::Key(key) => self.handle_key_event(key).await,
             Event::Mouse(mouse) => self.handle_mouse_event(mouse).await,
             Event::Paste(text) => {
-                if let Some(editor) = &mut self.compose.editor { editor.value.push_str(&text); Ok(()) }
-                else { self.handle_paste(text).await }
+                if let Some(editor) = &mut self.compose.editor {
+                    editor.value.push_str(&text);
+                    Ok(())
+                } else {
+                    self.handle_paste(text).await
+                }
             }
             _ => Ok(()),
         }
@@ -631,15 +720,33 @@ impl OperitTui {
 
     /// Routes plugin control clicks before transcript selection and scrolling.
     async fn handle_mouse_event(&mut self, mouse: MouseEvent) -> Result<(), String> {
-        let overlay = self.show_help || self.show_config_popup || self.show_list_popup || self.show_model_chooser ||
-            self.startup_install_prompt.is_some() || self.startup_update_prompt.is_some() ||
-            self.startup_workspace_prompt.is_some() || self.approval_bridge.current().is_some();
-        if self.compose.editor.is_some() { return Ok(()); }
+        let overlay = self.show_help
+            || self.show_config_popup
+            || self.show_list_popup
+            || self.show_model_chooser
+            || self.startup_install_prompt.is_some()
+            || self.startup_update_prompt.is_some()
+            || self.startup_workspace_prompt.is_some()
+            || self.approval_bridge.current().is_some();
+        if self.compose.editor.is_some() {
+            return Ok(());
+        }
         if !overlay {
             let area = super::scrollbar::split_transcript_inner(self.transcript_area).content;
-            let inside = mouse.column >= area.x && mouse.column < area.x + area.width && mouse.row >= area.y && mouse.row < area.y + area.height;
-            let row = if inside { usize::from(mouse.row - area.y + self.transcript_scroll) } else { usize::MAX };
-            let col = if inside { usize::from(mouse.column - area.x) } else { usize::MAX };
+            let inside = mouse.column >= area.x
+                && mouse.column < area.x + area.width
+                && mouse.row >= area.y
+                && mouse.row < area.y + area.height;
+            let row = if inside {
+                usize::from(mouse.row - area.y + self.transcript_scroll)
+            } else {
+                usize::MAX
+            };
+            let col = if inside {
+                usize::from(mouse.column - area.x)
+            } else {
+                usize::MAX
+            };
             match mouse.kind {
                 MouseEventKind::Down(MouseButton::Left) if self.compose.press(row, col) => {
                     self.transcript_selection.clear();
@@ -649,7 +756,10 @@ impl OperitTui {
                     match self.compose.release_click(&mut self.core, row, col).await {
                         Ok(true) => return Ok(()),
                         Ok(false) => {}
-                        Err(error) => { self.status_message = error; return Ok(()); }
+                        Err(error) => {
+                            self.status_message = error;
+                            return Ok(());
+                        }
                     }
                 }
                 _ => {}
@@ -823,12 +933,20 @@ impl OperitTui {
 
         if self.compose.editor.is_some() {
             match key.code {
-                KeyCode::Esc => { self.compose.editor = None; }
-                KeyCode::Enter => {
-                    if let Err(error) = self.compose.commit_editor(&mut self.core).await { self.status_message = error; }
+                KeyCode::Esc => {
+                    self.compose.editor = None;
                 }
-                KeyCode::Backspace => { self.compose.editor.as_mut().unwrap().value.pop(); }
-                KeyCode::Char(ch) if key.modifiers.is_empty() || key.modifiers == KeyModifiers::SHIFT => {
+                KeyCode::Enter => {
+                    if let Err(error) = self.compose.commit_editor(&mut self.core).await {
+                        self.status_message = error;
+                    }
+                }
+                KeyCode::Backspace => {
+                    self.compose.editor.as_mut().unwrap().value.pop();
+                }
+                KeyCode::Char(ch)
+                    if key.modifiers.is_empty() || key.modifiers == KeyModifiers::SHIFT =>
+                {
                     self.compose.editor.as_mut().unwrap().value.push(ch);
                 }
                 _ => {}
@@ -2276,6 +2394,7 @@ impl OperitTui {
             .currentWindowSizeFlowSnapshot()
             .await
             .map_err(|error| error.to_string())?;
+        self.route_permission_error = None;
         Ok(())
     }
 
@@ -2691,6 +2810,10 @@ impl OperitTui {
     }
 
     async fn refresh_runtime_status(&mut self) {
+        if let Some(error) = self.route_permission_error.clone() {
+            self.set_status_message(error);
+            return;
+        }
         self.refresh_context_usage_label().await;
         let is_loading = self.raw_current_chat_is_loading();
         let state = self.current_chat_input_processing_state();

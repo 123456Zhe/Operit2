@@ -651,10 +651,14 @@ fn wrap_folded_lines(block: FoldedLines, width: usize) -> FoldedLines {
         }
     }
     FoldedLines {
-        xml: block.xml.into_iter().map(|mut slot| {
-            slot.lines = boundaries[slot.lines.start]..boundaries[slot.lines.end];
-            slot
-        }).collect(),
+        xml: block
+            .xml
+            .into_iter()
+            .map(|mut slot| {
+                slot.lines = boundaries[slot.lines.start]..boundaries[slot.lines.end];
+                slot
+            })
+            .collect(),
         lines: wrapped_lines,
         hits: wrapped_hits,
     }

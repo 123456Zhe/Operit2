@@ -30,6 +30,23 @@ void main() {
       expect(error.backtrace, trace);
     },
   );
+  test('route permission errors expose structured client state', () {
+    const error = CoreLinkError(
+      code: 'ROUTE_PERMISSION_DENIED',
+      message: 'Space route chatMessagesFlow requires capability chat.read',
+      details: <String, Object?>{
+        'method': 'chatMessagesFlow',
+        'requiredCapability': 'chat.read',
+        'targetNodeId': 'windows-node',
+      },
+    );
+
+    expect(error.isRoutePermissionDenied, isTrue);
+    expect(error.requiredCapability, 'chat.read');
+    expect(error.targetNodeId, 'windows-node');
+    expect(error.deniedMethod, 'chatMessagesFlow');
+  });
+
   test('native bytes use MessagePack bin', () {
     final encoded = encodeCoreLink(Uint8List.fromList(<int>[1, 2, 3, 4]));
 

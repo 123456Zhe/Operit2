@@ -3586,10 +3586,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsRuntimeControlCapabilityNetworkUser => '使用网络';
 
   @override
+  String get settingsRuntimeControlCapabilityChatRead => '读取聊天记录';
+
+  @override
   String get settingsRuntimeControlCapabilityViewDevices => '查看设备与当前身份';
 
   @override
   String get settingsRuntimeControlCapabilityApproval => '审批授权';
+
+  @override
+  String chatRoutePermissionDenied(Object targetNodeId, Object capability) {
+    return '权限不足：目标设备 $targetNodeId 没有 $capability 权限。';
+  }
 
   @override
   String get settingsRuntimeControlRoleAdministrator => '管理员';

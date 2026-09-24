@@ -1864,8 +1864,16 @@
   "settingsRuntimeControlCapabilityStorageProvide": "Provide storage",
   "settingsRuntimeControlCapabilityRuntimeExecute": "Run tasks",
   "settingsRuntimeControlCapabilityNetworkUser": "Use the network",
+  "settingsRuntimeControlCapabilityChatRead": "Read chat history",
   "settingsRuntimeControlCapabilityViewDevices": "View devices and current identities",
   "settingsRuntimeControlCapabilityApproval": "Approve authorizations",
+  "chatRoutePermissionDenied": "Permission denied: target device {targetNodeId} lacks the {capability} capability.",
+  "@chatRoutePermissionDenied": {
+    "placeholders": {
+      "targetNodeId": {},
+      "capability": {}
+    }
+  },
   "settingsRuntimeControlRoleAdministrator": "Administrator",
   "settingsRuntimeControlRoleAuditor": "Auditor",
   "settingsRuntimeControlRoleRelay": "Relay node",

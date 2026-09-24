@@ -258,9 +258,6 @@ class RuntimeHostInteractionSubscriber {
       RuntimeHostInteractionKind.localInference => _handleLocalInference(
         _requirePayload(request.localInference, request.kind),
       ),
-      RuntimeHostInteractionKind.toolPermission => throw StateError(
-        'tool permission is handled by the approval bridge',
-      ),
       RuntimeHostInteractionKind.webAccessPairing => throw StateError(
         'web access pairing is handled by the app dialog host',
       ),
@@ -714,7 +711,6 @@ class RuntimeHostInteractionSubscriber {
     RuntimeHostInteractionTtsSynthesisResponse? ttsSynthesis,
     RuntimeHostInteractionTtsPlaybackResponse? ttsPlayback,
     RuntimeHostInteractionLocalInferenceResponse? localInference,
-    RuntimeHostInteractionToolPermissionResponse? toolPermission,
   }) {
     return RuntimeHostInteractionResponse(
       error: error,
@@ -735,7 +731,6 @@ class RuntimeHostInteractionSubscriber {
       ttsSynthesis: ttsSynthesis,
       ttsPlayback: ttsPlayback,
       localInference: localInference,
-      toolPermission: toolPermission,
     );
   }
 }

@@ -6705,6 +6705,12 @@ abstract class AppLocalizations {
   /// **'Use the network'**
   String get settingsRuntimeControlCapabilityNetworkUser;
 
+  /// No description provided for @settingsRuntimeControlCapabilityChatRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read chat history'**
+  String get settingsRuntimeControlCapabilityChatRead;
+
   /// No description provided for @settingsRuntimeControlCapabilityViewDevices.
   ///
   /// In en, this message translates to:
@@ -6716,6 +6722,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Approve authorizations'**
   String get settingsRuntimeControlCapabilityApproval;
+
+  /// No description provided for @chatRoutePermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Permission denied: target device {targetNodeId} lacks the {capability} capability.'**
+  String chatRoutePermissionDenied(Object targetNodeId, Object capability);
 
   /// No description provided for @settingsRuntimeControlRoleAdministrator.
   ///

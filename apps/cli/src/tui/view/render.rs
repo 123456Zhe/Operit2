@@ -64,8 +64,16 @@ impl OperitTui {
         if let Some(editor) = &self.compose.editor {
             let area = centered_rect(80, 25, frame.area());
             frame.render_widget(Clear, area);
-            frame.render_widget(Paragraph::new(editor.value.as_str()).wrap(Wrap { trim: false })
-                .block(Block::default().title("Edit · Enter: apply · Esc: cancel").borders(Borders::ALL)), area);
+            frame.render_widget(
+                Paragraph::new(editor.value.as_str())
+                    .wrap(Wrap { trim: false })
+                    .block(
+                        Block::default()
+                            .title("Edit · Enter: apply · Esc: cancel")
+                            .borders(Borders::ALL),
+                    ),
+                area,
+            );
         }
 
         if self.show_model_chooser {
@@ -197,8 +205,13 @@ impl OperitTui {
             &mut self.transcript_render_cache,
             text,
         );
-        self.compose.project(&mut transcript_lines, &self.transcript_render_cache.xml,
-            &mut self.transcript_render_cache.fold_hits, content_width, text);
+        self.compose.project(
+            &mut transcript_lines,
+            &self.transcript_render_cache.xml,
+            &mut self.transcript_render_cache.fold_hits,
+            content_width,
+            text,
+        );
         self.transcript_copy_lines = transcript_lines.iter().map(transcript_copy_line).collect();
         apply_transcript_selection(&mut transcript_lines, &self.transcript_selection);
         let max_scroll = transcript_max_scroll(&transcript_lines, area);

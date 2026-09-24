@@ -4653,6 +4653,9 @@ class _ProviderModelItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: cardBgColor,
         borderRadius: BorderRadius.circular(10),
+      ),
+      foregroundDecoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: borderColor, width: selected ? 1.0 : 0.8),
       ),
       clipBehavior: Clip.antiAlias,

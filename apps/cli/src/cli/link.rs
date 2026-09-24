@@ -22,8 +22,8 @@ use operit_providers::chat::enhance::ConversationService::ConversationService;
 use operit_providers::chat::EnhancedAIService::EnhancedAIService;
 use operit_runtime::core::chat::ChatRuntimeSlot::ChatRuntimeSlot;
 use operit_runtime::services::RuntimeHostInteractionService::{
-    requestOwnerToolPermissionAsync, RuntimeHostInteractionToolPermissionPayload,
-    RuntimeHostInteractionToolPermissionTool, RuntimeHostInteractionToolPermissionToolParameter,
+    requestChatToolPermissionAsync, RuntimeHostInteractionToolPermissionTool,
+    RuntimeHostInteractionToolPermissionToolParameter,
 };
 use operit_store::CoreNodeBindingStore::CoreNodeBindingStore;
 use operit_store::NetworkControlStore::{NetworkControlIdentityAssignment, NetworkControlRole};
@@ -129,19 +129,21 @@ pub(crate) fn install_link_permission_requester(core: &mut operit_proxy_local::L
     let handler = core.localApplicationMut().toolHandler.clone();
     handler
         .getToolPermissionSystem()
-        .setAsyncPermissionRequester(move |tool, description| async move {
-            let response = requestOwnerToolPermissionAsync(
-                RuntimeHostInteractionToolPermissionPayload {
-                    tool: tool_to_permission_payload(&tool),
-                    description,
-                },
+        .setAsyncPermissionRequester(move |tool, description, chatId| async move {
+            let Some(chatId) = chatId else {
+                return PermissionRequestResult::DENY;
+            };
+            let response = requestChatToolPermissionAsync(
+                chatId,
+                tool_to_permission_payload(&tool),
+                description,
                 Duration::from_secs(60),
             )
             .await
             .expect("permission request failed");
-            match response.result.as_str() {
+            match response.as_str() {
                 "allow" => PermissionRequestResult::ALLOW,
-                "always_allow" => PermissionRequestResult::ALLOW_SESSION,
+                "allow_session" => PermissionRequestResult::ALLOW_SESSION,
                 "deny" => PermissionRequestResult::DENY,
                 other => panic!("unknown permission response result: {other}"),
             }

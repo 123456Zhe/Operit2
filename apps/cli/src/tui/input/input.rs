@@ -8,9 +8,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use super::app::{OperitTui, QueuedAttachmentToken, QueuedAttachmentTokenKind};
-use super::commands::{
-    complete_command_input, matching_command_specs, TuiCommandSuggestion,
-};
+use super::commands::{complete_command_input, matching_command_specs, TuiCommandSuggestion};
 use super::helpers::{char_to_byte_index, display_width, wrap_approx_lines};
 
 const PASTE_ATTACHMENT_CHAR_THRESHOLD: usize = 2_048;

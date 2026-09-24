@@ -20,12 +20,17 @@ is not a registered UI route.
 
 ## Build and verification
 
+This package pins pnpm 10.7.0 through `package.json`. Use Corepack and the
+committed `pnpm-lock.yaml` for reproducible installs; `package-lock.json` is not
+used.
+
 From this directory:
 
 ```sh
-npm ci
-npm run pack:toolpkg
-npm run test:web
+corepack pnpm --version
+corepack pnpm install --frozen-lockfile
+corepack pnpm run pack:toolpkg
+corepack pnpm run test:web
 ```
 
 The browser test uses installed Microsoft Edge headlessly and the actual

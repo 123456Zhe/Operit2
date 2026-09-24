@@ -670,6 +670,8 @@ impl AIToolHandler {
         accessSpec: ToolAccessSpec,
     ) -> Result<ToolAccessSpec, ToolResult> {
         let permissionSystem = self.getToolPermissionSystem();
+        let chatId = ToolExecutionManager::currentToolRuntimeContext()
+            .and_then(|context| context.callerChatId);
         let mode = permissionSystem
             .getAiPermissionMode()
             .map_err(|error| ToolResult {
@@ -698,7 +700,7 @@ impl AIToolHandler {
         };
         let policyOverrideApproved = if let Some(reason) = policyOverrideReason.as_deref() {
             let approved = permissionSystem
-                .checkSandboxEscapeApprovalAsync(tool)
+                .checkSandboxEscapeApprovalAsync(tool, chatId.clone())
                 .await
                 .map_err(|error| ToolResult {
                     toolName: tool.name.clone(),
@@ -728,7 +730,7 @@ impl AIToolHandler {
             && !policyOverrideApproved
         {
             let approved = permissionSystem
-                .checkSandboxEscapeApprovalAsync(tool)
+                .checkSandboxEscapeApprovalAsync(tool, chatId.clone())
                 .await
                 .map_err(|error| ToolResult {
                     toolName: tool.name.clone(),

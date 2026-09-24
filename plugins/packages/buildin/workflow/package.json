@@ -2,7 +2,7 @@
   "private": true,
   "scripts": {
     "build:web": "node web/scripts/build.mjs",
-    "pack:toolpkg": "tsc -p tsconfig.json && tsc -p web/tsconfig.json && npm run build:web && node web/scripts/pack.mjs",
+    "pack:toolpkg": "tsc -p tsconfig.json && tsc -p web/tsconfig.json && pnpm run build:web && node web/scripts/pack.mjs",
     "test:web": "node --test web/tests/editor.test.mjs web/tests/performance.test.mjs web/tests/templates.test.mjs"
   },
   "dependencies": {
@@ -21,5 +21,6 @@
     "typescript": "5.9.2",
     "fflate": "0.8.2",
     "playwright": "1.55.1"
-  }
+  },
+  "packageManager": "pnpm@10.7.0"
 }

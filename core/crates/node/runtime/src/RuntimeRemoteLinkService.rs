@@ -1574,13 +1574,13 @@ impl RuntimeRemoteLinkService {
         Ok(record)
     }
 
-    /// Verifies and persists a discovered endpoint for one named paired remote runtime.
+    /// Persists a verified endpoint, distinguishing an unavailable peer from local failures.
     #[allow(non_snake_case)]
     async fn updatePairedRemoteEndpoint(
         &self,
         name: String,
         baseUrl: String,
-    ) -> Result<PairedRemoteSessionRecord, String> {
+    ) -> Result<Option<PairedRemoteSessionRecord>, String> {
         let sessions = self.linkAccessStore.outboundSessions()?;
         let record = sessions
             .get(&name)
@@ -1588,13 +1588,20 @@ impl RuntimeRemoteLinkService {
             .ok_or_else(|| format!("paired remote runtime does not exist: {name}"))?;
         let updated = record.withBaseUrl(baseUrl);
         let session = PairedRemoteSession::fromRecord(updated.clone())?;
-        let info = session.sessionInfo().await?;
+        let Some(info) = discoveredEndpointResponse(
+            session.sessionInfo().await,
+            "session_info",
+            &record.coreDeviceId,
+            &updated.baseUrl,
+        ) else {
+            return Ok(None);
+        };
         ensureRemoteIdentity(&updated, &info.coreDeviceId)?;
         if updated.baseUrl != record.baseUrl {
             self.linkAccessStore
                 .saveOutboundSession(name, updated.clone())?;
         }
-        Ok(updated)
+        Ok(Some(updated))
     }
 
     /// Resolves a named persisted outbound record into its authenticated remote session.
@@ -1642,9 +1649,16 @@ impl RuntimeRemoteLinkService {
     ) -> Result<Vec<RuntimeRemoteDiscoveredSpace>, String> {
         let mut spaces = BTreeMap::<String, RuntimeRemoteDiscoveredSpace>::new();
         for endpoint in devices {
-            let hello = RemoteLinkClient::new(endpoint.baseUrl.clone())
-                .hello(&endpoint.tokenHash)
-                .await?;
+            let Some(hello) = discoveredEndpointResponse(
+                RemoteLinkClient::new(endpoint.baseUrl.clone())
+                    .hello(&endpoint.tokenHash)
+                    .await,
+                "hello",
+                &endpoint.deviceId,
+                &endpoint.baseUrl,
+            ) else {
+                continue;
+            };
             ensureRemoteIdentityById(&endpoint.deviceId, &hello.coreDeviceId)?;
             if hello.deviceSpace.deviceCount == 0 {
                 return Err("discovered device space has no devices".to_string());
@@ -1712,6 +1726,29 @@ impl RuntimeRemoteLinkService {
             self.linkAccessStore.clone(),
             self.spaceStore.clone(),
         )
+    }
+}
+
+/// Isolates one failed discovery request while retaining its endpoint and error in the log.
+#[allow(non_snake_case)]
+fn discoveredEndpointResponse<T>(
+    response: Result<T, String>,
+    operation: &str,
+    deviceId: &str,
+    baseUrl: &str,
+) -> Option<T> {
+    match response {
+        Ok(response) => Some(response),
+        Err(error) => {
+            operit_util::AppLogger::AppLogger::w(
+                "RuntimeRemoteLinkService",
+                &format!(
+                    "Discovery request failed operation={operation} device={deviceId} \
+                     endpoint={baseUrl}: {error}"
+                ),
+            );
+            None
+        }
     }
 }
 
@@ -1940,6 +1977,54 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Verifies both discovery request phases retain healthy peers around failed requests.
+    #[test]
+    fn discovery_requests_isolate_unavailable_devices() {
+        for operation in ["session_info", "hello"] {
+            let responses = [
+                ("offline-first", Err("connection refused".to_string())),
+                ("online-first", Ok("verified-first")),
+                ("offline-middle", Err("request timed out".to_string())),
+                ("online-last", Ok("verified-last")),
+                ("offline-last", Err("connection reset".to_string())),
+            ];
+            let mut verified = Vec::new();
+            for (device_id, response) in responses {
+                let Some(response) = discoveredEndpointResponse(
+                    response,
+                    operation,
+                    device_id,
+                    "http://192.0.2.1:37194",
+                ) else {
+                    continue;
+                };
+                verified.push((device_id, response));
+            }
+            assert_eq!(
+                verified,
+                [
+                    ("online-first", "verified-first"),
+                    ("online-last", "verified-last"),
+                ],
+                "request phase: {operation}"
+            );
+        }
+    }
+
+    /// Verifies failed requests never create a verified endpoint or a discovered device.
+    #[test]
+    fn discovery_requests_do_not_create_results_for_unavailable_devices() {
+        for operation in ["session_info", "hello"] {
+            let response = discoveredEndpointResponse::<()>(
+                Err("connection refused".to_string()),
+                operation,
+                "offline-device",
+                "http://192.0.2.1:37194",
+            );
+            assert!(response.is_none(), "request phase: {operation}");
+        }
+    }
 
     #[tokio::test]
     async fn overview_subscription_stops_worker_after_last_watch_is_dropped() {

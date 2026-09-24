@@ -203,6 +203,7 @@ pub(crate) fn render_core_proxy_dispatch(objects: &[SourceObject]) -> String {
     let mut output = String::new();
     output.push_str("#[allow(unused_mut, unused_variables)]\n");
     output.push_str("async fn generated_dispatch_core_proxy_call(proxy: &LocalCoreProxy, request: operit_link::CoreCallRequest) -> Result<operit_link::CoreValue, operit_link::CoreLinkError> {\n");
+    output.push_str("    if let Some(__core_route_runtime) = operit_link::coreRouteRuntime() {\n        if __core_route_runtime.shouldRoute(&request.methodName, &request.args)? {\n            return __core_route_runtime.call(request).await.result;\n        }\n    }\n");
     output.push_str("    #[cfg(not(target_arch = \"wasm32\"))]\n");
     let application_id = objects
         .iter()
@@ -306,6 +307,7 @@ pub(crate) fn render_core_proxy_dispatch(objects: &[SourceObject]) -> String {
 
     output.push_str("#[allow(unused_mut, unused_variables)]\n");
     output.push_str("async fn generated_dispatch_core_proxy_watch_snapshot_async(proxy: &LocalCoreProxy, request: operit_link::CoreWatchRequest) -> Result<operit_link::CoreEvent, operit_link::CoreLinkError> {\n");
+    output.push_str("    if let Some(__core_route_runtime) = operit_link::coreRouteRuntime() {\n        if __core_route_runtime.shouldRouteWatch(&request.propertyName, &request.args)? {\n            return operit_link::coreRouteWatchSnapshot(__core_route_runtime, request).await;\n        }\n    }\n");
     for object in objects {
         let Some((holder_field, resolver_method)) = resolved_holder_metadata(&object.access) else {
             continue;
@@ -346,6 +348,7 @@ pub(crate) fn render_core_proxy_dispatch(objects: &[SourceObject]) -> String {
     output.push_str("#[allow(unused_mut, unused_variables)]\n");
     output.push_str("async fn generated_dispatch_core_proxy_watch_async(proxy: &LocalCoreProxy, request: operit_link::CoreWatchRequest) -> Result<operit_link::CoreEventStream, operit_link::CoreLinkError> {\n");
     output.push_str("    if request.targetObjectId == operit_link::CORE_STREAM_POOL_OBJECT_ID {\n        return proxy.openCoreStreamWatch(request);\n    }\n");
+    output.push_str("    if let Some(__core_route_runtime) = operit_link::coreRouteRuntime() {\n        if __core_route_runtime.shouldRouteWatch(&request.propertyName, &request.args)? {\n            return __core_route_runtime.watch(request).await;\n        }\n    }\n");
     for object in objects {
         let Some((holder_field, resolver_method)) = resolved_holder_metadata(&object.access) else {
             continue;

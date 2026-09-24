@@ -2513,3 +2513,42 @@ fn currentTimeMillis() -> i64 {
         .expect("system clock must be after unix epoch")
         .as_millis() as i64
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Verifies CLI errors expose the denied route subject and capability.
+    #[test]
+    fn cli_route_permission_error_keeps_structured_diagnostics() {
+        let error = CoreLinkError::withDetails(
+            "ROUTE_PERMISSION_DENIED",
+            "Space route chatMessagesFlow requires capability chat.read on caller cli-client",
+            operit_link::CoreValue::Map(BTreeMap::from([
+                (
+                    "subject".to_string(),
+                    operit_link::CoreValue::String("caller".to_string()),
+                ),
+                (
+                    "requiredCapability".to_string(),
+                    operit_link::CoreValue::String("chat.read".to_string()),
+                ),
+                (
+                    "callerNodeId".to_string(),
+                    operit_link::CoreValue::String("cli-client".to_string()),
+                ),
+                (
+                    "targetNodeId".to_string(),
+                    operit_link::CoreValue::String("windows-owner".to_string()),
+                ),
+            ])),
+        );
+        let message = core_command_error_message(error);
+        assert!(message.contains("ROUTE_PERMISSION_DENIED"));
+        assert!(message.contains("caller"));
+        assert!(message.contains("chat.read"));
+        assert!(message.contains("cli-client"));
+        assert!(message.contains("windows-owner"));
+    }
+}

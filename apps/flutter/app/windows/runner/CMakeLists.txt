@@ -95,6 +95,9 @@ file(GLOB_RECURSE OPERIT_PLUGIN_SYNC_INPUTS CONFIGURE_DEPENDS
   "${OPERIT_REPO_ROOT}/core/crates/plugin/codegen/*"
   "${OPERIT_REPO_ROOT}/core/crates/plugin/sdk/*"
 )
+# Node package contents are not inputs to the Python plugin synchronizer.
+# Keeping pnpm's package links out of DEPENDS avoids stale/missing node_modules paths in MSBuild.
+list(FILTER OPERIT_PLUGIN_SYNC_INPUTS EXCLUDE REGEX "(^|[/\\\\])node_modules([/\\\\]|$)")
 list(APPEND OPERIT_PLUGIN_SYNC_INPUTS
   "${OPERIT_PLUGIN_SYNC_SCRIPT}"
   "${OPERIT_REPO_ROOT}/core/Cargo.toml"

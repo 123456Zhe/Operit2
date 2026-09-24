@@ -412,8 +412,7 @@ async fn shared_core_accepts_nested_owner_response() {
                             "musicPlayback": null,
                             "bluetooth": null,
                             "ttsSynthesis": null,
-                            "ttsPlayback": null,
-                            "toolPermission": null
+                            "ttsPlayback": null
                         }
                     }))
                     .unwrap(),

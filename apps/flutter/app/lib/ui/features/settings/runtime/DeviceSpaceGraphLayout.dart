@@ -286,8 +286,7 @@ class _GraphPalette {
   Color halo(double fade, double arrival) =>
       _paint(accent, fade * (dark ? 0.19 : 0.30) * arrival);
 
-  Color sweep(double arrival) =>
-      _paint(accent, (dark ? 0.55 : 0.78) * arrival);
+  Color sweep(double arrival) => _paint(accent, (dark ? 0.55 : 0.78) * arrival);
 
   Color grid(double mode, double arrival) =>
       _paint(accent, (dark ? 0.09 : 0.16) * mode * arrival);
@@ -300,9 +299,9 @@ class _GraphPalette {
 
   Color sphereBase({required bool current, required bool online}) {
     final wash = current
-        ? (dark ? 0.52 : 0.36)
+        ? (dark ? 0.38 : 0.22)
         : online
-        ? (dark ? 0.28 : 0.22)
+        ? (dark ? 0.20 : 0.13)
         : (dark ? 0.12 : 0.14);
     final ground = current
         ? scheme.primaryContainer

@@ -570,7 +570,14 @@ def _prebuild_plans(repo_root: Path, source_dir: Path, plans: list[SyncPlanItem]
     )
     for child_dir in child_dirs:
         if _is_script_packed_toolpkg(child_dir):
-            _run_checked_command(["pnpm", "run", "pack:toolpkg"], child_dir, dry_run=dry_run)
+            corepack_command = shutil.which("corepack")
+            if corepack_command is None:
+                raise FileNotFoundError("Corepack is required to build script-packed ToolPkgs")
+            _run_checked_command(
+                [corepack_command, "pnpm", "run", "pack:toolpkg"],
+                child_dir,
+                dry_run=dry_run,
+            )
             continue
 
         tsconfig = child_dir / "tsconfig.json"

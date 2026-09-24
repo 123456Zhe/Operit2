@@ -3732,12 +3732,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsRuntimeControlCapabilityNetworkUser => 'Use the network';
 
   @override
+  String get settingsRuntimeControlCapabilityChatRead => 'Read chat history';
+
+  @override
   String get settingsRuntimeControlCapabilityViewDevices =>
       'View devices and current identities';
 
   @override
   String get settingsRuntimeControlCapabilityApproval =>
       'Approve authorizations';
+
+  @override
+  String chatRoutePermissionDenied(Object targetNodeId, Object capability) {
+    return 'Permission denied: target device $targetNodeId lacks the $capability capability.';
+  }
 
   @override
   String get settingsRuntimeControlRoleAdministrator => 'Administrator';

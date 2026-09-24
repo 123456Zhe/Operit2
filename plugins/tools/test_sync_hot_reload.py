@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -56,6 +57,37 @@ class HotReloadTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     sync._maybe_hot_reload_output(root, root, **arguments)
                 self.assertFalse(state.exists())
+
+    # Verifies build-time plugin synchronization never requires a running app.
+    def test_android_build_sync_does_not_contact_vm_service(self):
+        """Checks that Android build arguments sync both plugin sets without a runtime."""
+        gradle = (Path(__file__).resolve().parents[2] /
+                  'apps/flutter/app/android/app/build.gradle.kts').read_text(encoding='utf-8')
+        task = re.search(
+            r'^val syncOperitPlugins = tasks\.register<Exec>\("syncOperitPlugins"\) \{(.*?)^\}',
+            gradle, re.MULTILINE | re.DOTALL,
+        )
+        self.assertIsNotNone(task)
+        command = re.search(r'commandLine\((.*?)\)', task.group(1), re.DOTALL)
+        self.assertIsNotNone(command)
+        arguments = re.findall(r'"([^"\n]*)"', command.group(1))
+        self.assertEqual(arguments, ['--source', 'runtime', '--no-hot-reload'])
+
+        with (
+            patch.object(sys, 'argv', ['sync_plugin_packages.py', *arguments]),
+            patch.object(sync, '_generate_plugin_sdk_types'),
+            patch.object(sync, '_sync', return_value=(0, 0, 0)) as synchronize,
+            patch.object(sync, '_discover_vm_service') as discover,
+            patch.object(sync.urllib.request, 'urlopen') as request,
+            patch('builtins.print'),
+        ):
+            self.assertEqual(sync.main(), 0)
+            self.assertEqual(
+                [call.args[0].name for call in synchronize.call_args_list],
+                ['buildin', 'external'],
+            )
+            discover.assert_not_called()
+            request.assert_not_called()
 
     def test_discovers_flutter_development_service(self):
         """Extracts the authenticated VM service URI from the Flutter service process."""

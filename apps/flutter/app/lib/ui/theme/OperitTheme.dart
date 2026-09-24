@@ -21,7 +21,6 @@ import '../features/chat/tts/TtsFloatingPanel.dart';
 import '../features/startup/PluginLoadingOverlay.dart';
 import '../../core/host/browser/RuntimeBrowserOwnerHost.dart';
 import '../features/chat/components/workspace/browser/automation/WorkspaceWebVisitHost.dart';
-import '../permissions/ToolApprovalHost.dart';
 import 'OperitThemeAssets.dart';
 import 'ThemeCircularRevealHost.dart';
 
@@ -305,19 +304,16 @@ class _OperitMaterialApp extends StatelessWidget {
         enabled: hostInteractionHostsEnabled,
         child: WorkspaceWebVisitHost(
           child: AppToastHost(
-            child: ToolApprovalHost(
-              enabled: hostInteractionHostsEnabled,
-              child: Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  Positioned.fill(child: child),
-                  const TtsFloatingPanel(),
-                  PluginLoadingOverlay(
-                    key: const ValueKey<String>('plugin-loading-overlay'),
-                    enabled: hostInteractionHostsEnabled,
-                  ),
-                ],
-              ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                Positioned.fill(child: child),
+                const TtsFloatingPanel(),
+                PluginLoadingOverlay(
+                  key: const ValueKey<String>('plugin-loading-overlay'),
+                  enabled: hostInteractionHostsEnabled,
+                ),
+              ],
             ),
           ),
         ),

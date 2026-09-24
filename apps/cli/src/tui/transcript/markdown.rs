@@ -343,11 +343,16 @@ fn render_foldable_node(
         Some("details") => render_details_panel(node, index, content_width, text, fold),
         _ => {
             let lines = render_markdown_block_lines(node, content_width, text);
-            let mut output = FoldedLines { lines, ..Default::default() };
+            let mut output = FoldedLines {
+                lines,
+                ..Default::default()
+            };
             if let (Some(context), Some(tag)) = (fold, xml_tag_name(node)) {
                 output.xml.push(super::compose::XmlSurfaceSlot {
                     key: (context.message_timestamp, index, tag.clone()),
-                    tag, content: node.content.clone(), lines: 0..output.lines.len(),
+                    tag,
+                    content: node.content.clone(),
+                    lines: 0..output.lines.len(),
                 });
             }
             output

@@ -6,6 +6,7 @@ import '../../../core/bridge/OperitRuntimeBridge.dart';
 import '../../../core/bridge/ProxyCoreRuntimeBridge.dart';
 import '../../../core/proxy/generated/CoreProxyClients.g.dart';
 import '../../../core/proxy/generated/CoreProxyModels.g.dart' as core_proxy;
+import '../../../data/preferences/UserPreferencesManager.dart';
 import '../../common/OperitLogoMark.dart';
 import '../../features/chat/components/NewChatIntro.dart';
 import '../navigation/AppNavigationModels.dart';
@@ -38,17 +39,35 @@ class CollapsedDrawerContent extends StatelessWidget {
     vertical: 2,
   );
 
+  /// Reads the persisted sidebar mode used to decide workspace inheritance.
+  Future<bool> _shouldInheritWorkspaceFromCurrent() async {
+    final mode = await UserPreferencesManager(
+      clients: GeneratedCoreProxyClients(bridge),
+    ).loadChatHistoryGroupingMode();
+    return switch (mode) {
+      null => false,
+      UserPreferencesManager.CHAT_HISTORY_GROUPING_CHARACTER => false,
+      UserPreferencesManager.CHAT_HISTORY_GROUPING_WORKSPACE => true,
+      _ => throw FormatException(
+        'Unsupported persisted sidebar grouping mode: $mode',
+      ),
+    };
+  }
+
+  /// Creates a conversation using the active sidebar grouping mode.
   Future<void> _createConversation() async {
     // Arm before creating so the intro overlay sees the flag when the new
     // chat id arrives.
     newChatIntroArmed.value = true;
     try {
+      final inheritGroupFromCurrent =
+          await _shouldInheritWorkspaceFromCurrent();
       await GeneratedCoreProxyClients(
         bridge,
       ).chatRuntimeHolderMain.createNewChat(
         characterCardName: null,
         group: null,
-        inheritGroupFromCurrent: true,
+        inheritGroupFromCurrent: inheritGroupFromCurrent,
         setAsCurrentChat: true,
         characterGroupId: null,
       );

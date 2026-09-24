@@ -231,6 +231,10 @@ class _GraphSpherePainter extends CustomPainter {
         ).createShader(Rect.fromCircle(center: center, radius: 54)),
     );
 
+    canvas.saveLayer(
+      sphere,
+      Paint()..color = Colors.white.withValues(alpha: 0.78),
+    );
     canvas.drawCircle(
       center,
       radius,
@@ -320,6 +324,7 @@ class _GraphSpherePainter extends CustomPainter {
         ..strokeWidth = 0.85
         ..strokeCap = StrokeCap.round,
     );
+    canvas.restore();
     canvas.restore();
   }
 
