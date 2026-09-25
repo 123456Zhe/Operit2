@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import zipfile
 import urllib.parse
 import urllib.request
@@ -118,6 +119,23 @@ def _collect_sync_plan(source_dir: Path) -> list[SyncPlanItem]:
                 )
             )
     return plans
+
+
+# Creates a directory exposing corepack's pnpm under the bare `pnpm` name.
+def _corepack_pnpm_shim_dir(corepack_command: str) -> str:
+    shim_dir = os.path.join(tempfile.gettempdir(), "operit-corepack-pnpm-shim")
+    os.makedirs(shim_dir, exist_ok=True)
+    if os.name == "nt":
+        shim_path = os.path.join(shim_dir, "pnpm.cmd")
+        contents = f'@"{corepack_command}" pnpm %*\r\n'
+    else:
+        shim_path = os.path.join(shim_dir, "pnpm")
+        contents = f'#!/bin/sh\nexec "{corepack_command}" pnpm "$@"\n'
+    if not os.path.isfile(shim_path) or open(shim_path, encoding="utf-8").read() != contents:
+        with open(shim_path, "w", encoding="utf-8", newline="") as output:
+            output.write(contents)
+        os.chmod(shim_path, 0o755)
+    return shim_dir
 
 
 # Runs one command and reports the exact command line on failure.
@@ -577,6 +595,10 @@ def _prebuild_plans(repo_root: Path, source_dir: Path, plans: list[SyncPlanItem]
             corepack_env = os.environ.copy()
             corepack_env.setdefault("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
             corepack_env.setdefault("COREPACK_ENABLE_AUTO_PIN", "0")
+            # The ToolPkg pack script calls a bare `pnpm`, so expose corepack's pnpm on PATH.
+            corepack_env["PATH"] = os.pathsep.join(
+                [_corepack_pnpm_shim_dir(corepack_command), corepack_env.get("PATH", "")]
+            )
             # Install dependencies when a script-packed ToolPkg has none vendored.
             if not (child_dir / "node_modules").is_dir():
                 install_command = [corepack_command, "pnpm", "install"]
