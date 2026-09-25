@@ -573,6 +573,12 @@ def _prebuild_plans(repo_root: Path, source_dir: Path, plans: list[SyncPlanItem]
             corepack_command = shutil.which("corepack")
             if corepack_command is None:
                 raise FileNotFoundError("Corepack is required to build script-packed ToolPkgs")
+            # Install dependencies when a script-packed ToolPkg has none vendored.
+            if not (child_dir / "node_modules").is_dir():
+                install_command = [corepack_command, "pnpm", "install"]
+                if (child_dir / "pnpm-lock.yaml").is_file():
+                    install_command.append("--frozen-lockfile")
+                _run_checked_command(install_command, child_dir, dry_run=dry_run)
             _run_checked_command(
                 [corepack_command, "pnpm", "run", "pack:toolpkg"],
                 child_dir,
